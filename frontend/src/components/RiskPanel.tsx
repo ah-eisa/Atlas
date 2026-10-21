@@ -10,6 +10,7 @@ import {
   formatDate,
   formatMoney,
   formatPercent,
+  formatPercentSigned,
   formatRatio,
   signClass,
   EM_DASH,
@@ -52,6 +53,12 @@ function buildRows(risk: RiskPayload, currency: string): Row[] {
 
   return [
     {
+      label: 'Annualised return',
+      value: formatPercentSigned(risk.annualized_return_pct),
+      tone: signClass(risk.annualized_return_pct),
+      meaning: 'Geometric mean daily return, compounded over the risk sample. It is not the same as the change in portfolio value when contributions are being made.',
+    },
+    {
       label: 'Volatility (ann.)',
       value: formatPercent(risk.volatility_annualized_pct),
       meaning: `Standard deviation of daily returns, annualised over ${risk.trading_days_per_year} trading days. Higher means a wider spread of outcomes.`,
@@ -74,6 +81,12 @@ function buildRows(risk: RiskPayload, currency: string): Row[] {
       meaning: 'Excess return per unit of downside risk only. Exceeds Sharpe when losses are rarer than gains.',
     },
     {
+      label: 'Calmar ratio',
+      value: formatRatio(risk.calmar_ratio),
+      tone: signClass(risk.calmar_ratio),
+      meaning: 'Annualised return divided by the absolute maximum drawdown. A compact reward-to-pain measure; it says nothing about recovery time.',
+    },
+    {
       label: 'Max drawdown',
       value: formatPercent(drawdown.pct),
       tone: signClass(drawdown.pct),
@@ -86,6 +99,12 @@ function buildRows(risk: RiskPayload, currency: string): Row[] {
       meaning: `On the worst 5% of days the portfolio lost at least this much, read directly from the observed return distribution (${formatPercent(var95?.historical_pct)} of value).`,
     },
     {
+      label: 'CVaR 95% (hist.)',
+      value: money(var95?.cvar_value ?? null),
+      tone: 'neg',
+      meaning: `The average loss on the days beyond the 95% VaR threshold (${formatPercent(var95?.cvar_pct)} of value). Expected shortfall is more sensitive to the tail than VaR.`,
+    },
+    {
       label: 'VaR 95% (param.)',
       value: money(var95?.parametric_value ?? null),
       tone: 'neg',
@@ -96,6 +115,12 @@ function buildRows(risk: RiskPayload, currency: string): Row[] {
       value: money(var99?.historical_value ?? null),
       tone: 'neg',
       meaning: `The worst 1% of days (${formatPercent(var99?.historical_pct)} of value). Where it exceeds the parametric figure, real losses have fatter tails than a normal distribution predicts.`,
+    },
+    {
+      label: 'CVaR 99% (hist.)',
+      value: money(var99?.cvar_value ?? null),
+      tone: 'neg',
+      meaning: `Average loss beyond the 99% threshold (${formatPercent(var99?.cvar_pct)} of value). This is the tail scenario a capital buffer should survive, not a typical day.`,
     },
     {
       label: 'VaR 99% (param.)',
@@ -134,6 +159,16 @@ export function RiskPanel({ risk, currency }: RiskPanelProps) {
           ))}
         </tbody>
       </table>
+      {risk.warnings.length > 0 ? (
+        <div className="notice notice--warning">
+          <span className="notice__title">Risk warnings</span>
+          <ul>
+            {risk.warnings.map((warning) => (
+              <li key={warning}>{warning}</li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
     </Panel>
   )
 }

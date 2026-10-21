@@ -19,6 +19,7 @@ import {
 import { useMemo } from 'react'
 
 import {
+  formatDate,
   formatMoney,
   formatMoneySigned,
   formatPercent,
@@ -80,6 +81,11 @@ const columns = column.columns([
     header: 'Region',
     sortFn: 'text',
     cell: (info) => <span className="grid__tag">{info.getValue()}</span>,
+  }),
+  column.accessor('acquired', {
+    header: 'Acquired',
+    sortFn: 'text',
+    cell: (info) => <span className="num grid__date">{formatDate(info.getValue())}</span>,
   }),
   column.accessor('quantity', {
     header: 'Quantity',
@@ -241,7 +247,7 @@ export function HoldingsPanel({ holdings, totalValue, currency }: HoldingsPanelP
           </tbody>
           <tfoot>
             <tr className="grid__total">
-              <td className="grid__td" colSpan={6}>
+              <td className="grid__td" colSpan={7}>
                 Total
               </td>
               <td className="grid__td grid__td--right">

@@ -73,6 +73,16 @@ export function useCountUp(target: number | null | undefined, delay = 0): number
       return
     }
 
+    // A backgrounded tab has its animation frames suspended, so the count-up
+    // would freeze at zero and the panel would read as "no data". Show the
+    // final figure instead: the entrance animation is decoration, the number
+    // is not.
+    if (typeof document !== 'undefined' && document.hidden) {
+      fromRef.current = target
+      setValue(target)
+      return
+    }
+
     const from = fromRef.current
     const start = performance.now()
 

@@ -17,6 +17,7 @@ import { Panel } from './Panel'
 
 interface CorrelationPanelProps {
   correlation: RiskPayload['correlation']
+  lookbackDays: number
 }
 
 /** Pick a legible label colour for a cell, given how light its fill is. */
@@ -110,7 +111,7 @@ function heatmapOption(correlation: RiskPayload['correlation']): EChartsOption {
   }
 }
 
-export function CorrelationPanel({ correlation }: CorrelationPanelProps) {
+export function CorrelationPanel({ correlation, lookbackDays }: CorrelationPanelProps) {
   const theme = chartTheme()
   const option = useMemo(() => heatmapOption(correlation), [correlation])
 
@@ -120,7 +121,7 @@ export function CorrelationPanel({ correlation }: CorrelationPanelProps) {
   const min = finite.length ? Math.min(...finite) : 0
 
   return (
-    <Panel title="Correlation" subtitle="daily returns, 2Y">
+    <Panel title="Correlation" subtitle={`daily returns · ${lookbackDays} days`}>
       <div className="correlation">
         <EChart
           option={option}

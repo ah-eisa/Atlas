@@ -87,6 +87,24 @@
   /* Negative correlation is rare here but must not be silently clipped. */
   --viz-negative: #7a4a52;
 
+  /* Monthly return heat scale: hue carries sign, luminance carries magnitude. */
+  --heat-pos-1-bg: #0c1c12;
+  --heat-pos-1-fg: #71a984;
+  --heat-pos-2-bg: #10281a;
+  --heat-pos-2-fg: #82c295;
+  --heat-pos-3-bg: #153923;
+  --heat-pos-3-fg: #9ad9ab;
+  --heat-pos-4-bg: #1c5030;
+  --heat-pos-4-fg: #c0ebca;
+  --heat-neg-1-bg: #1d0d0f;
+  --heat-neg-1-fg: #a87478;
+  --heat-neg-2-bg: #2d1114;
+  --heat-neg-2-fg: #c9858a;
+  --heat-neg-3-bg: #40161a;
+  --heat-neg-3-fg: #e19b9f;
+  --heat-neg-4-bg: #591d23;
+  --heat-neg-4-fg: #f4b8bb;
+
   /* Chart furniture */
   --viz-grid: #131519;
   --viz-axis: #24272d;

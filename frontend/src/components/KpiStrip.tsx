@@ -52,6 +52,13 @@ export function KpiStrip({ risk, montecarlo, summary, currency }: KpiStripProps)
 
   const kpis: Kpi[] = [
     {
+      label: 'Annualised return',
+      raw: risk.annualized_return_pct,
+      format: (value) => formatPercentSigned(value),
+      tone: signClass(risk.annualized_return_pct),
+      context: `geometric · ${risk.lookback_days}d sample`,
+    },
+    {
       label: 'Volatility',
       raw: risk.volatility_annualized_pct,
       format: (value) => formatPercent(value),
@@ -65,13 +72,6 @@ export function KpiStrip({ risk, montecarlo, summary, currency }: KpiStripProps)
       context: `excess return vs ${formatPercent(risk.risk_free_rate, 1)} rf`,
     },
     {
-      label: 'Sortino',
-      raw: risk.sortino_ratio,
-      format: formatRatio,
-      tone: signClass(risk.sortino_ratio),
-      context: 'downside risk only',
-    },
-    {
       label: 'Max drawdown',
       raw: drawdown.pct,
       format: (value) => formatPercent(value),
@@ -79,11 +79,11 @@ export function KpiStrip({ risk, montecarlo, summary, currency }: KpiStripProps)
       context: drawdownWindow,
     },
     {
-      label: 'VaR 95%',
-      raw: var95?.historical_value ?? null,
+      label: 'CVaR 95%',
+      raw: var95?.cvar_value ?? null,
       format: withCurrency,
       tone: 'neg',
-      context: `1-day historical · ${formatPercent(var95?.historical_pct)}`,
+      context: `1-day expected shortfall · ${formatPercent(var95?.cvar_pct)}`,
     },
     {
       label: `Beta vs ${risk.beta.benchmark_name}`,

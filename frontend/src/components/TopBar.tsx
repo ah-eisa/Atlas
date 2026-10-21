@@ -1,18 +1,46 @@
 /**
- * Headline bar: total value, all-time and intraday change, an inline equity
- * sparkline, and the provenance of the data on screen.
+ * Application chrome: wordmark, primary navigation, data controls, and the
+ * headline portfolio readout.
+ *
+ * The header is deliberately two-tier. The chrome row (brand / navigation /
+ * actions) stays fixed in function across every view, while the masthead row
+ * carries the portfolio identity and is allowed to disappear when there is no
+ * analytics payload yet. That keeps the navigation usable in an empty state
+ * instead of replacing the whole application with a spinner.
  */
 
-import { formatDate, formatMoneyCompact, formatMoneySigned, formatPercentSigned, signClass } from '../lib/format'
+import { formatDate, formatMoneyCompact, formatMoneySigned, formatPercentSigned, formatTimestamp, signClass } from '../lib/format'
 import type { DataConfig } from '../lib/api'
 import type { Health, SummaryPayload } from '../lib/types'
+import type { ViewKey } from '../lib/useHashRoute'
 import { AnimatedNumber } from './AnimatedNumber'
 import { Sparkline } from './Sparkline'
 
+interface ViewDefinition {
+  key: ViewKey
+  label: string
+  /** Views that need an analytics payload are disabled when none exists. */
+  needsAnalytics: boolean
+}
+
+const VIEWS: ViewDefinition[] = [
+  { key: 'overview', label: 'Overview', needsAnalytics: true },
+  { key: 'performance', label: 'Performance', needsAnalytics: true },
+  { key: 'risk', label: 'Risk', needsAnalytics: true },
+  { key: 'holdings', label: 'Holdings', needsAnalytics: false },
+  { key: 'projection', label: 'Projection', needsAnalytics: true },
+  { key: 'data', label: 'Data', needsAnalytics: false },
+]
+
 interface TopBarProps {
-  summary: SummaryPayload
-  health: Health
+  summary: SummaryPayload | null
+  health: Health | null
   config: DataConfig
+  view: ViewKey
+  baseCurrency: string
+  holdingsCount: number
+  refreshing: boolean
+  onRefresh: () => void
 }
 
 interface DeltaProps {
@@ -22,7 +50,7 @@ interface DeltaProps {
   delay: number
 }
 
-/** One signed change readout: absolute above percentage, semantic colour. */
+/** One signed change readout: value, percentage, semantic colour. */
 function Delta({ label, absolute, percent, delay }: DeltaProps) {
   const tone = signClass(absolute)
   return (
@@ -34,73 +62,165 @@ function Delta({ label, absolute, percent, delay }: DeltaProps) {
         delay={delay}
         className={`num ${tone}`}
       />
-      <span className={`num ${tone}`}>
-        (
-        <AnimatedNumber value={percent} format={formatPercentSigned} delay={delay} />)
+      <span className={`num topbar__delta-pct ${tone}`}>
+        (<AnimatedNumber value={percent} format={formatPercentSigned} delay={delay} />)
       </span>
     </div>
   )
 }
 
-export function TopBar({ summary, health, config }: TopBarProps) {
-  const allTime = summary.changes.all
-  const today = summary.changes.day
+export function TopBar({
+  summary,
+  health,
+  config,
+  view,
+  baseCurrency,
+  holdingsCount,
+  refreshing,
+  onRefresh,
+}: TopBarProps) {
   const live = config.source === 'api'
+  const analyticsReady = summary !== null
 
   return (
-    <header className="topbar">
-      <div className="topbar__identity">
-        <div className="topbar__eyebrow">
-          <h1 className="topbar__title">Portfolio Analytics</h1>
-          <span className="panel__subtitle">
-            {summary.holdings_count} holdings · {health.benchmark} benchmark
-          </span>
-        </div>
+    <header className={analyticsReady ? 'topbar' : 'topbar topbar--compact'}>
+      <div className="topbar__chrome">
+        <a className="topbar__brand" href="#/overview" aria-label="Atlas portfolio analytics home">
+          <span className="topbar__wordmark">ATLAS</span>
+          <span className="topbar__product">Portfolio intelligence</span>
+        </a>
 
-        <div className="topbar__value">
-          <AnimatedNumber
-            value={summary.total_value}
-            format={formatMoneyCompact}
-            className="num topbar__amount"
-          />
-          <span className="topbar__currency">{summary.base_currency}</span>
-        </div>
+        <nav className="nav" aria-label="Primary">
+          {VIEWS.map((item) => {
+            const disabled = item.needsAnalytics && !analyticsReady
+            const active = item.key === view
+            if (disabled) {
+              return (
+                <span
+                  key={item.key}
+                  className="nav__link nav__link--disabled"
+                  aria-disabled="true"
+                  title="Add a position to unlock analytics"
+                >
+                  {item.label}
+                </span>
+              )
+            }
+            return (
+              <a
+                key={item.key}
+                className={active ? 'nav__link nav__link--active' : 'nav__link'}
+                href={`#/${item.key}`}
+                aria-current={active ? 'page' : undefined}
+              >
+                {item.label}
+                {item.key === 'holdings' ? (
+                  <span className="nav__count num">{holdingsCount}</span>
+                ) : null}
+              </a>
+            )
+          })}
+        </nav>
 
-        {/* Deltas start fractionally after the headline so the eye lands on the
-            total first and the row resolves top-down rather than all at once. */}
-        <div className="topbar__deltas">
-          <Delta label="Today" absolute={today.absolute} percent={today.pct} delay={90} />
-          <Delta label="All time" absolute={allTime.absolute} percent={allTime.pct} delay={150} />
-          <Delta
-            label="Unrealised P&L"
-            absolute={summary.total_unrealized_pnl}
-            percent={summary.total_unrealized_pnl_pct}
-            delay={210}
-          />
+        <div className="topbar__actions">
+          <a className="topbar__source" href="#/data" title="Data source and settings">
+            <span
+              className={
+                live
+                  ? 'topbar__source-dot'
+                  : 'topbar__source-dot topbar__source-dot--snapshot'
+              }
+            />
+            {live ? 'Live API' : 'Demo snapshot'}
+          </a>
+          <button
+            type="button"
+            className="button button--quiet"
+            onClick={onRefresh}
+            disabled={refreshing}
+            title={live ? 'Refetch prices and rebuild analytics' : 'Reload the committed snapshot'}
+          >
+            <span className={refreshing ? 'spinner spinner--on' : 'spinner'} aria-hidden="true" />
+            {refreshing ? 'Refreshing' : 'Refresh'}
+          </button>
         </div>
       </div>
 
-      <div className="topbar__aside">
-        <Sparkline
-          values={summary.sparkline.values}
-          width={220}
-          height={44}
-          showEndpoint
-          ariaLabel={`Portfolio value over the last ${summary.sparkline.values.length} trading days`}
-        />
-        <div className="topbar__meta">
+      {summary ? (
+        <div className="topbar__masthead">
+          <div className="topbar__identity">
+            <div className="topbar__eyebrow">
+              <span className="eyebrow">Portfolio overview</span>
+              <span className="panel__subtitle">
+                {summary.holdings_count} holdings · {health?.benchmark ?? '—'} benchmark
+              </span>
+            </div>
+
+            <div className="topbar__value">
+              <AnimatedNumber
+                value={summary.total_value}
+                format={formatMoneyCompact}
+                className="num topbar__amount"
+              />
+              <span className="topbar__currency">{baseCurrency}</span>
+            </div>
+
+            <div className="topbar__deltas">
+              <Delta
+                label="Today"
+                absolute={summary.changes.day.absolute}
+                percent={summary.changes.day.pct}
+                delay={90}
+              />
+              <Delta
+                label="Since inception"
+                absolute={summary.changes.all.absolute}
+                percent={summary.changes.all.pct}
+                delay={150}
+              />
+              <Delta
+                label="Unrealised P&L"
+                absolute={summary.total_unrealized_pnl}
+                percent={summary.total_unrealized_pnl_pct}
+                delay={210}
+              />
+            </div>
+          </div>
+
+          <div className="topbar__aside">
+            <Sparkline
+              values={summary.sparkline.values}
+              width={236}
+              height={46}
+              showEndpoint
+              ariaLabel={`Portfolio value over the last ${summary.sparkline.values.length} trading days`}
+            />
+            <div className="topbar__meta">
+              <span>
+                Base <span className="topbar__meta-value num">{baseCurrency}</span>
+              </span>
+              <span>
+                As of <span className="topbar__meta-value num">{formatDate(summary.as_of)}</span>
+              </span>
+              <span>
+                Built{' '}
+                <span className="topbar__meta-value num">
+                  {formatTimestamp(summary.generated_at)}
+                </span>
+              </span>
+            </div>
+          </div>
+        </div>
+      ) : (
+        <div className="topbar__empty">
+          <span className="eyebrow">No analytics yet</span>
           <span>
-            Base <span className="topbar__meta-value num">{summary.base_currency}</span>
-          </span>
-          <span>
-            As of <span className="topbar__meta-value num">{formatDate(summary.as_of)}</span>
-          </span>
-          <span className="topbar__source">
-            <span className={live ? 'topbar__source-dot' : 'topbar__source-dot topbar__source-dot--snapshot'} />
-            {live ? 'Live API' : 'Snapshot'}
+            {live
+              ? 'Add a position in Holdings to build the portfolio analytics.'
+              : 'This snapshot contains no usable analytics. Open the API source to create a portfolio.'}
           </span>
         </div>
-      </div>
+      )}
     </header>
   )
 }

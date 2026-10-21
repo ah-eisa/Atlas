@@ -2,41 +2,88 @@
  * Data access: one configurable base URL, two interchangeable sources.
  *
  * `snapshot` (default) reads the committed `snapshot.json`, so the dashboard
- * runs with no backend process. `api` reads the live FastAPI endpoints. Both
- * resolve to the identical {@link Analytics} shape, so no component knows or
- * cares which one is in use.
+ * runs with no backend process. `api` reads the live FastAPI service and enables
+ * position editing. Both normalise to the same {@link PortfolioState}, so no
+ * component knows which one is in use.
  *
  * Configuration, in order of precedence:
  *   1. `?source=api|snapshot` in the URL (handy for demos)
  *   2. `VITE_DATA_SOURCE` / `VITE_API_BASE_URL` in `.env`
- *   3. Defaults: snapshot, `http://localhost:8000`
+ *   3. Defaults: snapshot, and the API on the page's own host at port 8000
+ *
+ * The API key is never put in a URL. In live mode the UI stores it in
+ * `sessionStorage` after the user enters it.
  */
 
-import type { Analytics, DataSource, Snapshot } from './types'
+import type {
+  Analytics,
+  BootstrapResponse,
+  DataSource,
+  InstrumentInfo,
+  PortfolioState,
+  Position,
+  PositionInput,
+  Snapshot,
+} from './types'
 
-const DEFAULT_API_BASE_URL = 'http://localhost:8000'
-
-/** Endpoint paths, in the order they appear in the snapshot. */
-const ROUTES = {
-  health: '/health',
-  holdings: '/holdings',
-  summary: '/portfolio/summary',
-  history: '/portfolio/history',
-  returns: '/portfolio/returns',
-  risk: '/portfolio/risk',
-  montecarlo: '/portfolio/montecarlo',
-} as const
+const DEFAULT_API_PORT = 8000
+const API_KEY_STORAGE = 'atlas.apiKey'
 
 export interface DataConfig {
   source: DataSource
   apiBaseUrl: string
   snapshotUrl: string
+  apiKey: string
+}
+
+export class ApiError extends Error {
+  status: number
+  code: string
+  fields: { field: string; message: string }[]
+
+  constructor(
+    message: string,
+    options: { status?: number; code?: string; fields?: { field: string; message: string }[] } = {},
+  ) {
+    super(message)
+    this.name = 'ApiError'
+    this.status = options.status ?? 0
+    this.code = options.code ?? 'network_error'
+    this.fields = options.fields ?? []
+  }
 }
 
 function readSourceOverride(): DataSource | null {
   if (typeof window === 'undefined') return null
   const requested = new URLSearchParams(window.location.search).get('source')
   return requested === 'api' || requested === 'snapshot' ? requested : null
+}
+
+export function getStoredApiKey(): string {
+  if (typeof window === 'undefined') return ''
+  return window.sessionStorage.getItem(API_KEY_STORAGE) ?? ''
+}
+
+export function setStoredApiKey(key: string): void {
+  if (typeof window === 'undefined') return
+  if (key) window.sessionStorage.setItem(API_KEY_STORAGE, key)
+  else window.sessionStorage.removeItem(API_KEY_STORAGE)
+}
+
+/**
+ * Default API origin for live mode.
+ *
+ * Derived from the host serving the page rather than hard-coded to
+ * `localhost`. A page opened at `http://127.0.0.1:5173` must talk to
+ * `http://127.0.0.1:8000`: the two names are different origins, so a
+ * hard-coded `localhost` target is rejected by CORS (and by proxies that
+ * resolve `localhost` to IPv6) the moment anyone opens the app by its
+ * numeric address.
+ */
+function defaultApiBaseUrl(): string {
+  if (typeof window === 'undefined') return `http://localhost:${DEFAULT_API_PORT}`
+  const { protocol, hostname } = window.location
+  return `${protocol}//${hostname}:${DEFAULT_API_PORT}`
 }
 
 /** Resolve the active configuration from URL params and build-time env. */
@@ -46,68 +93,239 @@ export function resolveConfig(): DataConfig {
 
   return {
     source,
-    apiBaseUrl: (import.meta.env.VITE_API_BASE_URL as string | undefined) ?? DEFAULT_API_BASE_URL,
+    apiBaseUrl: (import.meta.env.VITE_API_BASE_URL as string | undefined) ?? defaultApiBaseUrl(),
     // BASE_URL keeps this correct when the app is served from a sub-path.
     snapshotUrl: `${import.meta.env.BASE_URL}snapshot.json`,
+    apiKey: (import.meta.env.VITE_API_KEY as string | undefined) || getStoredApiKey(),
   }
 }
 
-/** Fetch JSON, turning any non-2xx or transport failure into a clear Error. */
-async function fetchJson<T>(url: string, signal?: AbortSignal): Promise<T> {
+/** Fetch JSON, turning any non-2xx or transport failure into an ApiError. */
+async function requestJson<T>(
+  url: string,
+  config: DataConfig,
+  init: RequestInit = {},
+  signal?: AbortSignal,
+): Promise<T> {
+  const headers = new Headers(init.headers)
+  headers.set('Accept', 'application/json')
+  if (init.body) headers.set('Content-Type', 'application/json')
+  if (config.apiKey) headers.set('X-API-Key', config.apiKey)
+
   let response: Response
   try {
-    response = await fetch(url, { signal, headers: { Accept: 'application/json' } })
+    response = await fetch(url, { ...init, headers, signal })
   } catch (cause) {
     if (cause instanceof DOMException && cause.name === 'AbortError') throw cause
-    throw new Error(`Could not reach ${url}. Is the backend running?`, { cause })
+    throw new ApiError(`Could not reach ${url}. Is the backend running?`)
   }
 
   if (!response.ok) {
-    throw new Error(`${url} returned ${response.status} ${response.statusText}`)
+    let message = `${url} returned ${response.status} ${response.statusText}`
+    let code = 'http_error'
+    let fields: { field: string; message: string }[] = []
+    try {
+      const body = (await response.json()) as {
+        detail?: string | { code?: string; message?: string; fields?: typeof fields }
+      }
+      if (typeof body.detail === 'string') {
+        message = body.detail
+      } else if (body.detail) {
+        code = body.detail.code ?? code
+        message = body.detail.message ?? message
+        fields = body.detail.fields ?? []
+      }
+    } catch {
+      // A non-JSON error page (proxy, crash) keeps the status-based message.
+    }
+    throw new ApiError(message, { status: response.status, code, fields })
   }
+
+  if (response.status === 204) return undefined as T
   return (await response.json()) as T
 }
 
-/** Load every payload from the live API, in parallel. */
-async function loadFromApi(baseUrl: string, signal?: AbortSignal): Promise<Analytics> {
-  const base = baseUrl.replace(/\/$/, '')
-  const [health, holdings, summary, history, returns, risk, montecarlo] = await Promise.all([
-    fetchJson<Analytics['health']>(`${base}${ROUTES.health}`, signal),
-    fetchJson<Analytics['holdings']>(`${base}${ROUTES.holdings}`, signal),
-    fetchJson<Analytics['summary']>(`${base}${ROUTES.summary}`, signal),
-    fetchJson<Analytics['history']>(`${base}${ROUTES.history}`, signal),
-    fetchJson<Analytics['returns']>(`${base}${ROUTES.returns}`, signal),
-    fetchJson<Analytics['risk']>(`${base}${ROUTES.risk}`, signal),
-    fetchJson<Analytics['montecarlo']>(`${base}${ROUTES.montecarlo}`, signal),
-  ])
-  return { health, holdings, summary, history, returns, risk, montecarlo }
-}
-
-/** Load every payload from the committed snapshot. */
-async function loadFromSnapshot(url: string, signal?: AbortSignal): Promise<Analytics> {
-  const snapshot = await fetchJson<Snapshot>(url, signal)
-  const endpoints = snapshot?.endpoints
-
-  if (!endpoints?.[ROUTES.summary]) {
-    throw new Error(
-      `${url} is not a valid snapshot. Regenerate it with backend/generate_snapshot.py.`,
+function snapshotToState(snapshot: Snapshot): PortfolioState {
+  const endpoints = snapshot.endpoints
+  if (!endpoints?.['/portfolio/summary']) {
+    throw new ApiError(
+      'This snapshot is missing its analytics payloads. Regenerate it with backend/generate_snapshot.py.',
+      { code: 'invalid_snapshot' },
     )
   }
 
+  const analytics: Analytics = {
+    health: endpoints['/health'],
+    holdings: endpoints['/holdings'],
+    summary: endpoints['/portfolio/summary'],
+    history: endpoints['/portfolio/history'],
+    returns: endpoints['/portfolio/returns'],
+    risk: endpoints['/portfolio/risk'],
+    montecarlo: endpoints['/portfolio/montecarlo'],
+  }
+
+  // The snapshot is the demo output, not a database. Positions are derived so
+  // the read-only holdings view can describe cost basis and acquisition dates.
+  const positions: Position[] = analytics.holdings.holdings.map((holding, index) => ({
+    id: index + 1,
+    ticker: holding.ticker,
+    name: holding.name,
+    asset_class: holding.asset_class,
+    region: holding.region,
+    currency: holding.currency,
+    quantity: holding.quantity,
+    cost_basis_per_unit: holding.cost_basis_native,
+    acquired: holding.acquired,
+    created_at: snapshot.generated_at,
+    updated_at: snapshot.generated_at,
+  }))
+
   return {
-    health: endpoints[ROUTES.health],
-    holdings: endpoints[ROUTES.holdings],
-    summary: endpoints[ROUTES.summary],
-    history: endpoints[ROUTES.history],
-    returns: endpoints[ROUTES.returns],
-    risk: endpoints[ROUTES.risk],
-    montecarlo: endpoints[ROUTES.montecarlo],
+    source: 'snapshot',
+    apiVersion: analytics.health.version,
+    baseCurrency: snapshot.base_currency,
+    analytics,
+    positions,
+    settings: {
+      benchmark: analytics.health.benchmark,
+      benchmark_name: analytics.risk.benchmark.name,
+      risk_free_rate: analytics.risk.risk_free_rate,
+      history_years: Math.max(1, Math.round(analytics.health.history_days / 252)),
+      trading_days_per_year: analytics.risk.trading_days_per_year,
+      api_key_required: false,
+      seed_demo: false,
+    },
+    warnings: analytics.health.warnings ?? [],
+    error: null,
+    editable: false,
   }
 }
 
-/** Load the full analytics set from whichever source is configured. */
-export function loadAnalytics(config: DataConfig, signal?: AbortSignal): Promise<Analytics> {
-  return config.source === 'api'
-    ? loadFromApi(config.apiBaseUrl, signal)
-    : loadFromSnapshot(config.snapshotUrl, signal)
+/** Load everything the UI needs from whichever source is configured. */
+export async function loadPortfolio(
+  config: DataConfig,
+  signal?: AbortSignal,
+): Promise<PortfolioState> {
+  if (config.source === 'snapshot') {
+    const snapshot = await requestJson<Snapshot>(config.snapshotUrl, config, {}, signal)
+    return snapshotToState(snapshot)
+  }
+
+  const base = config.apiBaseUrl.replace(/\/$/, '')
+  const bootstrap = await requestJson<BootstrapResponse>(
+    `${base}/api/v1/bootstrap`,
+    config,
+    {},
+    signal,
+  )
+  return {
+    source: 'api',
+    apiVersion: bootstrap.api_version,
+    baseCurrency: bootstrap.base_currency,
+    analytics: bootstrap.analytics,
+    positions: bootstrap.positions,
+    settings: bootstrap.settings,
+    warnings: bootstrap.warnings,
+    error: bootstrap.error,
+    editable: true,
+  }
+}
+
+function apiUrl(config: DataConfig, path: string): string {
+  return `${config.apiBaseUrl.replace(/\/$/, '')}${path}`
+}
+
+export function createPosition(config: DataConfig, input: PositionInput): Promise<Position> {
+  return requestJson<Position>(apiUrl(config, '/api/v1/positions'), config, {
+    method: 'POST',
+    body: JSON.stringify(input),
+  })
+}
+
+export function updatePosition(
+  config: DataConfig,
+  id: number,
+  input: PositionInput,
+): Promise<Position> {
+  return requestJson<Position>(apiUrl(config, `/api/v1/positions/${id}`), config, {
+    method: 'PUT',
+    body: JSON.stringify(input),
+  })
+}
+
+export function deletePosition(config: DataConfig, id: number): Promise<void> {
+  return requestJson<void>(apiUrl(config, `/api/v1/positions/${id}`), config, {
+    method: 'DELETE',
+  })
+}
+
+export function lookupInstrument(
+  config: DataConfig,
+  ticker: string,
+  signal?: AbortSignal,
+): Promise<InstrumentInfo> {
+  return requestJson<InstrumentInfo>(
+    apiUrl(config, `/api/v1/instruments/${encodeURIComponent(ticker)}`),
+    config,
+    {},
+    signal,
+  )
+}
+
+export function updateBaseCurrency(config: DataConfig, baseCurrency: string): Promise<{ base_currency: string }> {
+  return requestJson<{ base_currency: string }>(
+    apiUrl(config, '/api/v1/settings/base-currency'),
+    config,
+    { method: 'PUT', body: JSON.stringify({ base_currency: baseCurrency }) },
+  )
+}
+
+export interface RefreshResult {
+  status: string
+  as_of: string
+  prices_fetched_at: string
+}
+
+export function refreshPortfolio(config: DataConfig): Promise<RefreshResult> {
+  return requestJson<RefreshResult>(apiUrl(config, '/api/v1/portfolio/refresh'), config, {
+    method: 'POST',
+  })
+}
+
+export function exportUrl(config: DataConfig, format: 'json' | 'csv'): string {
+  return apiUrl(config, `/api/v1/portfolio/export?format=${format}`)
+}
+
+/**
+ * Download an export through `fetch` rather than a plain link so the API key
+ * travels in the header. An anchor cannot attach one, which would make every
+ * export fail on a protected deployment.
+ */
+export async function downloadExport(
+  config: DataConfig,
+  format: 'json' | 'csv',
+): Promise<void> {
+  const headers = new Headers({ Accept: format === 'json' ? 'application/json' : 'text/csv' })
+  if (config.apiKey) headers.set('X-API-Key', config.apiKey)
+
+  const response = await fetch(exportUrl(config, format), { headers })
+  if (!response.ok) {
+    throw new ApiError(`Export failed with status ${response.status}.`, {
+      status: response.status,
+      code: 'export_failed',
+    })
+  }
+  const blob = await response.blob()
+  const url = URL.createObjectURL(blob)
+  const anchor = document.createElement('a')
+  anchor.href = url
+  anchor.download = `portfolio.${format}`
+  document.body.append(anchor)
+  anchor.click()
+  anchor.remove()
+  URL.revokeObjectURL(url)
+}
+
+export function apiBase(config: DataConfig): string {
+  return config.apiBaseUrl.replace(/\/$/, '')
 }

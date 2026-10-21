@@ -28,7 +28,7 @@ import type { HistoryPayload, PeriodKey, ReturnsPayload, SummaryPayload } from '
 import { Panel, Segmented } from './Panel'
 
 type Range = '1w' | '1m' | 'ytd' | 'all'
-type View = 'value' | 'return'
+type View = 'growth' | 'return' | 'drawdown'
 
 const RANGES = [
   { value: '1w' as const, label: '1W' },
@@ -38,8 +38,9 @@ const RANGES = [
 ]
 
 const VIEWS = [
-  { value: 'value' as const, label: 'Value' },
+  { value: 'growth' as const, label: 'Growth' },
   { value: 'return' as const, label: 'Return' },
+  { value: 'drawdown' as const, label: 'Drawdown' },
 ]
 
 const READOUT_PERIODS: PeriodKey[] = ['day', 'week', 'month', 'ytd', 'all']
@@ -85,7 +86,7 @@ interface PerformancePanelProps {
 
 export function PerformancePanel({ history, summary, returns, currency }: PerformancePanelProps) {
   const [range, setRange] = useState<Range>('all')
-  const [view, setView] = useState<View>('value')
+  const [view, setView] = useState<View>('growth')
   const [crosshair, setCrosshair] = useState<CrosshairState | null>(null)
   const theme = chartTheme()
 
@@ -94,6 +95,18 @@ export function PerformancePanel({ history, summary, returns, currency }: Perfor
     const dates = history.dates.slice(start)
     const portfolio = history.portfolio.slice(start)
     const benchmark = history.benchmark_rebased.slice(start)
+
+    if (view === 'drawdown') {
+      return [
+        {
+          id: 'drawdown',
+          label: 'Drawdown',
+          color: theme.negative,
+          lineWidth: 1,
+          data: toLineData(dates, history.drawdown_pct.slice(start)),
+        },
+      ]
+    }
 
     if (view === 'return') {
       return [
@@ -132,7 +145,7 @@ export function PerformancePanel({ history, summary, returns, currency }: Perfor
     ]
   }, [history, range, view, theme])
 
-  const isPercentView = view !== 'value'
+  const isPercentView = view !== 'growth'
   const valueFormatter = useMemo(
     () => (value: number) => (isPercentView ? formatPercent(value, 1) : formatMoneyCompact(value)),
     [isPercentView],
@@ -146,7 +159,9 @@ export function PerformancePanel({ history, summary, returns, currency }: Perfor
   return (
     <Panel
       title="Performance"
-      subtitle={view === 'value' ? currency : 'percent'}
+      subtitle={
+        view === 'growth' ? `${currency} growth index` : view === 'drawdown' ? 'percent below peak' : 'percent'
+      }
       actions={
         <>
           <Segmented options={VIEWS} value={view} onChange={setView} ariaLabel="Chart view" />
@@ -170,7 +185,11 @@ export function PerformancePanel({ history, summary, returns, currency }: Perfor
                 />
                 <span className="performance__legend-label">{spec.label}</span>
                 <span className="num performance__legend-value">
-                  {isPercentView ? formatPercentSigned(shown) : formatMoney(shown)}
+                  {view === 'drawdown'
+                    ? formatPercent(shown)
+                    : isPercentView
+                      ? formatPercentSigned(shown)
+                      : formatMoney(shown)}
                 </span>
               </span>
             )
@@ -225,6 +244,17 @@ export function PerformancePanel({ history, summary, returns, currency }: Perfor
             <span className="num muted">{formatDate(returns.worst_day.date)}</span>
           </span>
         </div>
+
+        {summary.changes.all.flows !== 0 ? (
+          <div className="performance__flows">
+            <span>
+              External contributions are excluded from returns. Net invested: YTD{' '}
+              <span className="num">{formatMoneySigned(summary.changes.ytd.flows)}</span> ·
+              since inception{' '}
+              <span className="num">{formatMoneySigned(summary.changes.all.flows)}</span>.
+            </span>
+          </div>
+        ) : null}
       </div>
     </Panel>
   )
