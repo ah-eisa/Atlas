@@ -83,6 +83,9 @@ test('charts fill their containers', async ({ page }) => {
 test('the numbers are numbers, not zeros', async ({ page }) => {
   await page.goto('/?source=snapshot#/overview')
 
+  // The shell paints before the lazily loaded view, so wait for the band.
+  await expect(page.locator('.kpi__cell').first()).toBeVisible()
+
   const total = await page.locator('.topbar__amount .counter__reserve').innerText()
   expect(total).not.toMatch(/^0\b/)
   expect(total).not.toContain('—')

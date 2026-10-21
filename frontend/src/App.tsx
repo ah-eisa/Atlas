@@ -8,38 +8,26 @@
  * views is instantaneous.
  */
 
-import { useState } from 'react'
+import { lazy, Suspense, useState } from 'react'
 
-import { AllocationPanel } from './components/AllocationPanel'
-import { AttributionPanel } from './components/AttributionPanel'
-import { BenchmarkPanel } from './components/BenchmarkPanel'
-import { CashFlowEditor } from './components/CashFlowEditor'
-import { CorrelationPanel } from './components/CorrelationPanel'
-import { DataPanel } from './components/DataPanel'
-import { DrawdownPanel } from './components/DrawdownPanel'
-import { DriftPanel } from './components/DriftPanel'
-import { FxAttributionPanel } from './components/FxAttributionPanel'
-import { HoldingsPanel } from './components/HoldingsPanel'
-import { KpiStrip } from './components/KpiStrip'
-import { MonteCarloPanel, OutcomeDistributionPanel } from './components/MonteCarloPanel'
-import { MonthlyReturnsPanel } from './components/MonthlyReturnsPanel'
-import { Panel } from './components/Panel'
-import { PerformancePanel } from './components/PerformancePanel'
-import { PortfolioEditor } from './components/PortfolioEditor'
-import { ProjectionNotesPanel } from './components/ProjectionNotesPanel'
-import { ReplayPanel } from './components/ReplayPanel'
-import { ReturnsDistributionPanel } from './components/ReturnsDistributionPanel'
-import { RiskContributionPanel } from './components/RiskContributionPanel'
-import { RiskPanel } from './components/RiskPanel'
 import { TopBar } from './components/TopBar'
-import { ApiError } from './lib/api'
+import { ApiError, type DataConfig } from './lib/api'
 import { formatDate, formatTimestamp } from './lib/format'
 import { useTheme } from './lib/theme'
 import { useHashRoute, type ViewKey } from './lib/useHashRoute'
 import { usePortfolio } from './lib/usePortfolio'
 import type { PortfolioState } from './lib/types'
 
-const ANALYTIC_VIEWS: ViewKey[] = ['overview', 'performance', 'risk', 'projection']
+// Views are code-split: the shell and the KPI band render without waiting for
+// a view's panels and, more importantly, without waiting for the charting
+// libraries. Each chunk is fetched the first time its view is opened and
+// cached thereafter.
+const OverviewView = lazy(() => import('./views/OverviewView'))
+const PerformanceView = lazy(() => import('./views/PerformanceView'))
+const RiskView = lazy(() => import('./views/RiskView'))
+const ProjectionView = lazy(() => import('./views/ProjectionView'))
+const HoldingsView = lazy(() => import('./views/HoldingsView'))
+const DataView = lazy(() => import('./views/DataView'))
 
 function Shell({
   state,
@@ -246,178 +234,82 @@ function WarningStrip({
   )
 }
 
-function SnapshotHoldingsNotice() {
+function ViewLoading() {
   return (
-    <Panel title="Editing" subtitle="snapshot mode is read-only">
-      <div className="snapshot-note">
-        <p>
-          This view is running from the committed <code>snapshot.json</code>. Positions can
-          be inspected but not changed, because a static file has no database behind it.
-        </p>
-        <p>
-          Start the FastAPI service and switch the data source to add positions, refresh
-          prices, set the reporting currency, and export the stored portfolio.
-        </p>
-        <a className="button button--primary" href="?source=api#/holdings">
-          Open live API
-        </a>
+    <main className="app__main">
+      <div className="state state--inline" role="status">
+        <span className="spinner spinner--on" aria-hidden="true" />
+        <span className="state__title">Loading view</span>
       </div>
-    </Panel>
+    </main>
   )
 }
 
-function AnalyticsViews({
+function ViewContent({
   state,
   view,
   config,
+  refreshing,
   onReload,
+  onRefresh,
   onApiKey,
+  onPortfolio,
 }: {
   state: PortfolioState
   view: ViewKey
-  config: ReturnType<typeof usePortfolio>['config']
+  config: DataConfig
+  refreshing: boolean
   onReload: () => void
+  onRefresh: () => void
   onApiKey: (key: string) => void
+  onPortfolio: (id: number) => void
 }) {
-  const analytics = state.analytics
-  if (!analytics) return null
+  if (view === 'data') {
+    return (
+      <DataView
+        state={state}
+        config={config}
+        refreshing={refreshing}
+        onRefresh={onRefresh}
+        onReload={onReload}
+        onApiKey={onApiKey}
+        onPortfolio={onPortfolio}
+      />
+    )
+  }
 
-  const { summary, history, returns, risk, montecarlo, holdings } = analytics
-  const currency = summary.base_currency
-  const apiKeyRequired = state.settings?.api_key_required ?? false
+  // Holdings is reachable with no analytics at all: an empty live portfolio
+  // still needs its editor, and a pricing failure must not hide the positions
+  // that are already stored.
+  if (view === 'holdings') {
+    return (
+      <HoldingsView
+        state={state}
+        config={config}
+        onReload={onReload}
+        onApiKey={onApiKey}
+      />
+    )
+  }
+
+  // A live API can bootstrap successfully with no analytics (empty portfolio
+  // or an upstream data failure). Keep the shell reachable instead of showing
+  // an unrecoverable error page.
+  if (!state.analytics) {
+    return <AnalyticsUnavailable state={state} onRetry={onReload} />
+  }
 
   switch (view) {
     case 'overview':
-      return (
-        <main className="app__main">
-          <KpiStrip risk={risk} montecarlo={montecarlo} summary={summary} currency={currency} />
-
-          <div className="row row--overview">
-            <PerformancePanel
-              history={history}
-              summary={summary}
-              returns={returns}
-              currency={currency}
-            />
-            <AllocationPanel
-              byClass={summary.allocation_by_class}
-              byRegion={summary.allocation_by_region}
-              currency={currency}
-            />
-          </div>
-
-          <div className="row row--split">
-            <BenchmarkPanel risk={risk} config={config} />
-            <RiskContributionPanel risk={risk} />
-          </div>
-
-          <HoldingsPanel
-            holdings={holdings.holdings}
-            totalValue={holdings.total_value}
-            currency={currency}
-          />
-        </main>
-      )
-
+      return <OverviewView state={state} config={config} />
     case 'performance':
-      return (
-        <main className="app__main">
-          <PerformancePanel
-            history={history}
-            summary={summary}
-            returns={returns}
-            currency={currency}
-          />
-          <div className="row row--split">
-            <DrawdownPanel history={history} risk={risk} />
-            <ReturnsDistributionPanel returns={returns} />
-          </div>
-          <FxAttributionPanel
-            summary={summary}
-            holdings={holdings.holdings}
-            currency={currency}
-          />
-          <MonthlyReturnsPanel returns={returns} />
-        </main>
-      )
-
+      return <PerformanceView state={state} />
     case 'risk':
-      return (
-        <main className="app__main">
-          <div className="row row--split">
-            <BenchmarkPanel risk={risk} config={config} />
-            <RiskContributionPanel risk={risk} />
-          </div>
-          <div className="row row--risk">
-            <RiskPanel risk={risk} currency={currency} />
-            <CorrelationPanel
-              correlation={risk.correlation}
-              lookbackDays={risk.lookback_days}
-            />
-          </div>
-          <DriftPanel summary={summary} currency={currency} config={config} />
-          <AttributionPanel summary={summary} />
-          <ReplayPanel
-            config={config}
-            currency={currency}
-            historyStart={analytics.health.history_start}
-            history={history}
-          />
-        </main>
-      )
-
+      return <RiskView state={state} config={config} />
     case 'projection':
-      return (
-        <main className="app__main">
-          <KpiStrip risk={risk} montecarlo={montecarlo} summary={summary} currency={currency} />
-          <div className="row row--projection">
-            <MonteCarloPanel montecarlo={montecarlo} currency={currency} />
-            <OutcomeDistributionPanel montecarlo={montecarlo} currency={currency} />
-          </div>
-          <ProjectionNotesPanel montecarlo={montecarlo} currency={currency} />
-        </main>
-      )
-
-    case 'holdings':
-      return (
-        <main className="app__main">
-          <HoldingsPanel
-            holdings={holdings.holdings}
-            totalValue={holdings.total_value}
-            currency={currency}
-          />
-          <AllocationPanel
-            byClass={summary.allocation_by_class}
-            byRegion={summary.allocation_by_region}
-            byCurrency={summary.allocation_by_currency}
-            currency={currency}
-          />
-          {state.editable ? (
-            <PortfolioEditor
-              positions={state.positions}
-              config={config}
-              apiKeyRequired={apiKeyRequired}
-              baseCurrency={currency}
-              onSaved={onReload}
-              onApiKey={onApiKey}
-            />
-          ) : (
-            <SnapshotHoldingsNotice />
-          )}
-          {state.editable ? (
-            <CashFlowEditor
-              cashFlows={state.cashFlows}
-              config={config}
-              baseCurrency={currency}
-              onSaved={onReload}
-              onApiKey={onApiKey}
-            />
-          ) : null}
-        </main>
-      )
-
+      return <ProjectionView state={state} />
     default:
-      return null
+      return <AnalyticsUnavailable state={state} onRetry={onReload} />
   }
 }
 
@@ -459,77 +351,22 @@ export default function App() {
     )
   }
 
-  const analytics = data.analytics
-  const isAnalyticView = ANALYTIC_VIEWS.includes(view)
-
-  // A live API can bootstrap successfully with no analytics (empty portfolio or
-  // an upstream data failure). Keep the shell and the editor reachable instead
-  // of showing an unrecoverable error page.
-  let content: React.ReactNode
-  if (view === 'data') {
-    content = (
-      <main className="app__main">
-        <DataPanel
-          state={data}
-          config={config}
-          refreshing={refreshing}
-          onRefresh={() => void refresh()}
-          onReload={reload}
-          onApiKey={setApiKey}
-          onPortfolio={setPortfolio}
-        />
-      </main>
-    )
-  } else if (!analytics && view === 'holdings') {
-    content = (
-      <main className="app__main">
-        <Panel title="Holdings" subtitle={`${data.positions.length} stored positions`}>
-          <div className="state state--inline">
-            <span className="state__kicker">
-              {data.positions.length === 0 ? 'Empty portfolio' : 'Pricing unavailable'}
-            </span>
-            <span className="state__title">
-              {data.positions.length === 0
-                ? 'Add the first position to build the portfolio'
-                : 'Positions are stored, but market data could not be loaded'}
-            </span>
-            <p className="state__detail">
-              {data.error ??
-                'The editor is ready. Analytics will appear once the portfolio has at least one position and prices can be fetched.'}
-            </p>
-          </div>
-        </Panel>
-        {data.editable ? (
-          <PortfolioEditor
-            positions={data.positions}
-            config={config}
-            apiKeyRequired={data.settings?.api_key_required ?? false}
-            baseCurrency={data.baseCurrency}
-            onSaved={reload}
-            onApiKey={setApiKey}
-          />
-        ) : null}
-      </main>
-    )
-  } else if (!analytics && isAnalyticView) {
-    content = <AnalyticsUnavailable state={data} onRetry={reload} />
-  } else if (!analytics) {
-    content = (
-      <main className="app__main">
-        <AnalyticsUnavailable state={data} onRetry={reload} />
-      </main>
-    )
-  } else {
-    content = (
-      <AnalyticsViews
+  // Views are resolved lazily; the fallback is a panel-shaped skeleton so the
+  // page does not jump when a chunk arrives.
+  const content = (
+    <Suspense fallback={<ViewLoading />}>
+      <ViewContent
         state={data}
         view={view}
         config={config}
+        refreshing={refreshing}
         onReload={reload}
+        onRefresh={() => void refresh()}
         onApiKey={setApiKey}
+        onPortfolio={setPortfolio}
       />
-    )
-  }
+    </Suspense>
+  )
 
   return (
     <Shell

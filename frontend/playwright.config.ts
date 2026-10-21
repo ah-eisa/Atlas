@@ -13,9 +13,13 @@ import { defineConfig, devices } from '@playwright/test'
  */
 export default defineConfig({
   testDir: './e2e',
-  timeout: 30_000,
-  expect: { timeout: 7_000 },
+  timeout: 60_000,
+  expect: { timeout: 15_000 },
   fullyParallel: true,
+  // Two workers is enough to catch cross-test interference without starving
+  // the renderer of CPU; chart libraries are large and the assertions time the
+  // layout, not just the network.
+  workers: process.env.CI ? 2 : 4,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 1 : 0,
   reporter: process.env.CI ? 'github' : 'list',

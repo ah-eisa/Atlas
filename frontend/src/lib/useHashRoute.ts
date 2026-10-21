@@ -7,7 +7,7 @@
  * `#/risk?source=api` can be pasted into a report or a chat message.
  */
 
-import { useCallback, useEffect, useState } from 'react'
+import { startTransition, useCallback, useEffect, useState } from 'react'
 
 export const VIEW_KEYS = [
   'overview',
@@ -36,7 +36,11 @@ export function useHashRoute(): [ViewKey, (view: ViewKey) => void] {
   )
 
   useEffect(() => {
-    const onHashChange = () => setView(parseHash(window.location.hash))
+    // The views are lazy, so a route change may have to fetch a chunk. Marking
+    // the update as a transition lets React keep the current view on screen
+    // until the next one is ready, instead of flashing a loading placeholder.
+    const onHashChange = () =>
+      startTransition(() => setView(parseHash(window.location.hash)))
     window.addEventListener('hashchange', onHashChange)
     return () => window.removeEventListener('hashchange', onHashChange)
   }, [])
@@ -44,7 +48,7 @@ export function useHashRoute(): [ViewKey, (view: ViewKey) => void] {
   const navigate = useCallback((next: ViewKey) => {
     const target = `#/${next}`
     if (window.location.hash === target) {
-      setView(next)
+      startTransition(() => setView(next))
       return
     }
     // Assigning the hash pushes a history entry, so Back returns to the
