@@ -74,6 +74,13 @@ class PositionView:
     day_change_pct: float
     acquired: str
     sparkline: list[float]
+    # Attribution of the unrealised P&L between the two effects that can move
+    # it: the instrument's own price, and the currency it is quoted in.
+    price_effect: float | None
+    fx_effect: float | None
+    fx_rate_now: float
+    fx_rate_at_acquisition: float
+    price_native_at_acquisition: float | None
 
 
 class PortfolioAnalytics:
@@ -274,6 +281,30 @@ class PortfolioAnalytics:
             pnl_abs, pnl_pct = metrics.unrealized_pnl(holding.quantity, price_base, cost_base)
             prev = float(previous_base[ticker])
 
+            # Split the unrealised P&L into what the instrument did and what
+            # the currency did.
+            #
+            #   price effect = q * (p_now - p_entry) * rate_entry
+            #   fx effect    = q * p_now * (rate_now - rate_entry)
+            #
+            # The two add up exactly to the reported P&L, so the split is a
+            # decomposition rather than an approximation. The price effect is
+            # measured in the currency the position was bought in, which is
+            # the only way to say "the stock moved" without the currency
+            # contaminating the answer.
+            price_native_now = float(latest_native[ticker])
+            rate_now = (
+                1.0
+                if normalise_currency(holding.currency)[0] == self.portfolio.base_currency
+                else fx_rate_on(self.market.rate_series(holding.currency), self.as_of)
+            )
+            price_entry = self._native_price_at(holding.ticker, holding.acquired)
+            if price_entry is None:
+                price_effect = fx_effect = None
+            else:
+                price_effect = holding.quantity * (price_native_now - price_entry) * rate
+                fx_effect = holding.quantity * price_native_now * (rate_now - rate)
+
             views.append(
                 PositionView(
                     ticker=ticker,
@@ -282,7 +313,7 @@ class PortfolioAnalytics:
                     region=holding.region_label,
                     currency=holding.currency,
                     quantity=holding.quantity,
-                    price_native=float(latest_native[ticker]),
+                    price_native=price_native_now,
                     price_base=price_base,
                     value_base=float(current_values[ticker]),
                     allocation_pct=float(weights[ticker]),
@@ -294,9 +325,30 @@ class PortfolioAnalytics:
                     day_change_pct=(price_base / prev - 1.0) if prev else float("nan"),
                     acquired=holding.acquired,
                     sparkline=[float(v) for v in history_tail[ticker]],
+                    price_effect=price_effect,
+                    fx_effect=fx_effect,
+                    fx_rate_now=rate_now,
+                    fx_rate_at_acquisition=rate,
+                    price_native_at_acquisition=price_entry,
                 )
             )
         return views
+
+    def _native_price_at(self, ticker: str, day: str) -> float | None:
+        """The instrument's own-currency price on ``day``, or ``None``.
+
+        Returns ``None`` when the position was acquired before the downloaded
+        history starts: there is no entry price to compare against, so the
+        price/currency split cannot be made and is reported as unknown rather
+        than estimated.
+        """
+        series = self.market.prices_native[ticker].dropna()
+        if series.empty:
+            return None
+        window = series.loc[: pd.Timestamp(day).normalize()]
+        if window.empty:
+            return None
+        return float(window.iloc[-1])
 
     @cached_property
     def monte_carlo(self) -> montecarlo.MonteCarloResult:
@@ -449,6 +501,15 @@ class PortfolioAnalytics:
                         "cost_total_base": round_money(p.cost_total_base),
                         "unrealized_pnl": round_money(p.unrealized_pnl),
                         "unrealized_pnl_pct": round_ratio(p.unrealized_pnl_pct),
+                        "price_effect": round_money(p.price_effect),
+                        "fx_effect": round_money(p.fx_effect),
+                        "fx_rate_now": round(p.fx_rate_now, 6),
+                        "fx_rate_at_acquisition": round(p.fx_rate_at_acquisition, 6),
+                        "price_native_at_acquisition": (
+                            round_money(p.price_native_at_acquisition)
+                            if p.price_native_at_acquisition is not None
+                            else None
+                        ),
                         "day_change_pct": round_ratio(p.day_change_pct),
                         "acquired": p.acquired,
                         "sparkline": money_series(p.sparkline),
@@ -475,12 +536,38 @@ class PortfolioAnalytics:
                 "allocation_by_class": self._allocation_breakdown("asset_class"),
                 "allocation_by_region": self._allocation_breakdown("region"),
                 "allocation_by_currency": self._allocation_breakdown("currency"),
+                "fx_attribution": self._fx_attribution(),
                 "sparkline": {
                     "dates": to_iso_dates(tail.index),
                     "values": money_series(tail.to_numpy()),
                 },
             }
         )
+
+    def _fx_attribution(self) -> dict[str, Any]:
+        """Split the unrealised P&L into price effect and currency effect.
+
+        The two effects are computed per position and summed, so the totals
+        reconcile with the reported unrealised P&L. Positions acquired before
+        the price history starts have no entry price, so their P&L cannot be
+        attributed; that remainder is reported rather than smeared across the
+        others.
+        """
+        price_effect = 0.0
+        fx_effect = 0.0
+        unattributed = 0.0
+        for position in self.positions:
+            if position.price_effect is None or position.fx_effect is None:
+                unattributed += position.unrealized_pnl
+                continue
+            price_effect += position.price_effect
+            fx_effect += position.fx_effect
+        return {
+            "price_effect": round_money(price_effect),
+            "fx_effect": round_money(fx_effect),
+            "unattributed": round_money(unattributed),
+            "total": round_money(price_effect + fx_effect + unattributed),
+        }
 
     def history(self) -> dict[str, Any]:
         dates = to_iso_dates(self.active_index)

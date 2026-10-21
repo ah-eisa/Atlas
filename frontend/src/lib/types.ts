@@ -50,6 +50,17 @@ export interface Holding {
   acquired: string
   /** Trailing 90 trading days of price in base currency, for the row sparkline. */
   sparkline: number[]
+  /**
+   * The unrealised P&L split into the instrument's own price move and the
+   * move of the currency it is quoted in. `null` when the position predates
+   * the price history, so no entry price exists to compare against.
+   */
+  price_effect: number | null
+  fx_effect: number | null
+  /** Base-currency units per unit of the quote currency, now and at entry. */
+  fx_rate_now: number
+  fx_rate_at_acquisition: number
+  price_native_at_acquisition: number | null
 }
 
 export interface HoldingsPayload extends Envelope {
@@ -88,6 +99,14 @@ export interface SummaryPayload extends Envelope {
   allocation_by_class: AllocationBucket[]
   allocation_by_region: AllocationBucket[]
   allocation_by_currency: AllocationBucket[]
+  /** Unrealised P&L split into price effect and currency effect. */
+  fx_attribution: {
+    price_effect: number
+    fx_effect: number
+    /** P&L of positions acquired before the price history starts. */
+    unattributed: number
+    total: number
+  }
   sparkline: {
     dates: string[]
     values: number[]

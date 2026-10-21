@@ -1021,3 +1021,129 @@
     flex-wrap: wrap;
   }
 }
+/* ------------------------------------------------------------------ *
+ * Price vs currency attribution                                      *
+ * ------------------------------------------------------------------ */
+
+.attribution {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  padding: var(--space-5);
+}
+
+.attribution__figures {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-5);
+}
+
+.attribution__figure {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.attribution__label {
+  font-size: var(--size-micro);
+  letter-spacing: var(--tracking-label);
+  color: var(--text-tertiary);
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.attribution__value {
+  font-size: var(--size-heading);
+  line-height: var(--leading-tight);
+  color: var(--text-primary);
+}
+
+.attribution__context {
+  font-size: var(--size-micro);
+  color: var(--text-tertiary);
+  line-height: var(--leading-snug);
+}
+
+/* A single bar, split between the two effects and scaled to the larger
+   of them, so a small effect next to a large one stays visible. */
+.attribution__bar {
+  display: flex;
+  height: 8px;
+  width: 100%;
+  background: var(--surface-active);
+  overflow: hidden;
+}
+
+.attribution__segment {
+  display: block;
+  height: 100%;
+  min-width: 2px;
+}
+
+.attribution__segment--price {
+  background: var(--accent);
+}
+
+.attribution__segment--fx {
+  background: var(--viz-cat-4);
+}
+
+.attribution__segment--negative {
+  background: var(--negative);
+}
+
+.attribution__table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--size-micro);
+}
+
+.attribution__table th {
+  padding: var(--space-2) var(--space-3);
+  border-bottom: 1px solid var(--line);
+  color: var(--text-tertiary);
+  font-weight: var(--weight-medium);
+  letter-spacing: var(--tracking-wide);
+  text-transform: uppercase;
+  text-align: left;
+}
+
+.attribution__table td {
+  padding: var(--space-2) var(--space-3);
+  border-bottom: 1px solid var(--line-faint);
+  color: var(--text-secondary);
+}
+
+.attribution__table th.tabular-right,
+.attribution__table td.tabular-right {
+  text-align: right;
+}
+
+.attribution__ticker {
+  color: var(--text-primary);
+  font-weight: var(--weight-medium);
+}
+
+.attribution__move {
+  color: var(--text-tertiary);
+}
+
+.attribution__note {
+  margin: 0;
+  font-size: var(--size-micro);
+  line-height: var(--leading-normal);
+  color: var(--text-tertiary);
+}
+
+@media (max-width: 720px) {
+  .attribution__figures {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--space-4);
+  }
+
+  .attribution__table {
+    display: block;
+    overflow-x: auto;
+  }
+}

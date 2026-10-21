@@ -119,3 +119,71 @@ def test_incomplete_sparkline_history_is_tolerated() -> None:
     )
     assert len(portfolio.positions[0].sparkline) == 6
     assert any("highly concentrated" in warning for warning in portfolio._warnings())
+def _attribution_market(fx_rates: list[float], prices: list[float]) -> MarketData:
+    """A six-day market: constant holdings, one moving price, one moving rate."""
+    index = pd.bdate_range("2025-01-06", periods=len(prices), name="date")
+    native = pd.DataFrame({"A": prices}, index=index)
+    fx = pd.Series(fx_rates, index=index, name="USDEUR=X")
+    base = native.copy()
+    base["A"] = native["A"] * fx
+    return MarketData(
+        prices_native=native,
+        prices_base=base,
+        fx={"USD": fx},
+        benchmark=pd.Series(100.0, index=index),
+        base_currency="EUR",
+        fetched_at=datetime(2025, 1, 1, tzinfo=timezone.utc),
+    )
+
+
+def test_unrealised_pnl_splits_into_price_and_currency_effects() -> None:
+    """The attribution must reconcile exactly with the reported P&L.
+
+    A multi-currency book gains from two different things: the instrument
+    moving, and the currency moving. Reporting one number for both hides
+    both, so the split has to be an identity rather than an estimate.
+    """
+    prices = [100.0] * 5 + [120.0]
+    rates = [0.90] * 6
+    market = _attribution_market(rates, prices)
+    portfolio = Portfolio(
+        base_currency="EUR",
+        holdings=(Holding("A", "A", "Stock", "US", "USD", 10, 100.0, "2025-01-06"),),
+    )
+    position = PortfolioAnalytics(portfolio, market).positions[0]
+
+    # 10 units bought at 100 with EUR 0.90 per USD, now at 120 with the same rate.
+    assert position.price_effect == pytest.approx(180.0)
+    assert position.fx_effect == pytest.approx(0.0)
+    assert position.price_effect + position.fx_effect == pytest.approx(position.unrealized_pnl)
+
+    # Now the currency weakens to 0.80: the price effect is unchanged (it is
+    # measured at the entry rate) and the currency effect is the difference.
+    market = _attribution_market([0.90] * 5 + [0.80], prices)
+    position = PortfolioAnalytics(portfolio, market).positions[0]
+    assert position.price_effect == pytest.approx(180.0)
+    assert position.fx_effect == pytest.approx(-120.0)
+    assert position.price_effect + position.fx_effect == pytest.approx(position.unrealized_pnl)
+
+    summary = PortfolioAnalytics(portfolio, market).summary()
+    attribution = summary["fx_attribution"]
+    assert (
+        attribution["price_effect"] + attribution["fx_effect"] + attribution["unattributed"]
+    ) == pytest.approx(attribution["total"])
+    assert attribution["total"] == pytest.approx(summary["total_unrealized_pnl"])
+
+
+def test_a_position_acquired_before_the_history_has_no_entry_price() -> None:
+    """No entry price means no split, and the remainder is reported as such."""
+    analytics = analytics_for(
+        (Holding("A", "A", "Stock", "US", "EUR", 10, 100.0, "2024-01-01"),),
+        {"A": 120.0},
+    )
+    position = analytics.positions[0]
+    assert position.price_native_at_acquisition is None
+    assert position.price_effect is None
+    assert position.fx_effect is None
+
+    attribution = analytics.summary()["fx_attribution"]
+    assert attribution["price_effect"] == 0.0
+    assert attribution["unattributed"] == pytest.approx(position.unrealized_pnl)

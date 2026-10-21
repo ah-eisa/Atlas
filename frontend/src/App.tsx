@@ -15,6 +15,7 @@ import { BenchmarkPanel } from './components/BenchmarkPanel'
 import { CorrelationPanel } from './components/CorrelationPanel'
 import { DataPanel } from './components/DataPanel'
 import { DrawdownPanel } from './components/DrawdownPanel'
+import { FxAttributionPanel } from './components/FxAttributionPanel'
 import { HoldingsPanel } from './components/HoldingsPanel'
 import { KpiStrip } from './components/KpiStrip'
 import { MonteCarloPanel, OutcomeDistributionPanel } from './components/MonteCarloPanel'
@@ -322,6 +323,11 @@ function AnalyticsViews({
             <DrawdownPanel history={history} risk={risk} />
             <ReturnsDistributionPanel returns={returns} />
           </div>
+          <FxAttributionPanel
+            summary={summary}
+            holdings={holdings.holdings}
+            currency={currency}
+          />
           <MonthlyReturnsPanel returns={returns} />
         </main>
       )
