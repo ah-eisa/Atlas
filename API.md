@@ -1,14 +1,18 @@
-# API Reference
+# API Reference — ATLAS Portfolio Analytics
 
 FastAPI service exposing portfolio analytics as JSON. Default base URL:
 `http://localhost:8000`.
 
 ```bash
 cd backend
-uvicorn api:app --reload --port 8000
+python -m uvicorn app.api:app --port 8000        # from the backend directory
+python -m uvicorn backend.app.api:app --port 8000 # from the repository root
 ```
 
-Interactive OpenAPI docs are served at `/docs`.
+Interactive OpenAPI docs: `/docs`. ReDoc: `/redoc`. Raw schema: `/openapi.json`.
+
+Current API version: **2.0.0** (reported as `version` on the health route and
+`api_version` in the bootstrap payload).
 
 ---
 
@@ -18,358 +22,446 @@ These hold for **every** endpoint.
 
 | Rule | Detail |
 |---|---|
-| Currency | All monetary values are in the portfolio base currency, set by `base_currency` in `holdings.json` (**EUR** in the bundled example) and echoed on every response. Rounded to **2 dp**. |
-| `*_pct` fields | Always a **fraction**, never a percentage. `0.1234` means 12.34%. Rounded to **4 dp**. |
-| Ratios | Sharpe, Sortino, beta and correlations are unitless, rounded to **4 dp**. |
+| Base path | `/api/v1` for the current API. The pre-1.0 routes (`/holdings`, `/portfolio/...`, `/refresh`) still resolve as aliases. |
+| Currency | All monetary values are in the portfolio base currency, set in the store and echoed on every response. |
+| `*_pct` fields | Always a **fraction**, never a percentage. `0.1234` means 12.34%. |
+| Ratios | Sharpe, Sortino, Calmar, beta, capture ratios and correlations are unitless. |
 | Dates | ISO `YYYY-MM-DD` strings. Timestamps are ISO 8601 UTC. |
-| Missing values | Serialised as `null`. The payload never contains `NaN`, `Infinity` or `-Infinity`, so `JSON.parse` always succeeds. |
-| Envelope | Every response includes `as_of`, `base_currency` and `generated_at`. |
-
-`as_of` is the date of the most recent market close in the dataset — not
-today's date. Markets are shut at weekends and holidays.
+| Missing values | Serialised as `null`. Payloads never contain `NaN`, `Infinity` or `-Infinity`, so `JSON.parse` always succeeds. |
+| Envelope | Every analytic payload includes `as_of`, `base_currency` and `generated_at`. |
+| `as_of` | The date of the most recent market close in the dataset — not today's date. |
 
 ### Errors
 
-| Status | Meaning |
-|---|---|
-| `200` | Success. |
-| `404` | Unknown route. |
-| `503` | Analytics could not be built (Yahoo Finance unreachable, malformed `holdings.json`). The `detail` field carries the reason. |
+Every error uses the same shape:
+
+```json
+{ "detail": { "code": "validation_error", "message": "…", "fields": [ … ] } }
+```
+
+| Status | `code` | Meaning |
+|---|---|---|
+| `400` | `invalid_format` | Unknown export format, or an unusable instrument symbol |
+| `401` | `unauthorized` | `X-API-Key` is required (or wrong) on a protected route |
+| `404` | `not_found` / `holding_not_found` | Unknown route, or unknown position id |
+| `409` | `duplicate_ticker` / `empty_portfolio` | Ticker already held, or analytics requested for an empty portfolio |
+| `422` | `validation_error` | Body failed schema validation; `fields` lists each offending field |
+| `500` | `storage_error` | The database could not be written |
+| `503` | `analytics_unavailable` | Prices could not be fetched and no usable cache exists |
+
+A `401` response is still a normal CORS response: the CORS middleware wraps
+the API-key guard, so a browser can read the body and show "authorisation
+required" rather than an opaque CORS failure.
+
+### Authentication
+
+When `PORTFOLIO_API_KEY` is set, every route that returns portfolio data or
+mutates positions requires the header:
+
+```bash
+curl -H "X-API-Key: $PORTFOLIO_API_KEY" http://localhost:8000/api/v1/positions
+```
+
+Public regardless of the key: `/api/v1/health`, `/openapi.json`, `/docs`,
+`/redoc`, and the static SPA assets (they contain no data).
 
 ### CORS
 
-Enabled for `http://localhost:*` and `http://127.0.0.1:*` (any port), covering
-the Vite dev server and preview server. Configure via `cors_origins` in
-`backend/config.py`.
+Allowed origins default to `http://localhost:5173`, `http://127.0.0.1:5173`,
+`http://localhost:4173` and `http://127.0.0.1:4173`, plus a
+`localhost`/`127.0.0.1` regex for any port. Override with
+`PORTFOLIO_CORS_ORIGINS` (comma-separated).
+
+### Response headers
+
+| Header | Meaning |
+|---|---|
+| `X-Request-ID` | Correlation id, echoed from the request when supplied, generated otherwise |
+| `X-Content-Type-Options` | `nosniff` |
+| `Content-Security-Policy` | Restrictive policy for the served SPA |
+| `Referrer-Policy` | `no-referrer` |
 
 ---
 
-## `GET /health`
+## Meta
 
-Liveness plus a description of the loaded dataset.
+### `GET /api/v1/health`
+
+Fast liveness probe. Never downloads prices, never requires the API key, and
+answers in milliseconds.
 
 ```json
 {
   "status": "ok",
-  "version": "1.0.0",
-  "as_of": "2026-08-14",
+  "version": "2.0.0",
+  "process": "669a3aeb",
   "base_currency": "EUR",
-  "generated_at": "2026-08-17T12:16:59+00:00",
-  "holdings_count": 12,
-  "benchmark": "^GSPC",
-  "history_start": "2024-08-08",
-  "history_days": 506,
-  "prices_fetched_at": "2026-08-17T12:16:59+00:00"
+  "positions": 12,
+  "api_key_required": false
 }
 ```
 
-| Field | Unit | Notes |
-|---|---|---|
-| `history_days` | count | Trading days in the aligned price history. |
-| `prices_fetched_at` | ISO 8601 | When the underlying prices were downloaded (may be served from the disk cache). |
+### `GET /api/v1/bootstrap`
 
----
-
-## `GET /holdings`
-
-Priced positions — the source for the holdings grid.
+Everything the UI needs on first paint, in one request: settings, stored
+positions and the complete analytics bundle.
 
 ```json
 {
-  "as_of": "2026-08-14",
+  "api_version": "2.0.0",
+  "source": "api",
   "base_currency": "EUR",
-  "generated_at": "2026-08-17T12:16:59+00:00",
-  "total_value": 79999.97,
+  "positions": [ { "id": 1, "ticker": "AAPL", "…": "…" } ],
+  "analytics": {
+    "health": { "…": "…" },
+    "holdings": { "…": "…" },
+    "summary": { "…": "…" },
+    "history": { "…": "…" },
+    "returns": { "…": "…" },
+    "risk": { "…": "…" },
+    "montecarlo": { "…": "…" }
+  },
+  "warnings": [],
+  "error": null,
+  "settings": {
+    "benchmark": "^GSPC",
+    "benchmark_name": "S&P 500",
+    "risk_free_rate": 0.02,
+    "history_years": 2,
+    "trading_days_per_year": 252,
+    "api_key_required": false,
+    "seed_demo": true
+  }
+}
+```
+
+When the portfolio is empty, `analytics` is `null` and `error` explains why;
+the response is still `200`, so the client can show the editor instead of an
+error page.
+
+### `POST /api/v1/portfolio/refresh`
+
+Refetch prices from Yahoo Finance, rebuild every analytic, and return the
+freshness stamps. Always bypasses the on-disk price cache.
+
+```json
+{
+  "status": "refreshed",
+  "as_of": "2026-10-20",
+  "prices_fetched_at": "2026-10-21T12:34:31+00:00",
+  "revision": 6
+}
+```
+
+---
+
+## Analytics
+
+All five analytic routes are computed from the same cached model, so calling
+them is cheap and consistent with one another.
+
+### `GET /api/v1/portfolio/summary`
+
+Headline numbers: value, cost, unrealised P&L, period changes, allocations.
+
+```json
+{
+  "as_of": "2026-10-20",
+  "base_currency": "EUR",
+  "generated_at": "2026-10-21T09:58:51+00:00",
+  "total_value": 84685.65,
+  "total_cost": 84011.93,
+  "total_unrealized_pnl": 673.72,
+  "total_unrealized_pnl_pct": 0.008,
+  "holdings_count": 12,
+  "changes": {
+    "day":   { "period": "day",   "pct": -0.0004, "absolute": -30.92,  "start_value": 84716.57, "end_value": 84685.65, "start_date": "2026-10-19", "flows": 0 },
+    "week":  { "period": "week",  "pct": -0.0186, "absolute": -1600.76, "…": "…" },
+    "month": { "period": "month", "pct":  0.0231, "absolute":  1912.08, "…": "…" },
+    "ytd":   { "period": "ytd",   "pct":  0.0218, "absolute":  3268.04, "…": "…" },
+    "all":   { "period": "all",   "pct": -0.0455, "absolute":   777.15, "…": "…" }
+  },
+  "allocation_by_class":    [ { "key": "Stock", "value": 35965.01, "allocation_pct": 0.4247, "holdings": 7 } ],
+  "allocation_by_region":   [ { "key": "US",    "value": 30703.51, "allocation_pct": 0.3626, "holdings": 4 } ],
+  "allocation_by_currency": [ { "key": "USD",   "value": 46161.23, "allocation_pct": 0.5451, "holdings": 7 } ],
+  "sparkline": { "dates": ["2026-06-12", "…"], "values": [62267.88, "…"] }
+}
+```
+
+`changes[*].pct` is the time-weighted return over the window;
+`changes[*].absolute` is the money change over the same window, net of
+`flows` (external contributions and withdrawals). The two are deliberately
+different measures: one is performance, the other is cash.
+
+### `GET /api/v1/portfolio/history`
+
+The daily time series behind every chart.
+
+| Field | Meaning |
+|---|---|
+| `dates` | Trading dates, ascending |
+| `portfolio` | Time-weighted growth index, `1.0` at the start of the sample |
+| `portfolio_value` | Market value in the base currency |
+| `benchmark_rebased` | Benchmark rebased onto the same start value |
+| `drawdown_pct` | Drawdown from the running peak, always ≤ 0 |
+| `per_holding` | Per-ticker value series, keyed by ticker |
+| `flows` | External cash flow per date (contributions positive) |
+| `methodology` | Human-readable statement of the return method |
+
+`dates`, `portfolio`, `portfolio_value`, `benchmark_rebased`, `drawdown_pct`
+and `flows` are parallel arrays of equal length.
+
+### `GET /api/v1/portfolio/returns`
+
+Return distribution and aggregates.
+
+| Field | Meaning |
+|---|---|
+| `daily_pct` | Daily time-weighted returns |
+| `cumulative_pct` | Cumulative growth of the return series |
+| `monthly_pct` | `[{ "month": "2026-10", "pct": -0.0012 }]` |
+| `yearly_pct` | `[{ "year": "2026", "pct": 0.0218 }]` |
+| `histogram` | `[{ "start": -0.0355, "end": -0.0332, "count": 2 }]` |
+| `observations` | Number of return observations |
+| `best_day` / `worst_day` | `{ "date": "2026-02-06", "pct": 0.0371 }` |
+| `positive_days` / `negative_days` / `hit_rate_pct` | Hit-rate statistics |
+| `average_gain_pct` / `average_loss_pct` | Mean up- and down-day return |
+| `annualized_return_pct` | Geometric annualised return |
+| `best_month_pct` / `worst_month_pct` | Best and worst calendar month |
+
+### `GET /api/v1/portfolio/risk`
+
+The full risk picture.
+
+```json
+{
+  "as_of": "2026-10-20",
+  "base_currency": "EUR",
+  "generated_at": "2026-10-21T09:58:51+00:00",
+  "lookback_days": 276,
+  "risk_free_rate": 0.02,
+  "trading_days_per_year": 252,
+  "annualized_return_pct": -0.0417,
+  "volatility_annualized_pct": 0.171,
+  "downside_deviation_pct": 0.1223,
+  "sharpe_ratio": -0.2794,
+  "sortino_ratio": -0.3907,
+  "calmar_ratio": -0.1747,
+  "max_drawdown": {
+    "pct": -0.2385,
+    "peak_date": "2025-10-28",
+    "trough_date": "2026-03-27",
+    "peak_value": 93922.08,
+    "trough_value": 71522.91,
+    "recovery_date": null
+  },
+  "value_at_risk": {
+    "95": { "confidence": 0.95, "historical_pct": 0.017, "parametric_pct": 0.0178,
+            "historical_value": 1441.8, "parametric_value": 1509.66,
+            "cvar_pct": 0.0225, "cvar_value": 1905.28 },
+    "99": { "…": "…" }
+  },
+  "beta": { "value": 0.9906, "benchmark": "^GSPC", "benchmark_name": "S&P 500" },
+  "benchmark": {
+    "name": "S&P 500", "symbol": "^GSPC", "correlation": 0.732,
+    "alpha_annualized_pct": -0.1749, "tracking_error_pct": 0.1165,
+    "information_ratio": -1.5115, "up_capture": 0.9078, "down_capture": 1.1432,
+    "max_drawdown_pct": -0.091, "return_pct": 0.1659,
+    "annualized_return_pct": 0.1504, "volatility_annualized_pct": 0.1263,
+    "sharpe_ratio": 1.0157, "observations": 276
+  },
+  "concentration": { "herfindahl": 0.1031, "effective_holdings": 9.703,
+                     "top_five_pct": 0.5958, "largest_pct": 0.1695 },
+  "risk_contribution": [
+    { "ticker": "BTC-USD", "weight": 0.131, "contribution_pct": 0.2187 }
+  ],
+  "correlation": { "tickers": ["BTC-USD", "…"], "matrix": [[1.0, 0.42]] },
+  "warnings": []
+}
+```
+
+Notes:
+
+- `max_drawdown.pct` is a fraction (negative). `recovery_date` is `null` when
+  the drawdown has not been recovered yet.
+- `value_at_risk.<level>.cvar_value` is the expected loss *beyond* the VaR
+  threshold, in the base currency; `cvar_pct` is the same figure as a
+  fraction.
+- `risk_contribution` sums to 1 in `contribution_pct`. It is an Euler
+  decomposition of the covariance matrix, so it includes the correlation
+  effect, not just the standalone volatility of each position.
+- `correlation.matrix` is square, with the unit diagonal, and is ordered to
+  match `correlation.tickers`.
+
+### `GET /api/v1/portfolio/montecarlo`
+
+| Field | Meaning |
+|---|---|
+| `paths` | Number of simulated paths |
+| `horizon_days` | Trading days simulated |
+| `start_value` | Portfolio value at the start of the projection |
+| `dates` | Forward calendar of the projection |
+| `percentile_bands` | `p5`, `p25`, `p50`, `p75`, `p95` value paths |
+| `final_values` | The same percentiles at the end of the horizon |
+| `histogram` | `[{ "start": 48986.52, "end": 53504.51, "count": 2, "probability": 0.0002 }]` |
+| `expected_value` / `median_value` | Mean and median terminal value |
+| `probability_below_start_pct` | Probability of finishing below the starting value |
+| `expected_return_pct` / `annualized_drift_pct` | Expected and annualised drift |
+| `assumptions` | The model description, printed in the UI next to the result |
+
+### `GET /api/v1/holdings`
+
+Priced positions.
+
+```json
+{
+  "as_of": "2026-10-20",
+  "base_currency": "EUR",
+  "generated_at": "2026-10-21T09:58:51+00:00",
+  "total_value": 84685.65,
   "holdings": [
     {
-      "ticker": "IWDA.AS",
-      "name": "iShares Core MSCI World",
-      "asset_class": "ETF",
-      "region": "Global",
-      "currency": "EUR",
-      "quantity": 108.661909,
-      "price_native": 128.84,
-      "price_base": 128.84,
-      "value_base": 14000.0,
-      "allocation_pct": 0.175,
-      "cost_basis_native": 110.2,
-      "cost_basis_base": 110.2,
-      "cost_total_base": 11974.54,
-      "unrealized_pnl": 2025.46,
-      "unrealized_pnl_pct": 0.1691,
-      "day_change_pct": -0.0043,
-      "acquired": "2025-11-14",
-      "sparkline": [126.11, 126.48, "... 90 values ..."]
+      "ticker": "AAPL",
+      "name": "Apple",
+      "asset_class": "Stock",
+      "region": "US",
+      "currency": "USD",
+      "quantity": 22,
+      "cost_basis_native": 327.22,
+      "cost_basis_base": 286.41,
+      "cost_total_base": 6301.1,
+      "price_native": 339.5,
+      "price_base": 302.7,
+      "value_base": 6659.36,
+      "allocation_pct": 0.0786,
+      "unrealized_pnl": 358.26,
+      "unrealized_pnl_pct": 0.0569,
+      "day_change_pct": -0.0092,
+      "acquired": "2026-07-15",
+      "sparkline": [ 251.28, "…" ]
     }
   ]
 }
 ```
 
-| Field | Unit | Notes |
-|---|---|---|
-| `quantity` | units | Fractional allowed; frozen in `holdings.json`. |
-| `price_native` | native currency | As quoted by the exchange (see `currency`). |
-| `price_base` | base currency | `price_native * rate`, where the rate comes from the `{quote}{base}=X` pair. Minor units (London's `GBp`) are normalised first. |
-| `allocation_pct` | fraction | Share of `total_value`. Sums to 1 across holdings. |
-| `cost_basis_base` | EUR | Entry price converted at the FX rate **on `acquired`**, so P&L includes the currency move. |
-| `unrealized_pnl` | EUR | `quantity * (price_base - cost_basis_base)`. |
-| `day_change_pct` | fraction | Change in `price_base` versus the previous trading day. |
-| `sparkline` | EUR | Trailing 90 trading days of `price_base`, oldest first. |
+`price_native` is in the instrument's own currency; `price_base` is converted
+into the reporting currency. `sparkline` holds the last 90 daily closes in
+base currency.
 
 ---
 
-## `GET /portfolio/summary`
+## Positions
 
-Headline value, P&L, period changes and allocation breakdowns.
+Positions are stored, not traded: a quantity, a cost basis per unit, and the
+date the position was acquired. The acquisition date activates the position
+in the time series.
 
-```json
-{
-  "as_of": "2026-08-14",
-  "base_currency": "EUR",
-  "generated_at": "2026-08-17T12:16:59+00:00",
-  "total_value": 79999.97,
-  "total_cost": 83599.14,
-  "total_unrealized_pnl": -3599.16,
-  "total_unrealized_pnl_pct": -0.0431,
-  "holdings_count": 12,
-  "changes": {
-    "day":   { "period": "day",   "start_date": "2026-08-13", "start_value": 80154.92, "end_value": 79999.97, "absolute": -154.94,   "pct": -0.0019 },
-    "week":  { "period": "week",  "start_date": "2026-08-07", "start_value": 80922.19, "end_value": 79999.97, "absolute": -922.21,   "pct": -0.0114 },
-    "month": { "period": "month", "start_date": "2026-07-14", "start_value": 77910.61, "end_value": 79999.97, "absolute": 2089.36,   "pct": 0.0268 },
-    "ytd":   { "period": "ytd",   "start_date": "2025-12-31", "start_value": 79295.15, "end_value": 79999.97, "absolute": 704.83,    "pct": 0.0089 },
-    "all":   { "period": "all",   "start_date": "2024-08-08", "start_value": 66149.14, "end_value": 79999.97, "absolute": 13850.83,  "pct": 0.2094 }
-  },
-  "allocation_by_class": [
-    { "key": "Stock", "value": 36000.0, "allocation_pct": 0.45, "holdings": 7 }
-  ],
-  "allocation_by_region": [
-    { "key": "US", "value": 29000.0, "allocation_pct": 0.3625, "holdings": 4 }
-  ],
-  "sparkline": { "dates": ["2026-04-08", "..."], "values": [77123.44, "..."] }
-}
-```
-
-Period windows: `day` steps back one trading day; `week` and `month` step back
-one calendar week/month and snap to the last trading day at or before that
-date; `ytd` uses the final close of the previous year; `all` uses the first
-observation. Crypto has no separate weekend calendar here — see
-[Calendar alignment](README.md#calendar-alignment).
-
-`holdings` inside an allocation bucket is the number of positions in it.
-
----
-
-## `GET /portfolio/history`
-
-Time series, returned as **parallel arrays sharing one `dates` array**. This is
-materially smaller than repeating a date per point across twelve per-holding
-series. Index `i` of every array corresponds to `dates[i]`.
+### `GET /api/v1/positions`
 
 ```json
-{
-  "as_of": "2026-08-14",
-  "base_currency": "EUR",
-  "generated_at": "2026-08-17T12:16:59+00:00",
-  "benchmark": "^GSPC",
-  "benchmark_name": "S&P 500",
-  "dates": ["2024-08-08", "2024-08-09", "..."],
-  "portfolio": [66149.14, 66011.23, "..."],
-  "benchmark_rebased": [66149.14, 66458.17, "..."],
-  "drawdown_pct": [0.0, -0.0021, "..."],
-  "per_holding": {
-    "IWDA.AS": [11321.55, "..."],
-    "BTC-USD": [12983.21, "..."]
+[
+  {
+    "id": 1,
+    "ticker": "AAPL",
+    "name": "Apple",
+    "asset_class": "Stock",
+    "region": "US",
+    "currency": "USD",
+    "quantity": 22,
+    "cost_basis_per_unit": 327.22,
+    "acquired": "2026-07-15",
+    "created_at": "2026-07-15T09:12:44+00:00",
+    "updated_at": "2026-07-15T09:12:44+00:00"
   }
-}
+]
 ```
 
-| Field | Unit | Notes |
-|---|---|---|
-| `portfolio` | EUR | `sum(quantity_i * price_base_i)` per day. |
-| `benchmark_rebased` | EUR | Benchmark scaled to the portfolio's **starting value**, so both fit one axis. It is not a price. |
-| `drawdown_pct` | fraction | `value / running_peak - 1`. Always `<= 0`. |
-| `per_holding` | EUR | Position value per day, keyed by ticker. Sums to `portfolio`. |
-
----
-
-## `GET /portfolio/returns`
-
-Daily return series and distribution statistics. `dates` here has one **fewer**
-entry than `/portfolio/history` — the first day has no prior close.
+### `POST /api/v1/positions` → `201`
 
 ```json
 {
-  "as_of": "2026-08-14",
-  "base_currency": "EUR",
-  "generated_at": "2026-08-17T12:16:59+00:00",
-  "dates": ["2024-08-09", "..."],
-  "daily_pct": [-0.0021, "..."],
-  "cumulative_pct": [-0.0021, "..."],
-  "monthly_pct": [{ "month": "2024-08", "pct": -0.031 }],
-  "observations": 505,
-  "best_day":  { "date": "2024-11-11", "pct": 0.0425 },
-  "worst_day": { "date": "2024-08-26", "pct": -0.0564 },
-  "positive_days": 260,
-  "negative_days": 245,
-  "hit_rate_pct": 0.5149,
-  "average_gain_pct": 0.0102,
-  "average_loss_pct": -0.0098
+  "ticker": "AAPL",
+  "name": "Apple",
+  "asset_class": "Stock",
+  "region": "US",
+  "currency": "USD",
+  "quantity": 22,
+  "cost_basis_per_unit": 327.22,
+  "acquired": "2026-07-15"
 }
 ```
 
-| Field | Unit | Notes |
-|---|---|---|
-| `daily_pct` | fraction | `v_t / v_{t-1} - 1`. |
-| `cumulative_pct` | fraction | `prod(1 + r) - 1` from the start of the history. |
-| `hit_rate_pct` | fraction | Share of days with a positive return. |
+Validation (422 with per-field messages):
+
+| Field | Rule |
+|---|---|
+| `ticker` | Required, 1–20 characters, `A-Z 0-9 . - = ^` |
+| `name` | Required, non-empty |
+| `asset_class` | One of `Stock`, `ETF`, `Fund`, `Crypto`, `Bond`, `Cash`, `Other` |
+| `region` | Optional, may be `null` |
+| `currency` | Exactly three letters |
+| `quantity` | Greater than zero |
+| `cost_basis_per_unit` | Zero or greater |
+| `acquired` | ISO date, not in the future |
+
+A ticker that is already held returns `409 duplicate_ticker`.
+
+### `PUT /api/v1/positions/{id}`
+
+Same body as create. Returns the updated position. Unknown id → `404`.
+
+### `DELETE /api/v1/positions/{id}` → `204`
+
+No body. Unknown id → `404`.
 
 ---
 
-## `GET /portfolio/risk`
+## Settings and instruments
+
+### `GET /api/v1/instruments/{ticker}`
+
+Metadata and last price for a symbol, used by the editor to fill in the form.
 
 ```json
 {
-  "as_of": "2026-08-14",
-  "base_currency": "EUR",
-  "generated_at": "2026-08-17T12:16:59+00:00",
-  "lookback_days": 505,
-  "risk_free_rate": 0.02,
-  "trading_days_per_year": 252,
-  "volatility_annualized_pct": 0.2114,
-  "downside_deviation_pct": 0.151,
-  "sharpe_ratio": 0.4611,
-  "sortino_ratio": 0.6452,
-  "max_drawdown": {
-    "pct": -0.2541,
-    "peak_date": "2025-02-20",
-    "trough_date": "2025-04-08",
-    "peak_value": 81963.97,
-    "trough_value": 61138.05,
-    "recovery_date": "2025-08-12"
-  },
-  "value_at_risk": {
-    "95": { "confidence": 0.95, "historical_pct": 0.0188, "parametric_pct": 0.0214, "historical_value": 1506.45, "parametric_value": 1714.8 },
-    "99": { "confidence": 0.99, "historical_pct": 0.0416, "parametric_pct": 0.0305, "historical_value": 3330.88, "parametric_value": 2440.69 }
-  },
-  "beta": { "value": 0.866, "benchmark": "^GSPC", "benchmark_name": "S&P 500" },
-  "correlation": {
-    "tickers": ["IWDA.AS", "VUSA.AS", "..."],
-    "matrix": [[1.0, 0.98, "..."], [0.98, 1.0, "..."]]
-  }
+  "ticker": "AAPL",
+  "name": "Apple",
+  "currency": "USD",
+  "asset_class": "Stock",
+  "region": "US",
+  "last_price": 339.5,
+  "as_of": "2026-10-20",
+  "estimated": false
 }
 ```
 
-| Field | Formula | Unit |
-|---|---|---|
-| `volatility_annualized_pct` | `std(r) * sqrt(252)` | fraction |
-| `downside_deviation_pct` | `sqrt(mean(min(r - rf, 0)^2)) * sqrt(252)` | fraction |
-| `sharpe_ratio` | `(mean(r) - rf_daily) / std(r) * sqrt(252)` | ratio |
-| `sortino_ratio` | `(mean(r) - rf_daily) * 252 / downside_deviation` | ratio |
-| `max_drawdown.pct` | `min(v_t / cummax(v) - 1)` | fraction, `<= 0` |
-| `beta.value` | `cov(r_p, r_b) / var(r_b)` | ratio |
+`estimated` is `true` when the symbol could not be resolved and the values
+were inferred from the ticker shape. An unknown symbol returns `400`.
 
-**Value at Risk** is a **positive** fraction representing the 1-day loss
-threshold. `historical_pct: 0.0188` at 95% means: on the worst 5% of days the
-portfolio lost at least 1.88% of its value. `*_value` is that fraction applied
-to today's total, in EUR.
-
-- `historical_*` reads the empirical quantile — no distributional assumption.
-- `parametric_*` assumes normally distributed returns: `-(mu + z * sigma)`.
-
-Where historical VaR 99% **exceeds** the parametric figure (as it does here),
-real losses have fatter tails than a normal distribution predicts.
-
-`correlation.matrix` is row-major and symmetric; `matrix[i][j]` is the
-correlation between `tickers[i]` and `tickers[j]`. The diagonal is `1.0`.
-
-`risk_free_rate` is the **annual** rate (default 2%); it is de-annualised
-geometrically to a daily rate for Sharpe and Sortino.
-
----
-
-## `GET /portfolio/montecarlo`
-
-10,000 simulated paths over 252 trading days. See
-[Monte Carlo method](README.md#monte-carlo-method) for the model and its
-assumptions.
+### `PUT /api/v1/settings/base-currency`
 
 ```json
-{
-  "as_of": "2026-08-14",
-  "base_currency": "EUR",
-  "generated_at": "2026-08-17T12:16:59+00:00",
-  "paths": 10000,
-  "horizon_days": 252,
-  "start_value": 79999.97,
-  "dates": ["2026-08-14", "2026-08-17", "...", "2027-08-03"],
-  "percentile_bands": {
-    "p5":  [79999.97, 78511.76, "..."],
-    "p25": [79999.97, 79416.19, "..."],
-    "p50": [79999.97, 80057.57, "..."],
-    "p75": [79999.97, 80702.55, "..."],
-    "p95": [79999.97, 81664.62, "..."]
-  },
-  "final_values": { "p5": 71462.03, "p25": 84378.82, "p50": 95712.5, "p75": 109178.72, "p95": 132908.62 },
-  "histogram": [{ "start": 47030.1, "end": 50596.91, "count": 1, "probability": 0.0001 }],
-  "expected_value": 97993.28,
-  "median_value": 95712.5,
-  "probability_below_start_pct": 0.1637,
-  "expected_return_pct": 0.2249,
-  "annualized_drift_pct": 0.1355,
-  "assumptions": {
-    "distribution": "multivariate normal on daily log returns",
-    "correlation": "historical covariance across all holdings",
-    "rebalancing": "none (buy and hold, weights drift)",
-    "lookback_days": 505
-  }
-}
+{ "base_currency": "USD" }
 ```
 
-| Field | Unit | Notes |
-|---|---|---|
-| `dates` | ISO date | `horizon_days + 1` entries. `dates[0]` is `as_of` (day 0). |
-| `percentile_bands` | EUR | Each array aligns 1:1 with `dates`; all start at `start_value`. |
-| `histogram` | EUR / count | Contiguous bins of terminal value; `probability` sums to 1. |
-| `expected_value` | EUR | **Mean** terminal value. Exceeds the median because compounded outcomes are right-skewed. |
-| `probability_below_start_pct` | fraction | Share of paths ending below today's value. |
-| `annualized_drift_pct` | fraction | Value-weighted mean **log** drift, annualised and expressed as a simple return. Not directly comparable to `expected_return_pct`, which also carries the variance term. |
+Rebuilds every analytic in the new reporting currency. An unsupported code
+returns `422`.
 
-Results are deterministic: the RNG seed is fixed in `config.py` (`mc_seed`), so
-the committed snapshot is reproducible.
+### `GET /api/v1/portfolio/export?format=json|csv`
+
+Downloads the stored positions. `json` is lossless; `csv` suits a
+spreadsheet. The CSV header is
+`ticker,name,asset_class,region,currency,quantity,cost_basis_per_unit,acquired`.
 
 ---
 
-## `POST /refresh`
+## Legacy aliases
 
-Rebuilds the analytics from freshly downloaded prices, bypassing the disk
-cache. Returns `{"status": "refreshed", "as_of": "2026-08-14"}`.
+The pre-1.0 routes still work and return the same payloads, so existing
+bookmarks and scripts do not break:
 
-This triggers a full download and a 10,000-path simulation, so it takes a few
-seconds.
+`/health`, `/holdings`, `/portfolio/summary`, `/portfolio/history`,
+`/portfolio/returns`, `/portfolio/risk`, `/portfolio/montecarlo`, `/refresh`.
 
----
-
-## Snapshot format
-
-`generate_snapshot.py` writes every endpoint's output to `snapshot.json` at the
-repository root, keyed by route:
-
-```json
-{
-  "generated_at": "2026-08-17T12:16:59+00:00",
-  "as_of": "2026-08-14",
-  "base_currency": "EUR",
-  "endpoints": {
-    "/health": { "...": "..." },
-    "/holdings": { "...": "..." },
-    "/portfolio/summary": { "...": "..." },
-    "/portfolio/history": { "...": "..." },
-    "/portfolio/returns": { "...": "..." },
-    "/portfolio/risk": { "...": "..." },
-    "/portfolio/montecarlo": { "...": "..." }
-  }
-}
-```
-
-The frontend reads either this file or the live API — see
-[Data sources](README.md#data-sources).
+They are hidden from the OpenAPI schema. New integrations should use
+`/api/v1/…`.
