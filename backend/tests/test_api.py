@@ -574,8 +574,9 @@ def test_the_schema_version_is_recorded(temp_settings: Any) -> None:
             row["name"]
             for row in connection.execute("PRAGMA table_info(holdings)").fetchall()
         }
-    assert version == 2
+    assert version == 3
     assert "portfolio_id" in columns
+    assert "target_weight" in columns
 
 
 def test_the_replay_runs_the_current_positions_over_a_past_window(analytics_client: Any) -> None:

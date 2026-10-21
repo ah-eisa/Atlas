@@ -63,6 +63,10 @@ export interface Holding {
   fx_rate_now: number
   fx_rate_at_acquisition: number
   price_native_at_acquisition: number | null
+  /** What the owner wants to hold, as a fraction of the portfolio. */
+  target_weight: number | null
+  /** Current weight minus target weight; null without a target. */
+  drift: number | null
 }
 
 export interface HoldingsPayload extends Envelope {
@@ -108,6 +112,21 @@ export interface SummaryPayload extends Envelope {
     /** P&L of positions acquired before the price history starts. */
     unattributed: number
     total: number
+  }
+  /** How far the portfolio has drifted from its target weights. */
+  drift: {
+    has_targets: boolean
+    positions: {
+      ticker: string
+      current_weight: number
+      target_weight: number
+      drift: number
+      trade_value: number
+    }[]
+    total_drift: number
+    turnover: number
+    target_sum: number
+    residual: number
   }
   sparkline: {
     dates: string[]
@@ -329,6 +348,8 @@ export interface Position {
   quantity: number
   cost_basis_per_unit: number
   acquired: string
+  /** Optional target weight as a fraction of the portfolio. */
+  target_weight: number | null
   created_at: string
   updated_at: string
 }
@@ -343,6 +364,8 @@ export interface PositionInput {
   quantity: number
   cost_basis_per_unit: number
   acquired: string
+  /** Optional target weight as a fraction of the portfolio. */
+  target_weight?: number | null
 }
 
 export interface InstrumentInfo {

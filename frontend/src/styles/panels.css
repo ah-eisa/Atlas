@@ -1225,3 +1225,101 @@
     grid-template-columns: minmax(0, 1fr);
   }
 }
+/* ------------------------------------------------------------------ *
+ * Allocation drift                                                   *
+ * ------------------------------------------------------------------ */
+
+.drift {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  padding: var(--space-5);
+}
+
+.drift__figures {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-5);
+}
+
+.drift__figure {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.drift__label {
+  font-size: var(--size-micro);
+  letter-spacing: var(--tracking-label);
+  color: var(--text-tertiary);
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.drift__value {
+  font-size: var(--size-heading);
+  line-height: var(--leading-tight);
+  color: var(--text-primary);
+}
+
+.drift__context {
+  font-size: var(--size-micro);
+  color: var(--text-tertiary);
+}
+
+.drift__context--warn {
+  color: var(--warning);
+}
+
+.drift__table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--size-micro);
+}
+
+.drift__table th {
+  padding: var(--space-2) var(--space-3);
+  border-bottom: 1px solid var(--line);
+  color: var(--text-tertiary);
+  font-weight: var(--weight-medium);
+  letter-spacing: var(--tracking-wide);
+  text-transform: uppercase;
+  text-align: left;
+}
+
+.drift__table td {
+  padding: var(--space-2) var(--space-3);
+  border-bottom: 1px solid var(--line-faint);
+  color: var(--text-secondary);
+}
+
+.drift__table th.tabular-right,
+.drift__table td.tabular-right {
+  text-align: right;
+}
+
+.drift__ticker {
+  color: var(--text-primary);
+  font-weight: var(--weight-medium);
+}
+
+.drift__note {
+  margin: 0;
+  font-size: var(--size-micro);
+  line-height: var(--leading-normal);
+  color: var(--text-tertiary);
+  max-width: 72ch;
+}
+
+@media (max-width: 720px) {
+  .drift__figures {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--space-4);
+  }
+
+  .drift__table {
+    display: block;
+    overflow-x: auto;
+  }
+}

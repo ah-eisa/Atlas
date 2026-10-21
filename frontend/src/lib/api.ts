@@ -199,6 +199,7 @@ function snapshotToState(snapshot: Snapshot): PortfolioState {
     quantity: holding.quantity,
     cost_basis_per_unit: holding.cost_basis_native,
     acquired: holding.acquired,
+    target_weight: null,
     created_at: snapshot.generated_at,
     updated_at: snapshot.generated_at,
   }))

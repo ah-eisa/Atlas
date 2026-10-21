@@ -82,7 +82,26 @@ MIGRATIONS: list[tuple[int, str, Any]] = [
         "portfolios",
         lambda connection: _add_portfolio_dimension(connection),
     ),
+    (
+        3,
+        "target_weights",
+        lambda connection: _add_target_weight(connection),
+    ),
 ]
+
+
+def _add_target_weight(connection: sqlite3.Connection) -> None:
+    """Add the optional target weight to a position.
+
+    A target weight is what the owner *wants* to hold, as a fraction of the
+    portfolio. It is optional: a portfolio without targets is a portfolio
+    that has not decided what it is for, and the column stays null.
+    """
+    columns = {
+        row["name"] for row in connection.execute("PRAGMA table_info(holdings)").fetchall()
+    }
+    if "target_weight" not in columns:
+        connection.execute("ALTER TABLE holdings ADD COLUMN target_weight REAL")
 
 
 def _add_portfolio_dimension(connection: sqlite3.Connection) -> None:
@@ -285,6 +304,9 @@ def _row_to_dict(row: sqlite3.Row) -> dict[str, Any]:
         "quantity": float(row["quantity"]),
         "cost_basis_per_unit": float(row["cost_basis_per_unit"]),
         "acquired": str(row["acquired"]),
+        "target_weight": (
+            float(row["target_weight"]) if row["target_weight"] is not None else None
+        ),
         "created_at": str(row["created_at"]),
         "updated_at": str(row["updated_at"]),
     }
@@ -352,8 +374,8 @@ def create_holding(
                 """
                 INSERT INTO holdings
                     (portfolio_id, ticker, name, asset_class, region, currency, quantity,
-                     cost_basis_per_unit, acquired, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                     cost_basis_per_unit, acquired, target_weight, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     portfolio_id,
@@ -365,6 +387,7 @@ def create_holding(
                     values["quantity"],
                     values["cost_basis_per_unit"],
                     values["acquired"],
+                    values["target_weight"],
                     now,
                     now,
                 ),
@@ -397,7 +420,8 @@ def update_holding(
                 """
                 UPDATE holdings SET
                     ticker = ?, name = ?, asset_class = ?, region = ?, currency = ?,
-                    quantity = ?, cost_basis_per_unit = ?, acquired = ?, updated_at = ?
+                    quantity = ?, cost_basis_per_unit = ?, acquired = ?, target_weight = ?,
+                    updated_at = ?
                 WHERE id = ? AND portfolio_id = ?
                 """,
                 (
@@ -409,6 +433,7 @@ def update_holding(
                     values["quantity"],
                     values["cost_basis_per_unit"],
                     values["acquired"],
+                    values["target_weight"],
                     _now(),
                     holding_id,
                     portfolio_id,
@@ -454,6 +479,11 @@ def _normalise(data: dict[str, Any]) -> dict[str, Any]:
         "quantity": float(data["quantity"]),
         "cost_basis_per_unit": float(data["cost_basis_per_unit"]),
         "acquired": str(data["acquired"]),
+        "target_weight": (
+            float(data["target_weight"])
+            if data.get("target_weight") is not None
+            else None
+        ),
     }
 
 
@@ -564,6 +594,9 @@ def build_portfolio(
             quantity=row["quantity"],
             cost_basis_per_unit=row["cost_basis_per_unit"],
             acquired=row["acquired"],
+            target_weight=(
+                float(row["target_weight"]) if row["target_weight"] is not None else None
+            ),
         )
         for row in rows
     )

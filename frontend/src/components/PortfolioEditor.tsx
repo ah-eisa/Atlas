@@ -43,6 +43,7 @@ interface FormState {
   quantity: string
   cost_basis_per_unit: string
   acquired: string
+  target_weight: string
 }
 
 const ASSET_CLASSES = ['Stock', 'ETF', 'Fund', 'Crypto', 'Bond', 'Cash', 'Other']
@@ -61,6 +62,7 @@ function blankForm(baseCurrency: string): FormState {
     quantity: '',
     cost_basis_per_unit: '',
     acquired: todayIso(),
+    target_weight: '',
   }
 }
 
@@ -74,6 +76,10 @@ function formFromPosition(position: Position): FormState {
     quantity: String(position.quantity),
     cost_basis_per_unit: String(position.cost_basis_per_unit),
     acquired: position.acquired,
+    target_weight:
+      position.target_weight === null || position.target_weight === undefined
+        ? ''
+        : String(position.target_weight * 100),
   }
 }
 
@@ -107,6 +113,18 @@ function validate(form: FormState): { input?: PositionInput; errors: Record<stri
     errors.currency = 'Use a three-letter currency code.'
   }
 
+  // The target weight is optional. It is entered as a percentage, because
+  // that is how a person thinks about allocation, and stored as a fraction.
+  let targetWeight: number | null = null
+  if (form.target_weight.trim()) {
+    const percent = decimal(form.target_weight)
+    if (!Number.isFinite(percent) || percent < 0 || percent > 100) {
+      errors.target_weight = 'Target weight must be between 0 and 100.'
+    } else {
+      targetWeight = percent / 100
+    }
+  }
+
   if (Object.keys(errors).length > 0) return { errors }
 
   return {
@@ -120,6 +138,7 @@ function validate(form: FormState): { input?: PositionInput; errors: Record<stri
       quantity,
       cost_basis_per_unit: cost,
       acquired: form.acquired,
+      target_weight: targetWeight,
     },
   }
 }
@@ -515,6 +534,18 @@ export function PortfolioEditor({
                   aria-invalid={Boolean(errors.acquired)}
                 />
                 <FieldError message={errors.acquired} />
+              </label>
+              <label className="field">
+                <span className="field__label">Target weight (%)</span>
+                <input
+                  className="input num"
+                  inputMode="decimal"
+                  value={form.target_weight}
+                  onChange={(event) => set('target_weight')(event.target.value)}
+                  placeholder="optional"
+                  aria-invalid={Boolean(errors.target_weight)}
+                />
+                <FieldError message={errors.target_weight} />
               </label>
             </div>
 

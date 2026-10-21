@@ -81,6 +81,8 @@ class PositionView:
     fx_rate_now: float
     fx_rate_at_acquisition: float
     price_native_at_acquisition: float | None
+    target_weight: float | None
+    drift: float | None
 
 
 class PortfolioAnalytics:
@@ -376,6 +378,12 @@ class PortfolioAnalytics:
                     fx_rate_now=rate_now,
                     fx_rate_at_acquisition=rate,
                     price_native_at_acquisition=price_entry,
+                    target_weight=holding.target_weight,
+                    drift=(
+                        float(weights[ticker]) - holding.target_weight
+                        if holding.target_weight is not None
+                        else None
+                    ),
                 )
             )
         return views
@@ -563,6 +571,10 @@ class PortfolioAnalytics:
                             if p.price_native_at_acquisition is not None
                             else None
                         ),
+                        "target_weight": (
+                            round_ratio(p.target_weight) if p.target_weight is not None else None
+                        ),
+                        "drift": round_ratio(p.drift) if p.drift is not None else None,
                         "day_change_pct": round_ratio(p.day_change_pct),
                         "acquired": p.acquired,
                         "sparkline": money_series(p.sparkline),
@@ -590,6 +602,7 @@ class PortfolioAnalytics:
                 "allocation_by_region": self._allocation_breakdown("region"),
                 "allocation_by_currency": self._allocation_breakdown("currency"),
                 "fx_attribution": self._fx_attribution(),
+                "drift": self._drift_payload(),
                 "sparkline": {
                     "dates": to_iso_dates(tail.index),
                     "values": money_series(tail.to_numpy()),
@@ -698,6 +711,65 @@ class PortfolioAnalytics:
                 "observations": int(len(returns)),
             }
         )
+
+    def _drift_payload(self) -> dict[str, Any]:
+        """How far the portfolio has drifted from its target weights.
+
+        A position drifts when its price moves differently from the rest of
+        the book: the position that was supposed to be 10% is now 17% without
+        a single trade. The rebalance figures are the trades that would put
+        it back, and the turnover is what that would cost in fees and tax.
+        """
+        positions = [p for p in self.positions if p.target_weight is not None]
+        if not positions:
+            return {
+                "has_targets": False,
+                "positions": [],
+                "total_drift": 0.0,
+                "turnover": 0.0,
+                "target_sum": 0.0,
+                "residual": 0.0,
+            }
+
+        total_value = float(self.total_value)
+        rows = []
+        buys = 0.0
+        sells = 0.0
+        drift_sum = 0.0
+        target_sum = 0.0
+        for position in positions:
+            target = float(position.target_weight or 0.0)
+            current = float(position.allocation_pct)
+            drift = current - target
+            trade = -drift * total_value
+            if trade > 0:
+                buys += trade
+            else:
+                sells += -trade
+            drift_sum += abs(drift)
+            target_sum += target
+            rows.append(
+                {
+                    "ticker": position.ticker,
+                    "current_weight": round_ratio(current),
+                    "target_weight": round_ratio(target),
+                    "drift": round_ratio(drift),
+                    "trade_value": round_money(trade),
+                }
+            )
+        rows.sort(key=lambda row: abs(float(row["drift"])), reverse=True)
+
+        return {
+            "has_targets": True,
+            "positions": rows,
+            # Half the sum of absolute drifts is the turnover needed to rebalance
+            # a fully invested book: every trade moves two weights.
+            "total_drift": round_ratio(drift_sum / 2.0),
+            "turnover": round_money(min(buys, sells)),
+            "target_sum": round_ratio(target_sum),
+            # What is left over if the targets do not add up to one.
+            "residual": round_ratio(1.0 - target_sum),
+        }
 
     def history(self) -> dict[str, Any]:
         dates = to_iso_dates(self.active_index)

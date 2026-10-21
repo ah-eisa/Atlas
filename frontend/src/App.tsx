@@ -16,6 +16,7 @@ import { CashFlowEditor } from './components/CashFlowEditor'
 import { CorrelationPanel } from './components/CorrelationPanel'
 import { DataPanel } from './components/DataPanel'
 import { DrawdownPanel } from './components/DrawdownPanel'
+import { DriftPanel } from './components/DriftPanel'
 import { FxAttributionPanel } from './components/FxAttributionPanel'
 import { HoldingsPanel } from './components/HoldingsPanel'
 import { KpiStrip } from './components/KpiStrip'
@@ -353,6 +354,7 @@ function AnalyticsViews({
               lookbackDays={risk.lookback_days}
             />
           </div>
+          <DriftPanel summary={summary} currency={currency} />
           <ReplayPanel
             config={config}
             currency={currency}

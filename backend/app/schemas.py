@@ -36,6 +36,13 @@ class HoldingInput(BaseModel):
     quantity: float = Field(gt=0, le=1e12, allow_inf_nan=False)
     cost_basis_per_unit: float = Field(ge=0, le=1e15, allow_inf_nan=False)
     acquired: date
+    target_weight: float | None = Field(
+        default=None,
+        ge=0,
+        le=1,
+        allow_inf_nan=False,
+        description="Optional target weight as a fraction of the portfolio (0.17 = 17%).",
+    )
 
     @field_validator("ticker")
     @classmethod
@@ -99,6 +106,7 @@ class HoldingInput(BaseModel):
             "quantity": self.quantity,
             "cost_basis_per_unit": self.cost_basis_per_unit,
             "acquired": self.acquired.isoformat(),
+            "target_weight": self.target_weight,
         }
 
 
@@ -112,6 +120,7 @@ class HoldingOut(BaseModel):
     quantity: float
     cost_basis_per_unit: float
     acquired: date
+    target_weight: float | None = None
     created_at: str
     updated_at: str
 

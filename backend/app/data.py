@@ -100,6 +100,8 @@ class Holding:
         cost_basis_per_unit: Entry price per unit, in ``currency``.
         acquired: ISO date of the (notional) purchase, used to pick the FX rate
             applied to the cost basis.
+        target_weight: Optional target weight as a fraction of the portfolio
+            (0.17 for 17%). Used to report allocation drift.
     """
 
     ticker: str
@@ -110,6 +112,7 @@ class Holding:
     quantity: float
     cost_basis_per_unit: float
     acquired: str
+    target_weight: float | None = None
 
     @property
     def region_label(self) -> str:
@@ -226,6 +229,11 @@ def load_portfolio(path: Path | None = None) -> Portfolio:
                     quantity=float(item["quantity"]),
                     cost_basis_per_unit=float(item["cost_basis_per_unit"]),
                     acquired=str(item["acquired"]),
+                    target_weight=(
+                        float(item["target_weight"])
+                        if item.get("target_weight") is not None
+                        else None
+                    ),
                 )
             )
         except (KeyError, TypeError, ValueError) as exc:
