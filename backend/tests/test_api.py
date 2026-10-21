@@ -576,3 +576,33 @@ def test_the_schema_version_is_recorded(temp_settings: Any) -> None:
         }
     assert version == 2
     assert "portfolio_id" in columns
+
+
+def test_the_replay_runs_the_current_positions_over_a_past_window(analytics_client: Any) -> None:
+    """A stress test of today's mix over a chosen period."""
+    response = analytics_client.get(
+        "/api/v1/portfolio/replay",
+        params={"notional": 100000},
+    )
+    assert response.status_code == 200
+    payload = response.json()
+
+    assert payload["notional"] == 100000
+    assert len(payload["dates"]) == len(payload["portfolio"])
+    assert len(payload["dates"]) == len(payload["benchmark"])
+    assert payload["start_date"] < payload["end_date"]
+    # The window starts at the notional and ends at the portfolio's value.
+    assert payload["portfolio"][0] == pytest.approx(100000)
+    assert payload["return_pct"] == pytest.approx(
+        payload["portfolio"][-1] / payload["portfolio"][0] - 1, abs=1e-4
+    )
+    assert payload["max_drawdown"]["pct"] <= 0
+
+
+def test_a_replay_window_that_is_too_short_is_rejected(analytics_client: Any) -> None:
+    response = analytics_client.get(
+        "/api/v1/portfolio/replay",
+        params={"start": "2030-01-01", "end": "2030-01-02"},
+    )
+    assert response.status_code == 422
+    assert response.json()["detail"]["code"] == "invalid_window"

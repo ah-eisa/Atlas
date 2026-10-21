@@ -604,6 +604,33 @@ def delete_cash_flow(
     return response
 
 
+@app.get("/api/v1/portfolio/replay", tags=["analytics"])
+def replay(
+    start: str | None = None,
+    end: str | None = None,
+    notional: float = 100_000.0,
+    portfolio_id: int = Depends(_portfolio_id),
+) -> dict[str, Any]:
+    """Run the current positions over a past window.
+
+    A stress test of today's mix, not a reconstruction of what was held
+    then: the current weights are applied to the prices of the period.
+    """
+    try:
+        analytics = _service.get(portfolio_id=portfolio_id)
+        return analytics.replay(start=start, end=end, notional=notional)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=422,
+            detail={"code": "invalid_window", "message": str(exc)},
+        ) from exc
+    except (store.EmptyPortfolio, AnalyticsUnavailable):
+        raise
+    except Exception as exc:  # noqa: BLE001 - upstream failure boundary
+        logger.exception("Failed to build the replay")
+        raise AnalyticsUnavailable(f"analytics unavailable: {exc}") from exc
+
+
 @app.get("/api/v1/portfolio/export", tags=["positions"])
 def export_portfolio(
     format: str = "json", portfolio_id: int = Depends(_portfolio_id)

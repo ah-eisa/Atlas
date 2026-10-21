@@ -308,7 +308,6 @@ export function deleteCashFlow(config: DataConfig, id: number): Promise<void> {
 export function listPortfolios(config: DataConfig): Promise<Portfolio[]> {
   return requestJson<Portfolio[]>(apiUrl(config, '/api/v1/portfolios'), config, {})
 }
-
 export function createPortfolio(
   config: DataConfig,
   name: string,
@@ -318,6 +317,44 @@ export function createPortfolio(
     method: 'POST',
     body: JSON.stringify({ name, base_currency: baseCurrency }),
   })
+}
+
+/** A stress test of the current positions over a past window. */
+export interface ReplayPayload {
+  as_of: string
+  base_currency: string
+  start_date: string
+  end_date: string
+  notional: number
+  dates: string[]
+  portfolio: number[]
+  benchmark: number[]
+  drawdown_pct: number[]
+  return_pct: number | null
+  annualized_return_pct: number | null
+  volatility_annualized_pct: number | null
+  max_drawdown: { pct: number | null; peak_date: string | null; trough_date: string | null }
+  best_day: { date: string | null; pct: number | null }
+  worst_day: { date: string | null; pct: number | null }
+  observations: number
+}
+
+export function fetchReplay(
+  config: DataConfig,
+  params: { start?: string; end?: string; notional?: number },
+  signal?: AbortSignal,
+): Promise<ReplayPayload> {
+  const query = new URLSearchParams()
+  if (params.start) query.set('start', params.start)
+  if (params.end) query.set('end', params.end)
+  if (params.notional) query.set('notional', String(params.notional))
+  const suffix = query.toString()
+  return requestJson<ReplayPayload>(
+    `${apiUrl(config, '/api/v1/portfolio/replay')}${suffix ? `?${suffix}` : ''}`,
+    config,
+    {},
+    signal,
+  )
 }
 
 export function lookupInstrument(

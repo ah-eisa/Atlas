@@ -25,6 +25,7 @@ import { Panel } from './components/Panel'
 import { PerformancePanel } from './components/PerformancePanel'
 import { PortfolioEditor } from './components/PortfolioEditor'
 import { ProjectionNotesPanel } from './components/ProjectionNotesPanel'
+import { ReplayPanel } from './components/ReplayPanel'
 import { ReturnsDistributionPanel } from './components/ReturnsDistributionPanel'
 import { RiskContributionPanel } from './components/RiskContributionPanel'
 import { RiskPanel } from './components/RiskPanel'
@@ -352,6 +353,12 @@ function AnalyticsViews({
               lookbackDays={risk.lookback_days}
             />
           </div>
+          <ReplayPanel
+            config={config}
+            currency={currency}
+            historyStart={analytics.health.history_start}
+            history={history}
+          />
         </main>
       )
 

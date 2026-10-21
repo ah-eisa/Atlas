@@ -622,6 +622,83 @@ class PortfolioAnalytics:
             "total": round_money(price_effect + fx_effect + unattributed),
         }
 
+    def replay(
+        self,
+        start: str | None = None,
+        end: str | None = None,
+        notional: float = 100_000.0,
+    ) -> dict[str, Any]:
+        """Run the current positions over a past window.
+
+        This is a stress test of the *current* mix, not a reconstruction of
+        what the owner held then: the same weights are applied to the prices
+        of the chosen period. It answers the question people actually ask -
+        "if I had this portfolio in that crash, what would it have done?" -
+        and the answer is only as good as that framing, which the panel
+        states in as many words.
+        """
+        growth = self.growth_index
+        window = growth
+        if start:
+            window = window.loc[pd.Timestamp(start).normalize() :]
+        if end:
+            window = window.loc[: pd.Timestamp(end).normalize()]
+        if len(window) < 2:
+            raise ValueError("the replay window needs at least two trading days")
+
+        benchmark = self.market.benchmark.reindex(self.active_index).ffill()
+        benchmark_window = benchmark.reindex(window.index).ffill()
+        if len(benchmark_window) < 2:
+            benchmark_window = pd.Series(dtype=float)
+
+        scaled = window / float(window.iloc[0]) * notional
+        drawdown = metrics.max_drawdown(scaled)
+        returns = metrics.daily_returns(scaled)
+        best = returns.idxmax() if len(returns) else None
+        worst = returns.idxmin() if len(returns) else None
+
+        return json_safe(
+            {
+                **self._envelope(),
+                "start_date": pd.Timestamp(window.index[0]).strftime("%Y-%m-%d"),
+                "end_date": pd.Timestamp(window.index[-1]).strftime("%Y-%m-%d"),
+                "notional": round_money(notional),
+                "dates": to_iso_dates(window.index),
+                "portfolio": money_series(scaled.to_numpy()),
+                "benchmark": (
+                    money_series(
+                        (
+                            benchmark_window / float(benchmark_window.iloc[0]) * notional
+                        ).to_numpy()
+                    )
+                    if len(benchmark_window)
+                    else []
+                ),
+                "drawdown_pct": ratio_series(metrics.drawdown_series(scaled).to_numpy()),
+                "return_pct": round_ratio(float(scaled.iloc[-1] / scaled.iloc[0] - 1.0)),
+                "annualized_return_pct": round_ratio(
+                    metrics.annualized_return(returns, self.settings.trading_days_per_year)
+                ),
+                "volatility_annualized_pct": round_ratio(
+                    metrics.annualized_volatility(returns, self.settings.trading_days_per_year)
+                ),
+                "max_drawdown": {
+                    "pct": round_ratio(drawdown.max_drawdown),
+                    "peak_date": iso(drawdown.peak_date),
+                    "trough_date": iso(drawdown.trough_date),
+                },
+                "best_day": {
+                    "date": iso(pd.Timestamp(best).date()) if best is not None else None,
+                    "pct": round_ratio(float(returns.loc[best])) if best is not None else None,
+                },
+                "worst_day": {
+                    "date": iso(pd.Timestamp(worst).date()) if worst is not None else None,
+                    "pct": round_ratio(float(returns.loc[worst])) if worst is not None else None,
+                },
+                "observations": int(len(returns)),
+            }
+        )
+
     def history(self) -> dict[str, Any]:
         dates = to_iso_dates(self.active_index)
         benchmark = self.market.benchmark.reindex(self.active_index).ffill()
