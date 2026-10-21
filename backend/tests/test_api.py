@@ -607,3 +607,25 @@ def test_a_replay_window_that_is_too_short_is_rejected(analytics_client: Any) ->
     )
     assert response.status_code == 422
     assert response.json()["detail"]["code"] == "invalid_window"
+
+
+def test_the_active_return_is_attributed_to_positions_and_buckets(analytics_client: Any) -> None:
+    """Every position is credited with its share of the active return."""
+    payload = analytics_client.get("/api/v1/portfolio/summary").json()
+    attribution = payload["attribution"]
+
+    assert attribution["positions"], "no position was attributed"
+    for row in attribution["positions"]:
+        assert "contribution_pct" in row
+        assert "weight" in row
+
+    explained = sum(float(row["contribution_pct"]) for row in attribution["positions"])
+    assert explained == pytest.approx(
+        float(attribution["active_return_pct"]) - float(attribution["residual"]), abs=0.01
+    )
+
+    # The bucket totals are the same money, grouped.
+    by_region = sum(float(row["contribution_pct"]) for row in attribution["by_region"])
+    assert by_region == pytest.approx(explained, abs=0.01)
+    by_class = sum(float(row["contribution_pct"]) for row in attribution["by_asset_class"])
+    assert by_class == pytest.approx(explained, abs=0.01)

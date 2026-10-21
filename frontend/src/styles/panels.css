@@ -1323,3 +1323,101 @@
     overflow-x: auto;
   }
 }
+/* ------------------------------------------------------------------ *
+ * Active return attribution                                          *
+ * ------------------------------------------------------------------ */
+
+.attribution-bucket {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  padding: var(--space-5);
+}
+
+.attribution-bucket__columns {
+  display: grid;
+  grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+  gap: var(--space-6);
+}
+
+.attribution-bucket__column {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  min-width: 0;
+}
+
+.attribution-bucket__table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--size-micro);
+}
+
+.attribution-bucket__table th {
+  padding: var(--space-2) var(--space-3);
+  border-bottom: 1px solid var(--line);
+  color: var(--text-tertiary);
+  font-weight: var(--weight-medium);
+  letter-spacing: var(--tracking-wide);
+  text-transform: uppercase;
+  text-align: left;
+}
+
+.attribution-bucket__table td {
+  padding: var(--space-2) var(--space-3);
+  border-bottom: 1px solid var(--line-faint);
+  color: var(--text-secondary);
+}
+
+.attribution-bucket__table th.tabular-right,
+.attribution-bucket__table td.tabular-right {
+  text-align: right;
+}
+
+.attribution-bucket__ticker {
+  color: var(--text-primary);
+  font-weight: var(--weight-medium);
+}
+
+.attribution-bucket__key {
+  color: var(--text-primary);
+}
+
+/* The contribution cell carries a bar behind the figure, so the eye can
+   find the largest contributors before it reads a single number. */
+.attribution-bucket__bar-cell {
+  position: relative;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.attribution-bucket__bar {
+  position: absolute;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  height: 12px;
+  max-width: 60%;
+  background: var(--accent);
+  opacity: 0.22;
+}
+
+.attribution-bucket__bar--negative {
+  background: var(--negative);
+  opacity: 0.24;
+}
+
+.attribution-bucket__note {
+  margin: 0;
+  font-size: var(--size-micro);
+  line-height: var(--leading-normal);
+  color: var(--text-tertiary);
+  max-width: 82ch;
+}
+
+@media (max-width: 900px) {
+  .attribution-bucket__columns {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--space-5);
+  }
+}

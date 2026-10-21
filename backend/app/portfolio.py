@@ -603,6 +603,7 @@ class PortfolioAnalytics:
                 "allocation_by_currency": self._allocation_breakdown("currency"),
                 "fx_attribution": self._fx_attribution(),
                 "drift": self._drift_payload(),
+                "attribution": self._attribution_payload(),
                 "sparkline": {
                     "dates": to_iso_dates(tail.index),
                     "values": money_series(tail.to_numpy()),
@@ -711,6 +712,69 @@ class PortfolioAnalytics:
                 "observations": int(len(returns)),
             }
         )
+
+    def _attribution_payload(self) -> dict[str, Any]:
+        """Attribute the active return to positions and to buckets.
+
+        The active return is what the portfolio earned above its benchmark.
+        This says where it came from: which positions paid for it, and which
+        parts of the book.
+        """
+        daily = self.portfolio_returns
+        benchmark_daily = self.benchmark_returns
+        if daily.empty:
+            return {"positions": [], "by_region": [], "by_asset_class": [], "residual": 0.0}
+
+        values = self.value_frame.reindex(daily.index)
+        equity = self.equity.reindex(daily.index)
+        holding_returns = self.asset_returns.reindex(daily.index)
+        contributions = metrics.active_return_attribution(
+            values, equity, holding_returns, benchmark_daily.reindex(daily.index)
+        )
+        if contributions.empty:
+            return {"positions": [], "by_region": [], "by_asset_class": [], "residual": 0.0}
+
+        active_total = float((1.0 + daily).prod() - (1.0 + benchmark_daily.reindex(daily.index)).prod())
+
+        positions = []
+        for position in self.positions:
+            contribution = float(contributions.get(position.ticker, 0.0))
+            positions.append(
+                {
+                    "ticker": position.ticker,
+                    "name": position.name,
+                    "region": position.region,
+                    "asset_class": position.asset_class,
+                    "weight": round_ratio(position.allocation_pct),
+                    "contribution_pct": round_ratio(contribution),
+                }
+            )
+        positions.sort(key=lambda row: abs(float(row["contribution_pct"])), reverse=True)
+
+        def grouped(attribute: str) -> list[dict[str, Any]]:
+            buckets: dict[str, float] = {}
+            for position in self.positions:
+                key = getattr(position, attribute) or "Unclassified"
+                buckets[key] = buckets.get(key, 0.0) + float(
+                    contributions.get(position.ticker, 0.0)
+                )
+            rows = [
+                {"key": key, "contribution_pct": round_ratio(value)}
+                for key, value in buckets.items()
+            ]
+            rows.sort(key=lambda row: abs(float(row["contribution_pct"])), reverse=True)
+            return rows
+
+        explained = float(contributions.sum())
+        return {
+            "positions": positions,
+            "by_region": grouped("region"),
+            "by_asset_class": grouped("asset_class"),
+            "active_return_pct": round_ratio(active_total),
+            # The difference between the explained part and the active return
+            # is compounding and cash flows, not a missing position.
+            "residual": round_ratio(active_total - explained),
+        }
 
     def _drift_payload(self) -> dict[str, Any]:
         """How far the portfolio has drifted from its target weights.

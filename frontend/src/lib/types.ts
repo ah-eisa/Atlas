@@ -128,6 +128,21 @@ export interface SummaryPayload extends Envelope {
     target_sum: number
     residual: number
   }
+  /** Where the active return above the benchmark came from. */
+  attribution: {
+    positions: {
+      ticker: string
+      name: string
+      region: string | null
+      asset_class: string
+      weight: number
+      contribution_pct: number
+    }[]
+    by_region: { key: string; contribution_pct: number }[]
+    by_asset_class: { key: string; contribution_pct: number }[]
+    active_return_pct: number
+    residual: number
+  }
   sparkline: {
     dates: string[]
     values: number[]

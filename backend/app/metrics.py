@@ -795,3 +795,39 @@ def money_weighted_return(
         return None
     series.sort(key=lambda item: item[0])
     return xirr(series)
+
+
+# ---------------------------------------------------------------------------
+# Attribution
+# ---------------------------------------------------------------------------
+
+
+def active_return_attribution(
+    values: pd.DataFrame,
+    equity: pd.Series,
+    holding_returns: pd.DataFrame,
+    benchmark_returns: pd.Series,
+) -> pd.Series:
+    """Attribute the active return to the individual positions.
+
+    On each day, a position earns its own return less the benchmark's, and
+    that difference is multiplied by the weight the position actually had
+    that day. Summing over days and positions gives the contribution of
+    each position to the return above the benchmark.
+
+    This is the single-index form of attribution: the allocation effect and
+    the selection effect are combined per position, because the benchmark is
+    a single index and cannot be broken into sectors. It is an arithmetic
+    decomposition of the *daily* active returns, so it does not compound
+    exactly into the total active return; the difference is reported as a
+    residual rather than hidden.
+    """
+    if values.empty or equity.empty:
+        return pd.Series(dtype=float)
+
+    weights = values.div(equity, axis=0)
+    aligned_returns = holding_returns.reindex(columns=values.columns)
+    benchmark = benchmark_returns.reindex(aligned_returns.index)
+    active = aligned_returns.sub(benchmark, axis=0)
+    contribution = active.mul(weights).sum(axis=0)
+    return contribution.dropna()

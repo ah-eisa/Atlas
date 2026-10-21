@@ -11,6 +11,7 @@
 import { useState } from 'react'
 
 import { AllocationPanel } from './components/AllocationPanel'
+import { AttributionPanel } from './components/AttributionPanel'
 import { BenchmarkPanel } from './components/BenchmarkPanel'
 import { CashFlowEditor } from './components/CashFlowEditor'
 import { CorrelationPanel } from './components/CorrelationPanel'
@@ -355,6 +356,7 @@ function AnalyticsViews({
             />
           </div>
           <DriftPanel summary={summary} currency={currency} />
+          <AttributionPanel summary={summary} />
           <ReplayPanel
             config={config}
             currency={currency}
