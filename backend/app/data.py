@@ -40,12 +40,12 @@ series then has exactly one observation per trading day.
 from __future__ import annotations
 
 import hashlib
+import io
 import json
 import logging
-import pickle
 import time
 from collections import Counter
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Iterable, Sequence
@@ -53,11 +53,13 @@ from typing import Iterable, Sequence
 import pandas as pd
 import yfinance as yf
 
-from config import SETTINGS, Settings
+from .config import SETTINGS, Settings
 
 logger = logging.getLogger(__name__)
 
-CACHE_FORMAT_VERSION = 4
+# Bumped whenever the on-disk shape changes. A cache from an older version is
+# ignored and replaced rather than migrated.
+CACHE_FORMAT_VERSION = 5
 
 # Venues that quote in a minor unit, mapped to their major unit and the factor
 # that converts to it. Yahoo reports these codes verbatim in its metadata.
@@ -156,6 +158,10 @@ class MarketData:
     benchmark: pd.Series
     base_currency: str
     fetched_at: datetime
+    # Last date on which the exchange actually printed a close, before the
+    # trading-calendar forward fill. Used to surface stale quotes rather than
+    # silently presenting a filled price as current.
+    raw_last_dates: dict[str, date] = field(default_factory=dict)
 
     @property
     def as_of(self) -> date:
@@ -219,11 +225,16 @@ def _cache_file(cache_dir: Path, symbols: Sequence[str], years: int) -> Path:
     """Deterministic cache path for a given symbol set and lookback."""
     key = f"v{CACHE_FORMAT_VERSION}-{years}y-{'_'.join(sorted(symbols))}"
     digest = hashlib.sha256(key.encode("utf-8")).hexdigest()[:12]
-    return cache_dir / f"prices-{years}y-{digest}.pkl"
+    return cache_dir / f"prices-{years}y-{digest}.json"
 
 
 def _download_closes(symbols: Sequence[str], start: date, end: date) -> pd.DataFrame:
     """Download adjusted daily closes for ``symbols`` from Yahoo Finance.
+
+    A batch download is attempted twice before individual symbols are retried
+    one by one. Yahoo's endpoint occasionally drops one ticker from an otherwise
+    successful multi-symbol response; retrying the batch alone would convert
+    that transient miss into a hard failure for the whole portfolio.
 
     Returns:
         DataFrame of closes indexed by date with one column per symbol.
@@ -232,6 +243,42 @@ def _download_closes(symbols: Sequence[str], start: date, end: date) -> pd.DataF
         RuntimeError: if the download returns nothing usable.
     """
     logger.info("Downloading %d symbols from Yahoo Finance (%s .. %s)", len(symbols), start, end)
+
+    last_error: Exception | None = None
+    for attempt in range(2):
+        try:
+            closes = _download_batch(symbols, start, end)
+            missing = [s for s in symbols if s not in closes.columns or closes[s].dropna().empty]
+            if not missing:
+                return closes
+            logger.warning("Batch download missed %s; retrying individually", missing)
+            pieces = {s: closes[s] for s in symbols if s in closes.columns and closes[s].notna().any()}
+            for symbol in missing:
+                try:
+                    single = _download_batch([symbol], start, end)
+                    if symbol in single.columns and single[symbol].notna().any():
+                        pieces[symbol] = single[symbol]
+                except Exception as exc:  # noqa: BLE001 - keep the symbols that worked
+                    last_error = exc
+                    logger.warning("Individual download failed for %s: %s", symbol, exc)
+            if len(pieces) == len(symbols):
+                frame = pd.DataFrame(pieces).sort_index()
+                frame.index.name = "date"
+                return frame
+            absent = [s for s in symbols if s not in pieces]
+            raise RuntimeError(f"No price data returned for: {absent}")
+        except RuntimeError:
+            raise
+        except Exception as exc:  # noqa: BLE001 - retry transport failures once
+            last_error = exc
+            logger.warning("Yahoo download attempt %d failed: %s", attempt + 1, exc)
+            if attempt == 0:
+                time.sleep(0.8)
+
+    raise RuntimeError(f"Yahoo Finance download failed: {last_error}") from last_error
+
+
+def _download_batch(symbols: Sequence[str], start: date, end: date) -> pd.DataFrame:
     raw = yf.download(
         list(symbols),
         start=start.isoformat(),
@@ -247,19 +294,21 @@ def _download_closes(symbols: Sequence[str], start: date, end: date) -> pd.DataF
     closes = raw["Close"] if isinstance(raw.columns, pd.MultiIndex) else raw[["Close"]]
     if isinstance(closes, pd.Series):  # single-symbol edge case
         closes = closes.to_frame(symbols[0])
+    if len(symbols) == 1 and list(closes.columns) == ["Close"]:
+        closes = closes.rename(columns={"Close": symbols[0]})
 
-    missing = [s for s in symbols if s not in closes.columns or closes[s].dropna().empty]
-    if missing:
-        raise RuntimeError(f"No price data returned for: {missing}")
-
-    closes = closes.loc[:, list(symbols)]
     closes.index = pd.to_datetime(closes.index).tz_localize(None).normalize()
     closes.index.name = "date"
     return closes.sort_index()
 
 
 def _load_cached(path: Path, ttl_hours: float) -> tuple[pd.DataFrame, datetime] | None:
-    """Return cached closes if the cache exists and is fresh, else ``None``."""
+    """Return cached closes if the cache exists and is fresh, else ``None``.
+
+    The cache is plain JSON rather than a pickle: it lives in a user-writable
+    directory, and unpickling an attacker-controlled file executes arbitrary
+    code. Nothing in a price cache justifies that risk.
+    """
     if not path.exists():
         return None
     age_hours = (time.time() - path.stat().st_mtime) / 3600.0
@@ -267,18 +316,31 @@ def _load_cached(path: Path, ttl_hours: float) -> tuple[pd.DataFrame, datetime] 
         logger.info("Price cache is %.1fh old (ttl %.1fh); refetching", age_hours, ttl_hours)
         return None
     try:
-        with path.open("rb") as handle:
-            payload = pickle.load(handle)
-        return payload["closes"], payload["fetched_at"]
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        frame = pd.read_json(io.StringIO(json.dumps(payload["closes"])), orient="split")
+        frame.index = pd.to_datetime(frame.index).tz_localize(None).normalize()
+        frame.index.name = "date"
+        frame = frame.sort_index()
+        if frame.empty:
+            raise ValueError("cache contains no rows")
+        fetched_at = datetime.fromisoformat(payload["fetched_at"])
+        return frame, fetched_at
     except Exception as exc:  # noqa: BLE001 - a corrupt cache must never be fatal
         logger.warning("Ignoring unreadable price cache %s: %s", path, exc)
         return None
 
 
 def _store_cache(path: Path, closes: pd.DataFrame, fetched_at: datetime) -> None:
+    """Write the cache atomically so a crash cannot leave a truncated file."""
     path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("wb") as handle:
-        pickle.dump({"closes": closes, "fetched_at": fetched_at}, handle)
+    payload = {
+        "format": CACHE_FORMAT_VERSION,
+        "fetched_at": fetched_at.isoformat(),
+        "closes": json.loads(closes.to_json(orient="split", date_format="iso")),
+    }
+    temporary = path.with_suffix(".tmp")
+    temporary.write_text(json.dumps(payload, separators=(",", ":")), encoding="utf-8")
+    temporary.replace(path)
 
 
 def _align_to_trading_calendar(closes: pd.DataFrame, benchmark_symbol: str) -> pd.DataFrame:
@@ -310,6 +372,9 @@ def load_market_data(
     Returns:
         A :class:`MarketData` with native and base-currency price frames.
     """
+    if not portfolio.holdings:
+        raise ValueError("portfolio has no holdings")
+
     base = portfolio.base_currency
 
     # One FX series per foreign quote currency in the portfolio.
@@ -337,6 +402,14 @@ def load_market_data(
         fetched_at = datetime.now(timezone.utc)
         _store_cache(cache_path, closes, fetched_at)
 
+    # Record the last genuine print per symbol before gaps are forward-filled,
+    # so the UI can distinguish "market closed" from "this feed stopped".
+    raw_last_dates = {
+        symbol: pd.Timestamp(series.dropna().index[-1]).date()
+        for symbol, series in closes.items()
+        if series.notna().any()
+    }
+
     aligned = _align_to_trading_calendar(closes, settings.benchmark)
 
     fx = {currency: aligned[symbol] for currency, symbol in pairs.items()}
@@ -359,6 +432,7 @@ def load_market_data(
         benchmark=benchmark,
         base_currency=base,
         fetched_at=fetched_at,
+        raw_last_dates=raw_last_dates,
     )
 
 

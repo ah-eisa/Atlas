@@ -290,10 +290,12 @@ class PeriodChange:
     Attributes:
         period: Window identifier (``day``/``week``/``month``/``ytd``/``all``).
         start_date: Date of the opening observation used.
-        start_value: Opening value.
-        end_value: Closing (latest) value.
-        absolute: ``end_value - start_value`` in base currency.
-        percent: ``end_value / start_value - 1`` as a fraction.
+        start_value: Opening market value.
+        end_value: Closing market value.
+        absolute: Investment gain over the window, in base currency. External
+            contributions are excluded, so a deposit does not look like a gain.
+        percent: Time-weighted return over the window, as a fraction.
+        flows: Contributions that entered the portfolio inside the window.
     """
 
     period: PeriodKey
@@ -302,6 +304,7 @@ class PeriodChange:
     end_value: float
     absolute: float
     percent: float
+    flows: float = 0.0
 
 
 def _window_start_stamp(index: pd.DatetimeIndex, period: PeriodKey) -> pd.Timestamp:
@@ -332,24 +335,59 @@ def _window_start_stamp(index: pd.DatetimeIndex, period: PeriodKey) -> pd.Timest
     return earlier[-1] if len(earlier) else index[0]
 
 
-def period_change(equity: pd.Series, period: PeriodKey) -> PeriodChange:
+def period_change(
+    equity: pd.Series,
+    period: PeriodKey,
+    *,
+    returns: pd.Series | None = None,
+    flows: pd.Series | None = None,
+) -> PeriodChange:
     """Change in an equity curve over a named window.
 
-    Formulas: ``absolute = v_end - v_start``; ``percent = v_end / v_start - 1``
+    With only ``equity`` the formulas are ``absolute = v_end - v_start`` and
+    ``percent = v_end / v_start - 1``. When ``returns`` and ``flows`` are
+    supplied the result is contribution-aware: ``absolute`` removes external
+    cash flows and ``percent`` chains the time-weighted daily returns, so a
+    deposit is not reported as investment performance.
     """
     index = pd.DatetimeIndex(equity.index)
     start_stamp = _window_start_stamp(index, period)
     start_value = float(equity.loc[start_stamp])
     end_value = float(equity.iloc[-1])
-    percent = (end_value / start_value - 1.0) if start_value else float("nan")
+
+    if returns is None or flows is None:
+        percent = (end_value / start_value - 1.0) if start_value else float("nan")
+        return PeriodChange(
+            period=period,
+            start_date=pd.Timestamp(start_stamp).date(),
+            start_value=start_value,
+            end_value=end_value,
+            absolute=end_value - start_value,
+            percent=percent,
+        )
+
+    window = index[(index >= start_stamp) & (index <= index[-1])]
+    # The opening observation is the baseline; its own return belongs to the
+    # previous period, so the chain starts strictly after it.
+    held = index[index > start_stamp]
+    window_returns = returns.reindex(held).dropna()
+    if len(window_returns):
+        percent = float((1.0 + window_returns).prod() - 1.0)
+    else:
+        percent = 0.0
+    flow_sum = float(flows.reindex(window).fillna(0.0).sum())
+    # Flows on the opening date are already inside start_value.
+    if len(window):
+        flow_sum -= float(flows.reindex([window[0]]).fillna(0.0).iloc[0])
 
     return PeriodChange(
         period=period,
         start_date=pd.Timestamp(start_stamp).date(),
         start_value=start_value,
         end_value=end_value,
-        absolute=end_value - start_value,
+        absolute=end_value - start_value - flow_sum,
         percent=percent,
+        flows=flow_sum,
     )
 
 
@@ -408,3 +446,260 @@ def unrealized_pnl(
     absolute = quantity * (price_base - cost_basis_per_unit_base)
     percent = (price_base / cost_basis_per_unit_base - 1.0) if cost_basis_per_unit_base else float("nan")
     return float(absolute), float(percent)
+
+# --------------------------------------------------------------------------
+# Contribution-aware performance
+# --------------------------------------------------------------------------
+
+def annualized_return(returns: pd.Series, trading_days: int = TRADING_DAYS) -> float:
+    """Geometric annualised return from daily simple returns.
+
+    Formula: ``(prod(1 + r)) ** (trading_days / n) - 1``
+
+    Unlike the arithmetic mean, this compounds the observed path, so it matches
+    the growth an investor actually experienced. Returns NaN for an empty
+    sample or a path that lost more than 100%.
+    """
+    clean = returns.dropna()
+    if clean.empty:
+        return float("nan")
+    growth = float((1.0 + clean).prod())
+    if growth <= 0.0:
+        return float("nan")
+    return float(growth ** (trading_days / len(clean)) - 1.0)
+
+
+def calmar_ratio(
+    returns: pd.Series,
+    equity: pd.Series,
+    trading_days: int = TRADING_DAYS,
+) -> float:
+    """Annualised return divided by the absolute maximum drawdown.
+
+    Formula: ``annualized_return / |max_drawdown|``
+    """
+    annual = annualized_return(returns, trading_days)
+    worst = max_drawdown(equity).max_drawdown
+    if not np.isfinite(annual) or not np.isfinite(worst) or worst == 0.0:
+        return float("nan")
+    return float(annual / abs(worst))
+
+
+def historical_cvar(returns: pd.Series, confidence: float = 0.95) -> float:
+    """1-day historical Expected Shortfall (CVaR).
+
+    Formula: ``-(1 / n_tail) * sum(r | r <= quantile(r, 1 - confidence))``
+
+    The average loss on the days that breached VaR. Unlike VaR it describes the
+    severity of the tail rather than its threshold, and it is always at least
+    as large as the historical VaR computed at the same confidence.
+
+    Returns:
+        A positive fraction of portfolio value, or NaN for an empty sample.
+    """
+    clean = returns.dropna()
+    if clean.empty:
+        return float("nan")
+    threshold = float(np.quantile(clean.to_numpy(dtype=float), 1.0 - confidence))
+    tail = clean[clean <= threshold]
+    if tail.empty:
+        return float("nan")
+    return float(max(-float(tail.mean()), 0.0))
+
+
+def rolling_volatility(
+    returns: pd.Series,
+    window: int = 63,
+    trading_days: int = TRADING_DAYS,
+) -> pd.Series:
+    """Annualised rolling volatility over ``window`` daily observations."""
+    if window < 2:
+        raise ValueError("window must be at least 2")
+    return returns.rolling(window).std(ddof=1) * float(np.sqrt(trading_days))
+
+
+def tracking_error(
+    portfolio_returns: pd.Series,
+    benchmark_returns: pd.Series,
+    trading_days: int = TRADING_DAYS,
+) -> float:
+    """Annualised standard deviation of active returns.
+
+    Formula: ``std(r_p - r_b, ddof=1) * sqrt(trading_days)``
+    """
+    active = _active_returns(portfolio_returns, benchmark_returns)
+    if len(active) < 2:
+        return float("nan")
+    return float(active.std(ddof=1) * np.sqrt(trading_days))
+
+
+def information_ratio(
+    portfolio_returns: pd.Series,
+    benchmark_returns: pd.Series,
+    trading_days: int = TRADING_DAYS,
+) -> float:
+    """Annualised active return per unit of tracking error.
+
+    Formula: ``mean(r_p - r_b) / std(r_p - r_b) * sqrt(trading_days)``
+    """
+    active = _active_returns(portfolio_returns, benchmark_returns)
+    if len(active) < 2:
+        return float("nan")
+    deviation = float(active.std(ddof=1))
+    if deviation == 0.0:
+        return float("nan")
+    return float(active.mean() / deviation * np.sqrt(trading_days))
+
+
+def jensen_alpha(
+    portfolio_returns: pd.Series,
+    benchmark_returns: pd.Series,
+    daily_risk_free_rate: float,
+    trading_days: int = TRADING_DAYS,
+) -> float:
+    """Annualised Jensen's alpha against the benchmark.
+
+    Formula: ``(mean(r_p) - rf_d - beta * (mean(r_b) - rf_d)) * trading_days``
+
+    The intercept of the CAPM regression, expressed as an annual simple return.
+    """
+    joined = pd.concat([portfolio_returns, benchmark_returns], axis=1, join="inner").dropna()
+    if len(joined) < 2:
+        return float("nan")
+    port = joined.iloc[:, 0]
+    bench = joined.iloc[:, 1]
+    sensitivity = beta(port, bench)
+    if not np.isfinite(sensitivity):
+        return float("nan")
+    alpha_daily = (float(port.mean()) - daily_risk_free_rate) - sensitivity * (
+        float(bench.mean()) - daily_risk_free_rate
+    )
+    return float(alpha_daily * trading_days)
+
+
+def up_down_capture(
+    portfolio_returns: pd.Series,
+    benchmark_returns: pd.Series,
+) -> tuple[float, float]:
+    """Up- and down-market capture ratios.
+
+    ``up = mean(r_p | r_b > 0) / mean(r_b | r_b > 0)`` and the same for the
+    negative benchmark days. ``1.0`` means the portfolio moved one-for-one with
+    the benchmark; below 1 is defensive, above 1 is aggressive. Both are
+    returned as ratios (``1.05`` == 105%), or NaN when there are no such days.
+    """
+    joined = pd.concat([portfolio_returns, benchmark_returns], axis=1, join="inner").dropna()
+    if joined.empty:
+        return float("nan"), float("nan")
+    port = joined.iloc[:, 0]
+    bench = joined.iloc[:, 1]
+
+    up = bench > 0.0
+    down = bench < 0.0
+    up_ratio = float("nan")
+    down_ratio = float("nan")
+    if up.any():
+        denominator = float(bench[up].mean())
+        if denominator:
+            up_ratio = float(port[up].mean() / denominator)
+    if down.any():
+        denominator = float(bench[down].mean())
+        if denominator:
+            down_ratio = float(port[down].mean() / denominator)
+    return up_ratio, down_ratio
+
+
+def _active_returns(
+    portfolio_returns: pd.Series, benchmark_returns: pd.Series
+) -> pd.Series:
+    joined = pd.concat([portfolio_returns, benchmark_returns], axis=1, join="inner").dropna()
+    if joined.empty:
+        return pd.Series(dtype=float)
+    return joined.iloc[:, 0] - joined.iloc[:, 1]
+
+
+# --------------------------------------------------------------------------
+# Position-level risk
+# --------------------------------------------------------------------------
+
+@dataclass(frozen=True)
+class Concentration:
+    """How much of the portfolio sits in its largest positions.
+
+    Attributes:
+        herfindahl: Sum of squared weights, in ``[1/n, 1]``.
+        effective_holdings: ``1 / herfindahl`` - the number of equally sized
+            positions that would carry the same concentration.
+        top_five: Combined weight of the five largest positions.
+        largest: Weight of the single largest position.
+    """
+
+    herfindahl: float
+    effective_holdings: float
+    top_five: float
+    largest: float
+
+
+def concentration(weights: pd.Series) -> Concentration:
+    """Concentration statistics for a set of portfolio weights."""
+    clean = weights.dropna().astype(float)
+    if clean.empty:
+        return Concentration(float("nan"), float("nan"), float("nan"), float("nan"))
+    total = float(clean.sum())
+    if total <= 0.0:
+        return Concentration(float("nan"), float("nan"), float("nan"), float("nan"))
+    normalised = clean / total
+    hhi = float((normalised**2).sum())
+    return Concentration(
+        herfindahl=hhi,
+        effective_holdings=(1.0 / hhi) if hhi else float("nan"),
+        top_five=float(normalised.nlargest(5).sum()),
+        largest=float(normalised.max()),
+    )
+
+
+def risk_contributions(
+    asset_returns: pd.DataFrame,
+    market_values: pd.Series,
+) -> pd.DataFrame:
+    """Euler decomposition of portfolio volatility by holding.
+
+    ``sigma_p = sqrt(w' S w)``, marginal contribution ``MCR_i = (S w)_i /
+    sigma_p`` and component contribution ``w_i * MCR_i``. Components sum to
+    ``sigma_p``; the returned ``contribution_pct`` divides by ``sigma_p`` and
+    therefore sums to 1 (negative values are possible for genuine hedges).
+
+    The covariance is estimated on the overlapping, complete rows of the asset
+    return frame, so holdings with short histories are not silently filled.
+    """
+    if asset_returns.empty or market_values.empty:
+        return pd.DataFrame(columns=["weight", "contribution", "contribution_pct"])
+
+    tickers = [ticker for ticker in asset_returns.columns if ticker in market_values.index]
+    if not tickers:
+        return pd.DataFrame(columns=["weight", "contribution", "contribution_pct"])
+
+    aligned = asset_returns[tickers].dropna(how="any")
+    values = market_values.reindex(tickers).astype(float)
+    total = float(values.sum())
+    if len(aligned) < 2 or total <= 0.0:
+        return pd.DataFrame(columns=["weight", "contribution", "contribution_pct"])
+
+    weights = values / total
+    covariance = np.cov(aligned.to_numpy(dtype=float), rowvar=False, ddof=1)
+    covariance = np.atleast_2d(covariance)
+    marginal = covariance @ weights.to_numpy(dtype=float)
+    variance = float(weights.to_numpy(dtype=float) @ marginal)
+    if variance <= 0.0:
+        return pd.DataFrame(columns=["weight", "contribution", "contribution_pct"])
+
+    sigma = float(np.sqrt(variance))
+    component = weights.to_numpy(dtype=float) * marginal / sigma
+    return pd.DataFrame(
+        {
+            "weight": weights,
+            "contribution": component,
+            "contribution_pct": component / sigma,
+        },
+        index=weights.index,
+    )

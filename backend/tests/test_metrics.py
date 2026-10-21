@@ -12,7 +12,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-import metrics
+from backend.app import metrics
 
 
 def series(values: list[float], start: str = "2025-01-01") -> pd.Series:
@@ -262,3 +262,102 @@ def test_unrealized_pnl_is_negative_for_a_loser() -> None:
     absolute, percent = metrics.unrealized_pnl(4.0, 75.0, 100.0)
     assert absolute == pytest.approx(-100.0)
     assert percent == pytest.approx(-0.25)
+
+
+# --------------------------------------------------------------------------
+# Added risk and relative-performance metrics
+# --------------------------------------------------------------------------
+
+
+def test_annualized_return_compounds_the_observed_path() -> None:
+    returns = series([0.01] * 252)
+    assert metrics.annualized_return(returns) == pytest.approx(1.01**252 - 1, rel=1e-9)
+
+
+def test_annualized_return_of_a_total_loss_is_nan() -> None:
+    assert math.isnan(metrics.annualized_return(series([-1.0])))
+
+
+def test_cvar_is_at_least_var_at_the_same_confidence() -> None:
+    returns = series(list(np.linspace(-0.09, 0.08, 80)))
+    for confidence in (0.95, 0.99):
+        assert metrics.historical_cvar(returns, confidence) >= metrics.historical_var(
+            returns, confidence
+        )
+
+
+def test_cvar_averages_only_the_tail() -> None:
+    returns = series([-0.10, -0.06, -0.02, 0.01, 0.02, 0.03, 0.04, 0.05, 0.06, 0.07])
+    threshold = np.quantile(returns.to_numpy(), 0.05)
+    tail = returns[returns <= threshold]
+    assert metrics.historical_cvar(returns, 0.95) == pytest.approx(-tail.mean())
+
+
+def test_calmar_is_nan_without_a_drawdown() -> None:
+    returns = series([0.01] * 252)
+    equity = (1.0 + returns).cumprod()
+    assert math.isnan(metrics.calmar_ratio(returns, equity))
+
+
+def test_tracking_error_is_zero_for_an_identical_benchmark() -> None:
+    benchmark = series([0.01, -0.02, 0.03, -0.01, 0.005])
+    assert metrics.tracking_error(benchmark, benchmark) == pytest.approx(0.0)
+    assert math.isnan(metrics.information_ratio(benchmark, benchmark))
+
+
+def test_information_ratio_is_positive_for_consistent_outperformance() -> None:
+    benchmark = series(np.sin(np.linspace(0, 12, 80)) / 100)
+    portfolio = benchmark + np.linspace(0.0001, 0.001, len(benchmark))
+    assert metrics.information_ratio(portfolio, benchmark) > 0
+    assert metrics.tracking_error(portfolio, benchmark) > 0
+
+
+def test_jensen_alpha_is_zero_when_the_portfolio_is_the_benchmark() -> None:
+    benchmark = series([0.01, -0.02, 0.03, -0.01, 0.005])
+    assert metrics.jensen_alpha(benchmark, benchmark, 0.0) == pytest.approx(0.0, abs=1e-12)
+
+
+def test_up_and_down_capture_of_a_levered_portfolio() -> None:
+    benchmark = series([0.01, -0.02, 0.03, -0.01, 0.005])
+    up, down = metrics.up_down_capture(benchmark * 1.5, benchmark)
+    assert up == pytest.approx(1.5)
+    assert down == pytest.approx(1.5)
+
+
+def test_concentration_of_equal_weights() -> None:
+    result = metrics.concentration(pd.Series({"A": 25.0, "B": 25.0, "C": 25.0, "D": 25.0}))
+    assert result.herfindahl == pytest.approx(0.25)
+    assert result.effective_holdings == pytest.approx(4.0)
+    assert result.top_five == pytest.approx(1.0)
+    assert result.largest == pytest.approx(0.25)
+
+
+def test_risk_contributions_sum_to_one_when_volatility_is_positive() -> None:
+    rng = np.random.default_rng(11)
+    frame = pd.DataFrame(
+        rng.normal(0, 0.01, size=(200, 3)),
+        columns=["A", "B", "C"],
+        index=pd.bdate_range("2025-01-01", periods=200),
+    )
+    result = metrics.risk_contributions(frame, pd.Series({"A": 50.0, "B": 30.0, "C": 20.0}))
+    assert len(result) == 3
+    assert result["weight"].sum() == pytest.approx(1.0)
+    assert result["contribution_pct"].sum() == pytest.approx(1.0)
+    assert result["contribution"].sum() == pytest.approx(
+        np.sqrt(
+            np.array([0.5, 0.3, 0.2])
+            @ np.cov(frame.to_numpy(), rowvar=False, ddof=1)
+            @ np.array([0.5, 0.3, 0.2])
+        )
+    )
+
+
+def test_period_change_excludes_flows_inside_the_window() -> None:
+    equity = series([100.0, 100.0, 300.0, 330.0])
+    returns = pd.Series([np.nan, 0.0, 0.0, 0.10], index=equity.index)
+    flows = pd.Series([0.0, 0.0, 200.0, 0.0], index=equity.index)
+    change = metrics.period_change(equity, "all", returns=returns, flows=flows)
+    assert change.flows == pytest.approx(200.0)
+    assert change.absolute == pytest.approx(30.0)
+    assert change.percent == pytest.approx(0.10)
+

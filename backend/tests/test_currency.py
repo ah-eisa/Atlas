@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import pytest
 
-from data import MINOR_UNITS, fx_symbol, normalise_currency
+from backend.app.data import MINOR_UNITS, fx_symbol, normalise_currency
 
 
 def test_fx_symbol_follows_yahoo_pair_convention() -> None:

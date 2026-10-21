@@ -1,14 +1,19 @@
-"""Build your ``holdings.json`` without hand-editing JSON.
+"""Build the portfolio without hand-editing JSON.
 
 Two ways in:
 
-    python setup_holdings.py                 # interactive, one position at a time
-    python setup_holdings.py --csv mine.csv  # bulk import from a spreadsheet
+    python backend/setup_holdings.py                 # interactive
+    python backend/setup_holdings.py --csv mine.csv  # bulk import
 
 Both validate every ticker against Yahoo Finance before writing, and fill in
 whatever they can on your behalf: the instrument's name, its quote currency,
-its asset class, and — if you give a purchase date — the actual closing price
+its asset class, and - if you give a purchase date - the actual closing price
 on that date as your cost basis.
+
+By default the positions are written to ``holdings.json`` *and* imported into
+the SQLite store the application reads. Use ``--no-db`` to only write the JSON
+file (for example to produce a fresh demo snapshot on a machine that should not
+create a database).
 
 The CSV needs a header row and at least ``ticker`` and ``quantity``:
 
@@ -37,7 +42,12 @@ from typing import Any, Iterable
 import pandas as pd
 import yfinance as yf
 
-from config import SETTINGS
+REPO_ROOT = Path(__file__).resolve().parents[1]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
+from backend.app.config import SETTINGS  # noqa: E402
+from backend.app import store  # noqa: E402
 
 logger = logging.getLogger("setup_holdings")
 
@@ -277,8 +287,14 @@ def from_csv(path: Path, base_currency: str) -> tuple[str, list[dict[str, Any]]]
 # --------------------------------------------------------------------------
 
 
-def write_holdings(path: Path, base_currency: str, entries: Iterable[dict[str, Any]]) -> None:
-    """Write holdings.json, backing up any existing file first."""
+def write_holdings(
+    path: Path,
+    base_currency: str,
+    entries: Iterable[dict[str, Any]],
+    *,
+    write_db: bool = True,
+) -> None:
+    """Write holdings.json (backing up any existing file) and optionally import."""
     entries = list(entries)
     if not entries:
         print("\nNo positions entered; nothing written.")
@@ -295,7 +311,13 @@ def write_holdings(path: Path, base_currency: str, entries: Iterable[dict[str, A
     }
     path.write_text(json.dumps(document, indent=2) + "\n", encoding="utf-8")
     print(f"Wrote {len(entries)} positions to {path}")
-    print("\nNext:  python generate_snapshot.py     then     cd ../frontend && npm run dev")
+
+    if write_db:
+        store.init_db(SETTINGS)
+        store.replace_all(entries, base_currency, SETTINGS)
+        print(f"Imported {len(entries)} positions into {SETTINGS.db_path}")
+
+    print("\nNext:  python backend/generate_snapshot.py  or  uvicorn backend.app.api:app --port 8000")
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -314,6 +336,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         type=Path,
         default=SETTINGS.holdings_path,
         help=f"output path (default: {SETTINGS.holdings_path})",
+    )
+    parser.add_argument(
+        "--no-db",
+        action="store_true",
+        help="only write the JSON file; do not import into SQLite",
     )
     return parser.parse_args(argv)
 
@@ -334,7 +361,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"\nError: {exc}")
         return 1
 
-    write_holdings(args.output, base_currency, entries)
+    write_holdings(args.output, base_currency, entries, write_db=not args.no_db)
     return 0
 
 

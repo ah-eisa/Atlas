@@ -14,7 +14,7 @@ import math
 from datetime import date
 from typing import Any, Mapping, Sequence
 
-from config import SETTINGS
+from .config import SETTINGS
 
 
 def clean_float(value: Any) -> float | None:

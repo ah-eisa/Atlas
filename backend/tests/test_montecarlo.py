@@ -12,7 +12,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-import montecarlo
+from backend.app import montecarlo
 
 
 @pytest.fixture()
