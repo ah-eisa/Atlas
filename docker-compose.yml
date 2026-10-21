@@ -1,0 +1,37 @@
+# ATLAS — the whole stack in one container.
+#
+#   docker compose up --build
+#   open http://localhost:8080
+#
+# The API and the dashboard are served from the same origin on port 8000
+# inside the container, so there is nothing to configure in the browser.
+
+services:
+  atlas:
+    build: .
+    image: atlas:latest
+    container_name: atlas
+    ports:
+      - "8080:8000"
+    environment:
+      # Reporting currency for the portfolio.
+      PORTFOLIO_BASE_CURRENCY: EUR
+      # Benchmark symbol and its display name.
+      PORTFOLIO_BENCHMARK: ^GSPC
+      PORTFOLIO_BENCHMARK_NAME: S&P 500
+      # Annual risk-free rate used by Sharpe, Sortino and the daily rate.
+      PORTFOLIO_RISK_FREE_RATE: "0.02"
+      # Seed the bundled example portfolio on first boot.
+      PORTFOLIO_SEED_DEMO: "true"
+      # Set to require an X-API-Key header on every data route.
+      # PORTFOLIO_API_KEY: change-me
+    volumes:
+      # Positions survive container restarts and rebuilds.
+      - atlas-data:/app/backend/data
+      # Price cache: keeps the app usable when Yahoo Finance rate-limits.
+      - atlas-cache:/app/backend/.cache
+    restart: unless-stopped
+
+volumes:
+  atlas-data:
+  atlas-cache:

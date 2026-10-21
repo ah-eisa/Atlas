@@ -1,4 +1,4 @@
-# Portfolio Dashboard — common tasks.
+# ATLAS — common tasks.
 #
 # Everything here is a thin wrapper around the underlying commands, which are
 # spelled out in the README for anyone who would rather not use make.
@@ -21,7 +21,7 @@ setup: ## Install backend and frontend dependencies (run this first)
 	$(PIP) install --quiet -r backend/requirements.txt
 	cd frontend && npm install
 	@echo
-	@echo "Done. Next:  make holdings   (enter your positions)"
+	@echo "Done. Next:  make dev   (start the dashboard)"
 
 holdings: ## Enter your positions interactively
 	cd backend && ../$(PY) setup_holdings.py
@@ -34,7 +34,7 @@ snapshot: ## Fetch prices and compute everything into snapshot.json
 	cd backend && ../$(PY) generate_snapshot.py
 
 api: ## Serve the live API on :8000
-	cd backend && ../$(VENV)/bin/uvicorn api:app --reload --port 8000
+	cd backend && ../$(VENV)/bin/uvicorn app.api:app --reload --port 8000
 
 dev: ## Run the dashboard on :5173
 	cd frontend && npm run dev
@@ -43,11 +43,14 @@ build: ## Produce a static build in frontend/dist
 	cd frontend && npm run build
 
 test: ## Run the backend test suite
-	cd backend && ../$(PY) -m pytest
+	$(PY) -m pytest
 
 lint: ## Lint the frontend
 	cd frontend && npx oxlint src
 
-clean: ## Remove the price cache and build output
-	rm -rf backend/.cache frontend/dist
+docker: ## Build and run the whole stack on :8080
+	docker compose up --build
+
+clean: ## Remove the price cache, the database and build output
+	rm -rf backend/.cache backend/data frontend/dist
 	find . -name __pycache__ -type d -prune -exec rm -rf {} +

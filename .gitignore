@@ -9,6 +9,12 @@ venv/
 # Price cache (regenerated from yfinance on demand)
 backend/.cache/
 
+# SQLite database of stored positions (created on first boot)
+backend/data/
+*.db
+*.db-wal
+*.db-shm
+
 # Node / Vite
 node_modules/
 frontend/dist/

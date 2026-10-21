@@ -15,7 +15,7 @@ jobs:
 
       - uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
+          python-version: '3.12'
           cache: pip
           cache-dependency-path: backend/requirements.txt
 
@@ -24,8 +24,9 @@ jobs:
 
       # The suite is hermetic: it never reaches Yahoo Finance, so CI stays
       # green regardless of upstream availability or rate limits.
+      # Run from the repository root so the root pytest.ini applies and the
+      # `backend.app` package is importable.
       - name: Run tests
-        working-directory: backend
         run: python -m pytest
 
   frontend:
@@ -36,7 +37,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
           cache: npm
           cache-dependency-path: frontend/package-lock.json
 
@@ -54,3 +55,31 @@ jobs:
       - name: Build
         working-directory: frontend
         run: npm run build
+
+      - name: Audit production dependencies
+        working-directory: frontend
+        run: npm audit --omit=dev --audit-level=high
+
+  docker:
+    name: Container image
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build image
+        run: docker build -t atlas:${{ github.sha }} .
+
+      # The image must answer its own health check with the API up.
+      - name: Health check
+        run: |
+          docker run -d --name atlas -p 8080:8000 atlas:${{ github.sha }}
+          for i in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:8080/api/v1/health; then
+              echo "healthy"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "service did not become healthy"
+          docker logs atlas
+          exit 1
