@@ -13,16 +13,19 @@ import {
   CrosshairMode,
   LineSeries,
   LineStyle,
+  type DeepPartial,
   type IChartApi,
   type ISeriesApi,
   type LineData,
   type AutoscaleInfo,
   type MouseEventParams,
   type Time,
+  type TimeChartOptions,
 } from 'lightweight-charts'
 import { useEffect, useRef } from 'react'
 
 import { easeOutSine, MOTION, prefersReducedMotion } from '../lib/motion'
+import { themeVersion } from '../lib/theme'
 import { fromTime } from './series'
 import { chartTheme } from './theme'
 
@@ -97,16 +100,12 @@ export function TimeSeriesChart({
   formatterRef.current = valueFormatter
   crosshairRef.current = onCrosshair
 
-  // Create the chart once. Series are added and removed by the effect below.
-  useEffect(() => {
-    const host = hostRef.current
-    if (!host) return
-
-    // Captured here so the cleanup closes over the same Map instance rather
-    // than reading `.current` after unmount.
-    const seriesMap = seriesRef.current
+  // Chart-level furniture: grid, axes, crosshair, label colour. Applied when
+  // the chart is created and re-applied whenever the theme changes, so a
+  // palette switch repaints the frame as well as the series.
+  const chartOptions = (): DeepPartial<TimeChartOptions> => {
     const theme = chartTheme()
-    const chart = createChart(host, {
+    return {
       autoSize: true,
       layout: {
         background: { color: 'transparent' },
@@ -150,7 +149,18 @@ export function TimeSeriesChart({
         priceFormatter: (price: number) => formatterRef.current(price),
       },
       handleScale: { axisPressedMouseMove: false },
-    })
+    }
+  }
+
+  // Create the chart once. Series are added and removed by the effect below.
+  useEffect(() => {
+    const host = hostRef.current
+    if (!host) return
+
+    // Captured here so the cleanup closes over the same Map instance rather
+    // than reading `.current` after unmount.
+    const seriesMap = seriesRef.current
+    const chart = createChart(host, chartOptions())
 
     chart.subscribeCrosshairMove((params: MouseEventParams<Time>) => {
       const report = crosshairRef.current
@@ -176,6 +186,15 @@ export function TimeSeriesChart({
       seriesMap.clear()
     }
   }, [])
+
+  // Re-apply the chart furniture when the theme changes. The series colours
+  // follow on their own, because the panels rebuild their series specs from
+  // the new palette; the grid, axes and crosshair are owned by the chart
+  // instance and would otherwise keep the old theme's colours.
+  const palette = themeVersion()
+  useEffect(() => {
+    chartRef.current?.applyOptions(chartOptions())
+  }, [palette])
 
   // Reconcile series: update in place where possible, add/remove on change.
   useEffect(() => {

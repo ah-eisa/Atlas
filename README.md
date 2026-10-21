@@ -188,6 +188,31 @@ cares which one is running. The active mode is always visible in the header
 
 ---
 
+## Light and dark
+
+The dashboard ships with two complete palettes, not one palette plus an
+inversion:
+
+- **Dark** — a true-black trading surface, the original design.
+- **Light** — a paper-white instrument panel: white panels on a cool grey
+  page, hairline rules instead of floating cards, and a categorical ramp that
+  runs dark-to-light so the largest slice still reads strongest.
+
+The switch lives in the header. The first visit follows the operating
+system's `prefers-color-scheme`; once you choose, the choice is remembered and
+survives a reload. The theme is applied before the first paint, so the page
+never flashes the wrong background.
+
+Both palettes are defined once, in `styles/tokens.css`, as CSS custom
+properties. Everything else - panels, tables, charts, heatmaps, the editor -
+reads those tokens, and the charting libraries read the same tokens at
+runtime, so a palette switch repaints the charts as well as the page. Every
+text role in both palettes clears the WCAG AA contrast ratio (4.5:1); the
+context lines under the headline figures are the tightest, at 4.85:1 in the
+light theme and 5.21:1 in the dark one.
+
+---
+
 ## Entering positions
 
 Positions are **current totals, not trades**: quantity and cost basis per

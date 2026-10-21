@@ -11,6 +11,7 @@
 
 import { formatDate, formatMoneyCompact, formatMoneySigned, formatPercentSigned, formatTimestamp, signClass } from '../lib/format'
 import type { DataConfig } from '../lib/api'
+import { useTheme } from '../lib/theme'
 import type { Health, SummaryPayload } from '../lib/types'
 import type { ViewKey } from '../lib/useHashRoute'
 import { AnimatedNumber } from './AnimatedNumber'
@@ -69,6 +70,40 @@ function Delta({ label, absolute, percent, delay }: DeltaProps) {
   )
 }
 
+/**
+ * Sun / moon glyph for the theme switch.
+ *
+ * The icon shows the theme that will be applied by pressing it, which is the
+ * convention that avoids a toggle that appears to do nothing.
+ */
+function ThemeIcon({ theme }: { theme: 'dark' | 'light' }) {
+  if (theme === 'dark') {
+    return (
+      <svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true">
+        <circle cx="8" cy="8" r="3.1" fill="currentColor" />
+        <g stroke="currentColor" strokeWidth="1.2" strokeLinecap="square">
+          <path d="M8 0.8 V2.6" />
+          <path d="M8 13.4 V15.2" />
+          <path d="M0.8 8 H2.6" />
+          <path d="M13.4 8 H15.2" />
+          <path d="M2.9 2.9 L4.1 4.1" />
+          <path d="M11.9 11.9 L13.1 13.1" />
+          <path d="M13.1 2.9 L11.9 4.1" />
+          <path d="M4.1 11.9 L2.9 13.1" />
+        </g>
+      </svg>
+    )
+  }
+  return (
+    <svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true">
+      <path
+        d="M13.4 9.6A5.8 5.8 0 0 1 6.4 2.6a5.9 5.9 0 1 0 7 7Z"
+        fill="currentColor"
+      />
+    </svg>
+  )
+}
+
 export function TopBar({
   summary,
   health,
@@ -81,6 +116,7 @@ export function TopBar({
 }: TopBarProps) {
   const live = config.source === 'api'
   const analyticsReady = summary !== null
+  const { theme, toggle } = useTheme()
 
   return (
     <header className={analyticsReady ? 'topbar' : 'topbar topbar--compact'}>
@@ -133,6 +169,15 @@ export function TopBar({
             />
             {live ? 'Live API' : 'Demo snapshot'}
           </a>
+          <button
+            type="button"
+            className="button button--quiet topbar__theme"
+            onClick={toggle}
+            title={theme === 'dark' ? 'Switch to the light theme' : 'Switch to the dark theme'}
+            aria-label={theme === 'dark' ? 'Switch to the light theme' : 'Switch to the dark theme'}
+          >
+            <ThemeIcon theme={theme} />
+          </button>
           <button
             type="button"
             className="button button--quiet"

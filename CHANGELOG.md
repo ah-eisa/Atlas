@@ -7,6 +7,36 @@ uses [semantic versioning](https://semver.org/spec/v2.0.0.html).
 The API version is exposed at runtime (`/api/v1/health` → `version`), and the
 frontend ships against it.
 
+## [2.1.0] — 2026-10-21
+
+### Added — frontend
+
+- **A complete light palette** alongside the dark one, switched from the
+  header. The light theme is a paper-white instrument panel with its own
+  surfaces, hairlines, categorical ramp, sequential heat ramp and monthly
+  return heat scale - not an inversion of the dark one. The first visit
+  follows the operating system's `prefers-color-scheme`; an explicit choice
+  is remembered and survives a reload.
+- **No flash on load**: the theme is applied by an inline script before the
+  first paint, and `color-scheme` is set so native controls, scrollbars and
+  date pickers match the palette.
+- **The charts follow the theme.** The ECharts and Lightweight Charts
+  palettes are read from the same CSS custom properties as the page, so a
+  palette switch repaints the plot furniture and the series, not just the
+  chrome.
+
+### Fixed
+
+- **Contrast.** The context lines under the headline figures, the panel
+  notes, the footer and several secondary labels were painted in the
+  "disabled" colour, which was around 2:1 against the surface. They now use
+  the tertiary text colour, and every text role clears WCAG AA (4.5:1) in
+  both themes - the tightest is 4.56:1 in the light palette and 5.01:1 in
+  the dark one.
+- **Correlation heatmap labels** now pick their text colour from the actual
+  cell fill, by contrast, instead of a fixed threshold that only worked in
+  one palette.
+
 ## [2.0.0] — 2026-10-21
 
 The dashboard was rebuilt from a single-file analytics script into a proper

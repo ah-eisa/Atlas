@@ -25,8 +25,10 @@ interface ReturnsDistributionPanelProps {
   returns: ReturnsPayload
 }
 
-function histogramOption(returns: ReturnsPayload): EChartsOption {
-  const theme = chartTheme()
+function histogramOption(
+  returns: ReturnsPayload,
+  theme: ReturnType<typeof chartTheme>,
+): EChartsOption {
   const bins = returns.histogram
   const labels = bins.map((bin) => bin.start)
   const firstPositive = bins.findIndex((bin) => bin.end > 0)
@@ -92,7 +94,8 @@ function histogramOption(returns: ReturnsPayload): EChartsOption {
 }
 
 export function ReturnsDistributionPanel({ returns }: ReturnsDistributionPanelProps) {
-  const option = useMemo(() => histogramOption(returns), [returns])
+  const theme = chartTheme()
+  const option = useMemo(() => histogramOption(returns, theme), [returns, theme])
   const payoff =
     returns.average_gain_pct !== null &&
     returns.average_loss_pct !== null &&

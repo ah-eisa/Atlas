@@ -29,6 +29,7 @@ import { RiskPanel } from './components/RiskPanel'
 import { TopBar } from './components/TopBar'
 import { ApiError } from './lib/api'
 import { formatDate, formatTimestamp } from './lib/format'
+import { useTheme } from './lib/theme'
 import { useHashRoute, type ViewKey } from './lib/useHashRoute'
 import { usePortfolio } from './lib/usePortfolio'
 import type { PortfolioState } from './lib/types'
@@ -52,9 +53,12 @@ function Shell({
 }) {
   const summary = state?.analytics?.summary ?? null
   const health = state?.analytics?.health ?? null
+  // Subscribing here makes the whole shell re-render when the theme changes,
+  // which is what lets the panels rebuild their chart palettes.
+  const { theme } = useTheme()
 
   return (
-    <div className="app">
+    <div className="app" data-theme={theme}>
       <TopBar
         summary={summary}
         health={health}

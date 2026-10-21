@@ -2,10 +2,16 @@
  * Bridges the CSS design tokens into the charting libraries.
  *
  * ECharts and Lightweight Charts both need literal colour strings in JS, which
- * would normally mean duplicating the palette. Instead these are read from the
- * live computed styles of `:root`, so `tokens.css` remains the single source of
- * truth: change a token there and every chart follows.
+ * would normally mean duplicating the palette. Instead these are read from
+ * the live computed styles of `:root`, so `tokens.css` remains the single source
+ * of truth: change a token there and every chart follows.
+ *
+ * The read is cached, because recomputing styles on every chart render would
+ * force a needless layout. The cache is keyed on the theme version, so a
+ * palette change invalidates it and the charts repaint in the new colours.
  */
+
+import { themeVersion } from '../lib/theme'
 
 interface ChartTheme {
   surface: string
@@ -40,13 +46,16 @@ function token(name: string, fallback: string): string {
 }
 
 let cached: ChartTheme | null = null
+let cachedVersion = -1
 
 /**
- * The resolved theme. Cached after first read - tokens are static at runtime,
- * and re-reading computed styles per chart render would force needless layout.
+ * The resolved theme. Cached per theme version - tokens are static while a
+ * theme is active, and re-reading computed styles per chart render would
+ * force needless layout.
  */
 export function chartTheme(): ChartTheme {
-  if (cached) return cached
+  const version = themeVersion()
+  if (cached && cachedVersion === version) return cached
 
   cached = {
     surface: token('--surface-panel', '#101215'),
@@ -87,6 +96,7 @@ export function chartTheme(): ChartTheme {
     fontSans: token('--font-sans', "'IBM Plex Sans', Arial, sans-serif"),
     fontMono: token('--font-mono', "'IBM Plex Mono', monospace"),
   }
+  cachedVersion = version
   return cached
 }
 

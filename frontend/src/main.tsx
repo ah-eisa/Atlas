@@ -16,6 +16,13 @@ import './styles/panels.css'
 import './styles/forms.css'
 
 import App from './App'
+import { applyTheme, getTheme, watchSystemTheme } from './lib/theme'
+
+// The inline script in index.html already set the theme before the first
+// paint; this keeps the document in step with the module's own state, and
+// follows the operating system until the user picks a theme explicitly.
+applyTheme(getTheme())
+watchSystemTheme()
 
 const container = document.getElementById('root')
 if (!container) throw new Error('#root not found in index.html')

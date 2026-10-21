@@ -126,6 +126,14 @@ Design decisions:
   was the strongest thing about the original code, so it was kept and
   systematised: tokens for spacing, colour and heat scales; one button and
   notice vocabulary; responsive grids that collapse rather than overflow.
+- **Two complete palettes.** The dashboard is read at 3am on a trading floor
+  and at midday in an office, so a light theme was added as a real second
+  palette — its own surfaces, categorical ramp, sequential heat ramp and
+  monthly return heat scale — rather than as an inversion of the dark one.
+  Both live in `tokens.css`; the charting libraries read the same tokens, so
+  a palette switch repaints the plots as well as the page. The theme follows
+  `prefers-color-scheme` until the user chooses one, and is applied before
+  the first paint so the page never flashes.
 - **Motion is used once, on load.** Numbers count into place over one second
   and stop. `prefers-reduced-motion` disables it, and a backgrounded tab
   shows the final value rather than a frozen zero.
@@ -135,6 +143,11 @@ Design decisions:
 - **Failure is a state, not a crash.** Loading, empty portfolio, analytics
   unavailable, authorisation required, and connection failure are all
   designed states with their own copy and their own next action.
+- **Contrast was audited, not assumed.** Several secondary labels (the
+  context lines under the headline figures, the panel notes, the footer) were
+  painted in the "disabled" colour at roughly 2:1. Every text role now
+  clears WCAG AA in both palettes — 4.56:1 at the tightest in light, 5.01:1
+  in dark.
 
 ### 2.4 Delivery
 
@@ -195,6 +208,9 @@ SQLite database per test, and no network access. It covers:
 | Empty portfolio | `200` bootstrap with `analytics: null`; UI shows the empty state and the editor |
 | Backend unreachable | Connection-error state with retry and source-switch actions |
 | Browser console during all of the above | No errors or warnings |
+| Light and dark palettes, all six views | Pass — the light palette is a second complete design, not an inversion |
+| Theme persistence across a reload | Pass — applied before the first paint, no flash |
+| Text contrast in both palettes | Pass — every role clears WCAG AA (4.56:1 light, 5.01:1 dark) |
 
 ---
 

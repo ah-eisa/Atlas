@@ -85,7 +85,7 @@
 .editor__meta {
   display: block;
   font-size: var(--size-micro);
-  color: var(--text-disabled);
+  color: var(--text-tertiary);
 }
 
 .editor__date {
@@ -160,7 +160,7 @@
   margin: 0;
   font-size: var(--size-micro);
   line-height: var(--leading-snug);
-  color: var(--text-disabled);
+  color: var(--text-tertiary);
 }
 
 .editor__hint code {

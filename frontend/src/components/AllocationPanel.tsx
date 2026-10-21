@@ -29,9 +29,11 @@ interface BreakdownProps {
   currency: string
 }
 
-function donutOption(buckets: AllocationBucket[], currency: string): EChartsOption {
-  const theme = chartTheme()
-
+function donutOption(
+  buckets: AllocationBucket[],
+  currency: string,
+  theme: ReturnType<typeof chartTheme>,
+): EChartsOption {
   return {
     // 'expansion' sweeps each ring open around its centre rather than fading
     // it in, so the donut reads as being drawn. The per-segment stagger makes
@@ -74,7 +76,9 @@ function donutOption(buckets: AllocationBucket[], currency: string): EChartsOpti
 
 function Breakdown({ title, buckets, currency }: BreakdownProps) {
   const theme = chartTheme()
-  const option = useMemo(() => donutOption(buckets, currency), [buckets, currency])
+  // The theme is a dependency: the segment colours are baked into the option,
+  // so switching the palette has to rebuild it.
+  const option = useMemo(() => donutOption(buckets, currency, theme), [buckets, currency, theme])
 
   return (
     <div className="allocation__group">

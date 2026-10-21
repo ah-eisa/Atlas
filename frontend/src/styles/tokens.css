@@ -14,6 +14,12 @@
  */
 
 :root {
+  /* The default palette is the dark one: a true black page with panels
+     barely lifted off it. The light palette lives in the
+     `[data-theme='light']` block at the end of this file, which overrides
+     exactly the same token names. */
+  color-scheme: dark;
+
   /* ---------------------------------------------------------------- *
    * Surfaces - a true black page with panels barely lifted off it.    *
    *                                                                   *
@@ -40,7 +46,7 @@
    * ---------------------------------------------------------------- */
   --text-primary: #e9ebee;
   --text-secondary: #9ba3ae;
-  --text-tertiary: #6a7280;
+  --text-tertiary: #7b8390;
   --text-disabled: #4a505a;
   --text-inverse: #0a0b0d;
 
@@ -185,4 +191,96 @@
     --duration-fast: 0ms;
     --duration-base: 0ms;
   }
+}
+
+/* -------------------------------------------------------------------- *
+ * Light palette                                                          *
+ *                                                                        *
+ * Not an inversion. A terminal is read against its own background, so    *
+ * the light palette is a paper-white instrument panel: white panels on   *
+ * a cool light-grey page, hairline rules instead of floating cards, and  *
+ * a categorical ramp that runs dark-to-light so the largest slice still  *
+ * reads strongest against the light surface.                             *
+ *                                                                        *
+ * Only colour tokens are overridden here. Spacing, type and motion stay  *
+ * in `:root`, so both themes share one rhythm.                           *
+ * -------------------------------------------------------------------- */
+[data-theme='light'] {
+  color-scheme: light;
+
+  --surface-page: #eef0f4;
+  --surface-panel: #ffffff;
+  --surface-header: #f7f8fa;
+  --surface-raised: #ffffff;
+  --surface-hover: #edf0f6;
+  --surface-active: #e2e7ef;
+
+  --line: #dce0e7;
+  --line-strong: #c2c9d4;
+  --line-faint: #e9ecf1;
+
+  --text-primary: #10131a;
+  --text-secondary: #4a5361;
+  --text-tertiary: #6a7280;
+  --text-disabled: #a6adba;
+  --text-inverse: #ffffff;
+
+  --accent: #1a6fe0;
+  --accent-dim: #14569f;
+  --accent-faint: #e6eefb;
+
+  --positive: #17803d;
+  --positive-dim: #0f5c2c;
+  --negative: #c62828;
+  --negative-dim: #8f1d1d;
+  --neutral: var(--text-secondary);
+  --warning: #8a5a00;
+
+  /* Categorical ramp, strongest first: the largest slice is the darkest,
+     which is the strongest reading against a white surface. */
+  --viz-cat-1: #1f5fa8;
+  --viz-cat-2: #2e7cc4;
+  --viz-cat-3: #4b98d6;
+  --viz-cat-4: #79b3e2;
+  --viz-cat-5: #a7cdec;
+  --viz-cat-6: #cfe4f6;
+
+  /* Sequential ramp for the correlation heatmap: near-white for no
+     correlation, deep blue for the strongest. The sign of the ramp is
+     inverted relative to the dark palette, because "more" must always mean
+     "more contrast against the surface it is drawn on". */
+  --viz-seq-1: #f4f7fb;
+  --viz-seq-2: #e2ebf5;
+  --viz-seq-3: #c9dbee;
+  --viz-seq-4: #a7c6e0;
+  --viz-seq-5: #7ea6cf;
+  --viz-seq-6: #4f7fb4;
+  --viz-seq-7: #22578f;
+
+  --viz-negative: #b06a72;
+
+  --heat-pos-1-bg: #e7f4eb;
+  --heat-pos-1-fg: #1f6b3d;
+  --heat-pos-2-bg: #cfeadb;
+  --heat-pos-2-fg: #17603a;
+  --heat-pos-3-bg: #a9dcbd;
+  --heat-pos-3-fg: #125230;
+  --heat-pos-4-bg: #7ecfa2;
+  --heat-pos-4-fg: #0d4426;
+
+  --heat-neg-1-bg: #fdecee;
+  --heat-neg-1-fg: #a8383f;
+  --heat-neg-2-bg: #fbdadd;
+  --heat-neg-2-fg: #932c33;
+  --heat-neg-3-bg: #f7c1c6;
+  --heat-neg-3-fg: #7d2229;
+  --heat-neg-4-bg: #f3a7ae;
+  --heat-neg-4-fg: #66191f;
+
+  --viz-grid: #e8ebf0;
+  --viz-axis: #ccd2db;
+  --viz-band: #dbe7f8;
+  --viz-band-inner: #b3d0f2;
+  --viz-crosshair: #8a93a2;
+  --viz-benchmark: #6f7887;
 }

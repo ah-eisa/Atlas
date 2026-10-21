@@ -20,13 +20,38 @@ interface CorrelationPanelProps {
   lookbackDays: number
 }
 
-/** Pick a legible label colour for a cell, given how light its fill is. */
-function labelColor(normalised: number, theme: ReturnType<typeof chartTheme>): string {
-  return normalised > 0.62 ? theme.surface : theme.textSecondary
+/** Relative luminance of a `#rrggbb` colour, on the usual 0..1 scale. */
+function luminance(hex: string): number {
+  const value = hex.replace('#', '')
+  if (value.length < 6) return 0
+  const channel = (offset: number) => parseInt(value.slice(offset, offset + 2), 16) / 255
+  return 0.2126 * channel(0) + 0.7152 * channel(2) + 0.0722 * channel(4)
 }
 
-function heatmapOption(correlation: RiskPayload['correlation']): EChartsOption {
-  const theme = chartTheme()
+/**
+ * Pick a legible label colour for a cell.
+ *
+ * The cell fill comes from the sequential ramp, and the ramp runs in opposite
+ * directions in the two palettes: dark cells in the light theme, light cells
+ * in the dark one. Rather than guess a threshold, the fill is sampled and the
+ * label takes whichever of near-black or white contrasts better with it.
+ */
+function labelColor(
+  normalised: number,
+  ramp: string[],
+  theme: ReturnType<typeof chartTheme>,
+): string {
+  const index = Math.min(ramp.length - 1, Math.max(0, Math.round(normalised * (ramp.length - 1))))
+  const fill = luminance(ramp[index])
+  const onWhite = 1.05 / (fill + 0.05)
+  const onDark = (fill + 0.05) / 0.06
+  return onWhite >= onDark ? '#ffffff' : theme.textPrimary
+}
+
+function heatmapOption(
+  correlation: RiskPayload['correlation'],
+  theme: ReturnType<typeof chartTheme>,
+): EChartsOption {
   const { tickers, matrix } = correlation
 
   const finite = matrix.flat().filter((value): value is number => value !== null && Number.isFinite(value))
@@ -42,7 +67,7 @@ function heatmapOption(correlation: RiskPayload['correlation']): EChartsOption {
       const normalised = max === min ? 1 : (value - min) / (max - min)
       data.push({
         value: [columnIndex, tickers.length - 1 - rowIndex, value],
-        label: { color: labelColor(normalised, theme) },
+        label: { color: labelColor(normalised, theme.sequential, theme) },
       })
     })
   })
@@ -113,7 +138,7 @@ function heatmapOption(correlation: RiskPayload['correlation']): EChartsOption {
 
 export function CorrelationPanel({ correlation, lookbackDays }: CorrelationPanelProps) {
   const theme = chartTheme()
-  const option = useMemo(() => heatmapOption(correlation), [correlation])
+  const option = useMemo(() => heatmapOption(correlation, theme), [correlation, theme])
 
   const finite = correlation.matrix
     .flat()

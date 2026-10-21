@@ -569,7 +569,7 @@
 
 .benchmark__context {
   font-size: var(--size-micro);
-  color: var(--text-disabled);
+  color: var(--text-tertiary);
 }
 
 .benchmark__readout .readout__label {
@@ -615,7 +615,7 @@
 
 .concentration__context {
   font-size: var(--size-micro);
-  color: var(--text-disabled);
+  color: var(--text-tertiary);
 }
 
 .risk-contribution__rows {
@@ -637,7 +637,7 @@
   border-bottom: 1px solid var(--line-faint);
   font-size: var(--size-micro);
   letter-spacing: var(--tracking-label);
-  color: var(--text-disabled);
+  color: var(--text-tertiary);
   text-transform: uppercase;
 }
 
@@ -824,7 +824,7 @@
   max-width: 60ch;
   font-size: var(--size-micro);
   line-height: var(--leading-snug);
-  color: var(--text-disabled);
+  color: var(--text-tertiary);
   text-align: right;
 }
 
@@ -868,7 +868,7 @@
 
 .distribution__context {
   font-size: var(--size-micro);
-  color: var(--text-disabled);
+  color: var(--text-tertiary);
 }
 
 .distribution__extremes {

@@ -34,8 +34,11 @@ function delta(upper: number[], lower: number[]): number[] {
   return upper.map((value, index) => value - lower[index])
 }
 
-function fanOption(mc: MonteCarloPayload, currency: string): EChartsOption {
-  const theme = chartTheme()
+function fanOption(
+  mc: MonteCarloPayload,
+  currency: string,
+  theme: ReturnType<typeof chartTheme>,
+): EChartsOption {
   const { p5, p25, p50, p75, p95 } = mc.percentile_bands
 
   const invisible = {
@@ -133,8 +136,10 @@ function fanOption(mc: MonteCarloPayload, currency: string): EChartsOption {
   }
 }
 
-function histogramOption(mc: MonteCarloPayload): EChartsOption {
-  const theme = chartTheme()
+function histogramOption(
+  mc: MonteCarloPayload,
+  theme: ReturnType<typeof chartTheme>,
+): EChartsOption {
   const labels = mc.histogram.map((bin) => bin.start)
   // Index of the bin containing today's value, for the break-even marker.
   const breakEven = mc.histogram.findIndex(
@@ -198,7 +203,8 @@ function histogramOption(mc: MonteCarloPayload): EChartsOption {
 
 /** The percentile fan: the projection itself. */
 export function MonteCarloPanel({ montecarlo, currency }: MonteCarloPanelProps) {
-  const fan = useMemo(() => fanOption(montecarlo, currency), [montecarlo, currency])
+  const theme = chartTheme()
+  const fan = useMemo(() => fanOption(montecarlo, currency, theme), [montecarlo, currency, theme])
   const subtitle = `${montecarlo.paths.toLocaleString('en-GB')} paths · ${montecarlo.horizon_days} trading days`
 
   return (
@@ -230,7 +236,8 @@ export function MonteCarloPanel({ montecarlo, currency }: MonteCarloPanelProps) 
 
 /** Where those paths land after a year, and how likely each outcome is. */
 export function OutcomeDistributionPanel({ montecarlo, currency }: MonteCarloPanelProps) {
-  const histogram = useMemo(() => histogramOption(montecarlo), [montecarlo])
+  const theme = chartTheme()
+  const histogram = useMemo(() => histogramOption(montecarlo, theme), [montecarlo, theme])
   const lossProbability = montecarlo.probability_below_start_pct
 
   return (

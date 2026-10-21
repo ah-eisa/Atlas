@@ -474,7 +474,7 @@ body {
 .field__hint {
   font-size: var(--size-micro);
   line-height: var(--leading-snug);
-  color: var(--text-disabled);
+  color: var(--text-tertiary);
 }
 
 .field__hint code {
@@ -554,7 +554,7 @@ select.input {
   border-top: 1px solid var(--line-faint);
   font-size: var(--size-micro);
   line-height: var(--leading-snug);
-  color: var(--text-disabled);
+  color: var(--text-tertiary);
 }
 
 .panel-note--inline {

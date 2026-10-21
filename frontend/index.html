@@ -3,12 +3,32 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="color-scheme" content="dark" />
+    <meta name="color-scheme" content="dark light" />
     <meta
       name="description"
       content="Portfolio analytics dashboard: allocation, performance, risk and Monte Carlo simulation for a multi-asset EUR portfolio."
     />
     <title>Portfolio Analytics</title>
+    <script>
+      // Apply the theme before the first paint. Without this the page would
+      // render one palette and then repaint in the other, which is jarring
+      // and, on a bright screen, genuinely uncomfortable.
+      ;(function () {
+        try {
+          var stored = window.localStorage.getItem('atlas.theme')
+          var theme =
+            stored === 'light' || stored === 'dark'
+              ? stored
+              : window.matchMedia('(prefers-color-scheme: light)').matches
+                ? 'light'
+                : 'dark'
+          document.documentElement.dataset.theme = theme
+          document.documentElement.style.colorScheme = theme
+        } catch (error) {
+          /* A blocked localStorage must not stop the app from rendering. */
+        }
+      })()
+    </script>
   </head>
   <body>
     <div id="root"></div>
