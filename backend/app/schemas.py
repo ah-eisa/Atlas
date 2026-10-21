@@ -240,5 +240,72 @@ class RealizedPnlSummaryOut(BaseModel):
     total_sell_volume: float
 
 
+# --------------------------------------------------------------------------
+# Fixed Income & Yield Curve Models
+# --------------------------------------------------------------------------
+
+
+class YieldPoint(BaseModel):
+    tenor: str
+    series_id: str
+    years: float
+    yield_pct: float
+
+
+class YieldCurveSnapshot(BaseModel):
+    as_of_date: str
+    curve_points: list[YieldPoint]
+    curve_points_1m_ago: list[YieldPoint] | None = None
+    curve_points_1y_ago: list[YieldPoint] | None = None
+    spread_10y_2y_bps: float
+    spread_10y_3m_bps: float
+    curve_status: str  # NORMAL, INVERTED, FLAT
+    us10y_yield: float
+    us2y_yield: float
+    us3m_yield: float
+    aaa_yield: float | None = None
+    baa_yield: float | None = None
+    credit_spread_baa_aaa_bps: float | None = None
+    credit_spread_baa_10y_bps: float | None = None
+
+
+class HistoricalYieldPoint(BaseModel):
+    date: str
+    dgs10: float | None = None
+    dgs2: float | None = None
+    dgs3mo: float | None = None
+    t10y2y: float | None = None
+    aaa: float | None = None
+    baa: float | None = None
+
+
+class BondCalculatorInput(BaseModel):
+    face_value: float = Field(default=1000.0, gt=0, le=1e9)
+    coupon_rate: float = Field(default=5.0, ge=0, le=100.0)
+    ytm: float = Field(default=5.0, ge=0.001, le=100.0)
+    years_to_maturity: float = Field(default=10.0, gt=0, le=100.0)
+    frequency: int = Field(default=2, ge=1, le=12)
+
+
+class RateShockScenario(BaseModel):
+    shift_bps: int
+    new_ytm: float
+    repriced_bond: float
+    price_change_dollars: float
+    price_change_pct: float
+
+
+class BondCalculatorOutput(BaseModel):
+    price: float
+    clean_price: float
+    macaulay_duration: float
+    modified_duration: float
+    convexity: float
+    dv01: float
+    annual_coupon_income: float
+    current_yield: float
+    scenarios: list[RateShockScenario]
+
+
 def is_finite(value: float) -> bool:
     return math.isfinite(value)

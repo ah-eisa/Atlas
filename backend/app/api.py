@@ -33,13 +33,16 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 
-from . import instruments, store
+from . import fixed_income, instruments, store
 from .config import SETTINGS, Settings
 from .observability import METRICS
 from .portfolio import API_VERSION, AnalyticsUnavailable, PortfolioAnalytics, build_analytics
 from .schemas import (
     BaseCurrencyUpdate,
+    BondCalculatorInput,
+    BondCalculatorOutput,
     CashFlowIn,
+    HistoricalYieldPoint,
     HoldingInput,
     HoldingOut,
     OrderInput,
@@ -47,6 +50,7 @@ from .schemas import (
     RealizedPnlSummaryOut,
     TransactionOut,
     WhatIfRequest,
+    YieldCurveSnapshot,
 )
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
@@ -720,6 +724,31 @@ def delete_transaction(
 def get_realized_pnl(portfolio_id: int = Depends(_portfolio_id)) -> dict[str, Any]:
     """Summary of realized gains, win rate and trade statistics."""
     return store.get_realized_pnl_summary(SETTINGS, portfolio_id)
+
+
+# ---------------------------------------------------------------------------
+# Fixed Income & Yield Curves
+# ---------------------------------------------------------------------------
+
+
+@app.get("/api/v1/fixed-income/yield-curve", response_model=YieldCurveSnapshot, tags=["fixed-income"])
+def get_yield_curve(as_of: str | None = None) -> YieldCurveSnapshot:
+    """Current US Treasury yield curve, comparative 1M/1Y curves, and key recession spreads."""
+    service = fixed_income.get_fixed_income_service()
+    return service.get_yield_curve(as_of)
+
+
+@app.get("/api/v1/fixed-income/history", response_model=list[HistoricalYieldPoint], tags=["fixed-income"])
+def get_historical_yields(range: str = "1Y") -> list[HistoricalYieldPoint]:
+    """Historical time-series for 10Y, 2Y, 3M, 10Y-2Y spread, and corporate yields (AAA/BAA)."""
+    service = fixed_income.get_fixed_income_service()
+    return service.get_historical_series(range_key=range)
+
+
+@app.post("/api/v1/fixed-income/calculator", response_model=BondCalculatorOutput, tags=["fixed-income"])
+def calculate_bond(params: BondCalculatorInput) -> BondCalculatorOutput:
+    """Bond pricing, Macaulay/Modified duration, convexity, DV01, and interest rate shock scenarios."""
+    return fixed_income.FixedIncomeService.calculate_bond_metrics(params)
 
 
 @app.post("/api/v1/portfolio/what-if", tags=["analytics"])

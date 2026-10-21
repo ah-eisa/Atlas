@@ -17,9 +17,12 @@
 
 import type {
   Analytics,
+  BondCalculatorInput,
+  BondCalculatorOutput,
   BootstrapResponse,
   CashFlow,
   DataSource,
+  HistoricalYieldPoint,
   InstrumentInfo,
   OrderInput,
   Portfolio,
@@ -29,6 +32,7 @@ import type {
   RealizedPnlSummary,
   Snapshot,
   Transaction,
+  YieldCurveSnapshot,
 } from './types'
 
 const DEFAULT_API_PORT = 8000
@@ -541,4 +545,153 @@ export async function downloadExport(
 
 export function apiBase(config: DataConfig): string {
   return config.apiBaseUrl.replace(/\/$/, '')
+}
+
+// --------------------------------------------------------------------------
+// Fixed Income & Yield Curve API
+// --------------------------------------------------------------------------
+
+const SAMPLE_YIELD_CURVE: YieldCurveSnapshot = {
+  as_of_date: '2025-04-10',
+  curve_points: [
+    { tenor: '1M', series_id: 'DGS1MO', years: 0.0833, yield_pct: 4.36 },
+    { tenor: '3M', series_id: 'DGS3MO', years: 0.25, yield_pct: 4.34 },
+    { tenor: '6M', series_id: 'DGS6MO', years: 0.5, yield_pct: 4.17 },
+    { tenor: '1Y', series_id: 'DGS1', years: 1.0, yield_pct: 3.97 },
+    { tenor: '2Y', series_id: 'DGS2', years: 2.0, yield_pct: 3.84 },
+    { tenor: '5Y', series_id: 'DGS5', years: 5.0, yield_pct: 4.04 },
+    { tenor: '7Y', series_id: 'DGS7', years: 7.0, yield_pct: 4.21 },
+    { tenor: '10Y', series_id: 'DGS10', years: 10.0, yield_pct: 4.4 },
+    { tenor: '20Y', series_id: 'DGS20', years: 20.0, yield_pct: 4.9 },
+    { tenor: '30Y', series_id: 'DGS30', years: 30.0, yield_pct: 4.86 },
+  ],
+  curve_points_1m_ago: [
+    { tenor: '1M', series_id: 'DGS1MO', years: 0.0833, yield_pct: 4.41 },
+    { tenor: '3M', series_id: 'DGS3MO', years: 0.25, yield_pct: 4.38 },
+    { tenor: '6M', series_id: 'DGS6MO', years: 0.5, yield_pct: 4.25 },
+    { tenor: '1Y', series_id: 'DGS1', years: 1.0, yield_pct: 4.08 },
+    { tenor: '2Y', series_id: 'DGS2', years: 2.0, yield_pct: 3.98 },
+    { tenor: '5Y', series_id: 'DGS5', years: 5.0, yield_pct: 4.15 },
+    { tenor: '7Y', series_id: 'DGS7', years: 7.0, yield_pct: 4.32 },
+    { tenor: '10Y', series_id: 'DGS10', years: 10.0, yield_pct: 4.48 },
+    { tenor: '20Y', series_id: 'DGS20', years: 20.0, yield_pct: 4.88 },
+    { tenor: '30Y', series_id: 'DGS30', years: 30.0, yield_pct: 4.82 },
+  ],
+  curve_points_1y_ago: [
+    { tenor: '1M', series_id: 'DGS1MO', years: 0.0833, yield_pct: 5.49 },
+    { tenor: '3M', series_id: 'DGS3MO', years: 0.25, yield_pct: 5.45 },
+    { tenor: '6M', series_id: 'DGS6MO', years: 0.5, yield_pct: 5.4 },
+    { tenor: '1Y', series_id: 'DGS1', years: 1.0, yield_pct: 5.19 },
+    { tenor: '2Y', series_id: 'DGS2', years: 2.0, yield_pct: 4.97 },
+    { tenor: '5Y', series_id: 'DGS5', years: 5.0, yield_pct: 4.61 },
+    { tenor: '7Y', series_id: 'DGS7', years: 7.0, yield_pct: 4.59 },
+    { tenor: '10Y', series_id: 'DGS10', years: 10.0, yield_pct: 4.55 },
+    { tenor: '20Y', series_id: 'DGS20', years: 20.0, yield_pct: 4.76 },
+    { tenor: '30Y', series_id: 'DGS30', years: 30.0, yield_pct: 4.64 },
+  ],
+  spread_10y_2y_bps: 56.0,
+  spread_10y_3m_bps: 6.0,
+  curve_status: 'NORMAL',
+  us10y_yield: 4.4,
+  us2y_yield: 3.84,
+  us3m_yield: 4.34,
+  aaa_yield: 5.29,
+  baa_yield: 5.93,
+  credit_spread_baa_aaa_bps: 64.0,
+  credit_spread_baa_10y_bps: 153.0,
+}
+
+export async function getYieldCurve(
+  config: DataConfig,
+  asOf?: string,
+): Promise<YieldCurveSnapshot> {
+  if (config.source === 'snapshot') {
+    return SAMPLE_YIELD_CURVE
+  }
+  const query = asOf ? `?as_of=${encodeURIComponent(asOf)}` : ''
+  try {
+    return await requestJson<YieldCurveSnapshot>(
+      apiUrl(config, `/api/v1/fixed-income/yield-curve${query}`),
+      config,
+    )
+  } catch {
+    return SAMPLE_YIELD_CURVE
+  }
+}
+
+export async function getHistoricalYields(
+  config: DataConfig,
+  range: string = '1Y',
+): Promise<HistoricalYieldPoint[]> {
+  if (config.source === 'snapshot') {
+    return []
+  }
+  try {
+    return await requestJson<HistoricalYieldPoint[]>(
+      apiUrl(config, `/api/v1/fixed-income/history?range=${encodeURIComponent(range)}`),
+      config,
+    )
+  } catch {
+    return []
+  }
+}
+
+export async function calculateBond(
+  config: DataConfig,
+  input: BondCalculatorInput,
+): Promise<BondCalculatorOutput> {
+  if (config.source === 'snapshot') {
+    // Client-side calculation fallback
+    const face = input.face_value
+    const c = face * (input.coupon_rate / 100) / input.frequency
+    const y = (input.ytm / 100) / input.frequency
+    const n = Math.max(1, Math.round(input.years_to_maturity * input.frequency))
+    let pvSum = 0
+    let durSum = 0
+    let convSum = 0
+    for (let t = 1; t <= n; t++) {
+      const cf = c + (t === n ? face : 0)
+      const df = Math.pow(1 + y, -t)
+      const pv = cf * df
+      pvSum += pv
+      durSum += (t / input.frequency) * pv
+      convSum += t * (t + 1) * cf * df
+    }
+    const macDur = pvSum > 0 ? durSum / pvSum : 0
+    const modDur = macDur / (1 + y)
+    const conv = convSum / (pvSum * Math.pow(1 + y, 2) * Math.pow(input.frequency, 2))
+    const dv01 = modDur * pvSum * 0.0001
+    const scenarios = [-200, -100, -50, -25, 25, 50, 100, 200].map((shift) => {
+      const newYtm = Math.max(0.001, input.ytm + shift / 100)
+      const newY = (newYtm / 100) / input.frequency
+      let re = 0
+      for (let t = 1; t <= n; t++) {
+        const cf = c + (t === n ? face : 0)
+        re += cf * Math.pow(1 + newY, -t)
+      }
+      return {
+        shift_bps: shift,
+        new_ytm: Number(newYtm.toFixed(3)),
+        repriced_bond: Number(re.toFixed(2)),
+        price_change_dollars: Number((re - pvSum).toFixed(2)),
+        price_change_pct: Number(((re - pvSum) / pvSum * 100).toFixed(2)),
+      }
+    })
+    return {
+      price: Number(pvSum.toFixed(2)),
+      clean_price: Number(pvSum.toFixed(2)),
+      macaulay_duration: Number(macDur.toFixed(3)),
+      modified_duration: Number(modDur.toFixed(3)),
+      convexity: Number(conv.toFixed(3)),
+      dv01: Number(dv01.toFixed(3)),
+      annual_coupon_income: Number((face * (input.coupon_rate / 100)).toFixed(2)),
+      current_yield: Number(((face * (input.coupon_rate / 100) / pvSum) * 100).toFixed(2)),
+      scenarios,
+    }
+  }
+
+  return requestJson<BondCalculatorOutput>(apiUrl(config, '/api/v1/fixed-income/calculator'), config, {
+    method: 'POST',
+    body: JSON.stringify(input),
+  })
 }

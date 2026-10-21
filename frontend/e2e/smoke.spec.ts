@@ -9,7 +9,7 @@ import { expect, test } from '@playwright/test'
  * that pushed the page sideways on a phone.
  */
 
-const VIEWS = ['overview', 'performance', 'risk', 'holdings', 'trades', 'projection', 'data']
+const VIEWS = ['overview', 'performance', 'risk', 'holdings', 'trades', 'bonds', 'projection', 'data']
 
 test.beforeEach(async ({ page }) => {
   const errors: string[] = []

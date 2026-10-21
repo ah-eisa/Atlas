@@ -492,3 +492,69 @@ export interface PortfolioState {
 }
 
 export type DataSource = 'snapshot' | 'api'
+
+// --------------------------------------------------------------------------
+// Fixed Income & Yield Curve Types
+// --------------------------------------------------------------------------
+
+export interface YieldPoint {
+  tenor: string
+  series_id: string
+  years: number
+  yield_pct: number
+}
+
+export interface YieldCurveSnapshot {
+  as_of_date: string
+  curve_points: YieldPoint[]
+  curve_points_1m_ago?: YieldPoint[] | null
+  curve_points_1y_ago?: YieldPoint[] | null
+  spread_10y_2y_bps: number
+  spread_10y_3m_bps: number
+  curve_status: 'NORMAL' | 'INVERTED' | 'FLAT' | string
+  us10y_yield: number
+  us2y_yield: number
+  us3m_yield: number
+  aaa_yield?: number | null
+  baa_yield?: number | null
+  credit_spread_baa_aaa_bps?: number | null
+  credit_spread_baa_10y_bps?: number | null
+}
+
+export interface HistoricalYieldPoint {
+  date: string
+  dgs10?: number | null
+  dgs2?: number | null
+  dgs3mo?: number | null
+  t10y2y?: number | null
+  aaa?: number | null
+  baa?: number | null
+}
+
+export interface BondCalculatorInput {
+  face_value: number
+  coupon_rate: number
+  ytm: number
+  years_to_maturity: number
+  frequency: number
+}
+
+export interface RateShockScenario {
+  shift_bps: number
+  new_ytm: number
+  repriced_bond: number
+  price_change_dollars: number
+  price_change_pct: number
+}
+
+export interface BondCalculatorOutput {
+  price: number
+  clean_price: number
+  macaulay_duration: number
+  modified_duration: number
+  convexity: number
+  dv01: number
+  annual_coupon_income: number
+  current_yield: number
+  scenarios: RateShockScenario[]
+}

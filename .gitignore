@@ -10,7 +10,9 @@ venv/
 backend/.cache/
 
 # SQLite database of stored positions (created on first boot)
-backend/data/
+backend/data/*
+!backend/data/fixed_income/
+!backend/data/fixed_income/*
 *.db
 *.db-wal
 *.db-shm
