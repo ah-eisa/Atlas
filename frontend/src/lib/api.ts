@@ -21,6 +21,7 @@ import type {
   CashFlow,
   DataSource,
   InstrumentInfo,
+  Portfolio,
   PortfolioState,
   Position,
   PositionInput,
@@ -29,12 +30,27 @@ import type {
 
 const DEFAULT_API_PORT = 8000
 const API_KEY_STORAGE = 'atlas.apiKey'
+const PORTFOLIO_STORAGE = 'atlas.portfolioId'
+
+/** The portfolio the user last selected, remembered between visits. */
+export function getStoredPortfolioId(): number {
+  if (typeof window === 'undefined') return 1
+  const raw = Number.parseInt(window.localStorage.getItem(PORTFOLIO_STORAGE) ?? '1', 10)
+  return Number.isFinite(raw) && raw > 0 ? raw : 1
+}
+
+export function setStoredPortfolioId(id: number): void {
+  if (typeof window === 'undefined') return
+  window.localStorage.setItem(PORTFOLIO_STORAGE, String(id))
+}
 
 export interface DataConfig {
   source: DataSource
   apiBaseUrl: string
   snapshotUrl: string
   apiKey: string
+  /** The portfolio to read, in live mode. */
+  portfolioId: number
 }
 
 export class ApiError extends Error {
@@ -98,6 +114,7 @@ export function resolveConfig(): DataConfig {
     // BASE_URL keeps this correct when the app is served from a sub-path.
     snapshotUrl: `${import.meta.env.BASE_URL}snapshot.json`,
     apiKey: (import.meta.env.VITE_API_KEY as string | undefined) || getStoredApiKey(),
+    portfolioId: getStoredPortfolioId(),
   }
 }
 
@@ -112,6 +129,11 @@ async function requestJson<T>(
   headers.set('Accept', 'application/json')
   if (init.body) headers.set('Content-Type', 'application/json')
   if (config.apiKey) headers.set('X-API-Key', config.apiKey)
+  // The portfolio is part of the request context, not the body: every route
+  // answers for one portfolio, and a header keeps the URL shareable.
+  if (config.source === 'api' && config.portfolioId) {
+    headers.set('X-Portfolio-Id', String(config.portfolioId))
+  }
 
   let response: Response
   try {
@@ -188,6 +210,8 @@ function snapshotToState(snapshot: Snapshot): PortfolioState {
     analytics,
     positions,
     cashFlows: [],
+    portfolioId: 1,
+    portfolios: [],
     settings: {
       benchmark: analytics.health.benchmark,
       benchmark_name: analytics.risk.benchmark.name,
@@ -228,6 +252,8 @@ export async function loadPortfolio(
     analytics: bootstrap.analytics,
     positions: bootstrap.positions,
     cashFlows: bootstrap.cash_flows ?? [],
+    portfolioId: bootstrap.portfolio_id ?? config.portfolioId,
+    portfolios: bootstrap.portfolios ?? [],
     settings: bootstrap.settings,
     warnings: bootstrap.warnings,
     error: bootstrap.error,
@@ -276,6 +302,21 @@ export function createCashFlow(
 export function deleteCashFlow(config: DataConfig, id: number): Promise<void> {
   return requestJson<void>(apiUrl(config, `/api/v1/cash-flows/${id}`), config, {
     method: 'DELETE',
+  })
+}
+
+export function listPortfolios(config: DataConfig): Promise<Portfolio[]> {
+  return requestJson<Portfolio[]>(apiUrl(config, '/api/v1/portfolios'), config, {})
+}
+
+export function createPortfolio(
+  config: DataConfig,
+  name: string,
+  baseCurrency: string,
+): Promise<Portfolio> {
+  return requestJson<Portfolio>(apiUrl(config, '/api/v1/portfolios'), config, {
+    method: 'POST',
+    body: JSON.stringify({ name, base_currency: baseCurrency }),
   })
 }
 

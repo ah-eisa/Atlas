@@ -27,6 +27,7 @@ interface DataPanelProps {
   onRefresh: () => void
   onReload: () => void
   onApiKey: (key: string) => void
+  onPortfolio: (id: number) => void
 }
 
 function sourceHref(source: 'snapshot' | 'api'): string {
@@ -43,6 +44,7 @@ export function DataPanel({
   onRefresh,
   onReload,
   onApiKey,
+  onPortfolio,
 }: DataPanelProps) {
   const [baseCurrency, setBaseCurrency] = useState(state.baseCurrency)
   const [baseSaving, setBaseSaving] = useState(false)
@@ -235,6 +237,29 @@ export function DataPanel({
             </button>
           </div>
           {exportError ? <p className="field__error">{exportError}</p> : null}
+
+          {live && state.portfolios.length > 0 ? (
+            <div className="data-portfolios">
+              <label className="field">
+                <span className="field__label">Portfolio</span>
+                <select
+                  className="input"
+                  value={state.portfolioId}
+                  onChange={(event) => onPortfolio(Number(event.target.value))}
+                >
+                  {state.portfolios.map((portfolio) => (
+                    <option key={portfolio.id} value={portfolio.id}>
+                      {portfolio.name} · {portfolio.base_currency}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <p className="field__hint">
+                Each portfolio keeps its own positions, cash flows and reporting currency.
+                The selection is remembered between visits.
+              </p>
+            </div>
+          ) : null}
 
           {live ? (
             <form className="data-form" onSubmit={(event) => void applyBaseCurrency(event)}>

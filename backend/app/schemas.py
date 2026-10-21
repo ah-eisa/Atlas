@@ -128,6 +128,13 @@ class BaseCurrencyUpdate(BaseModel):
         return cleaned
 
 
+class PortfolioIn(BaseModel):
+    """A new portfolio."""
+
+    name: str = Field(min_length=1, max_length=80)
+    base_currency: str = Field(default="", max_length=3)
+
+
 class CashFlowIn(BaseModel):
     """An external contribution to, or withdrawal from, the portfolio."""
 

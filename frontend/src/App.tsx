@@ -58,6 +58,10 @@ function Shell({
   // Subscribing here makes the whole shell re-render when the theme changes,
   // which is what lets the panels rebuild their chart palettes.
   const { theme } = useTheme()
+  const portfolioName =
+    state?.source === 'api'
+      ? state.portfolios.find((portfolio) => portfolio.id === state.portfolioId)?.name
+      : undefined
 
   return (
     <div className="app" data-theme={theme}>
@@ -70,6 +74,7 @@ function Shell({
         holdingsCount={state?.positions.length ?? 0}
         refreshing={refreshing}
         onRefresh={onRefresh}
+        portfolioName={portfolioName}
       />
       {children}
       <footer className="footer">
@@ -407,7 +412,7 @@ function AnalyticsViews({
 
 export default function App() {
   const [view] = useHashRoute()
-  const { data, error, loading, refreshing, config, reload, refresh, setApiKey, clearError } =
+  const { data, error, loading, refreshing, config, reload, refresh, setApiKey, setPortfolio, clearError } =
     usePortfolio()
 
   if (loading && !data) {
@@ -459,6 +464,7 @@ export default function App() {
         onRefresh={() => void refresh()}
         onReload={reload}
         onApiKey={setApiKey}
+        onPortfolio={setPortfolio}
       />
     )
   } else if (!analytics && view === 'holdings') {

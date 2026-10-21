@@ -26,7 +26,7 @@ from datetime import datetime, timezone
 from threading import Lock
 from typing import Any, AsyncIterator
 
-from fastapi import FastAPI, HTTPException, Request, Response
+from fastapi import Depends, FastAPI, HTTPException, Request, Response
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse
@@ -35,7 +35,7 @@ from fastapi.staticfiles import StaticFiles
 from . import instruments, store
 from .config import SETTINGS, Settings
 from .portfolio import API_VERSION, AnalyticsUnavailable, PortfolioAnalytics, build_analytics
-from .schemas import BaseCurrencyUpdate, CashFlowIn, HoldingInput, HoldingOut
+from .schemas import BaseCurrencyUpdate, CashFlowIn, HoldingInput, HoldingOut, PortfolioIn
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 logger = logging.getLogger(__name__)
@@ -217,6 +217,10 @@ class AnalyticsService:
     only when the stored positions or the reporting currency change. The lock
     serialises construction so ten simultaneous first requests do not start ten
     downloads.
+
+    One instance caches one portfolio at a time. The cache key includes the
+    portfolio id, so switching portfolios rebuilds rather than serving the
+    previous portfolio's numbers.
     """
 
     def __init__(self, settings: Settings) -> None:
@@ -225,9 +229,10 @@ class AnalyticsService:
         self._analytics: PortfolioAnalytics | None = None
         self._key: tuple[Any, ...] | None = None
 
-    def _current_key(self) -> tuple[Any, ...]:
-        portfolio = store.build_portfolio(self.settings)
+    def _current_key(self, portfolio_id: int) -> tuple[Any, ...]:
+        portfolio = store.build_portfolio(self.settings, portfolio_id)
         return (
+            portfolio_id,
             store.revision(self.settings),
             portfolio.base_currency,
             self.settings.benchmark,
@@ -235,15 +240,23 @@ class AnalyticsService:
             self.settings.history_years,
         )
 
-    def get(self, *, force: bool = False, refresh_prices: bool = False) -> PortfolioAnalytics:
-        key = self._current_key()
+    def get(
+        self,
+        *,
+        force: bool = False,
+        refresh_prices: bool = False,
+        portfolio_id: int = store.DEFAULT_PORTFOLIO_ID,
+    ) -> PortfolioAnalytics:
+        key = self._current_key(portfolio_id)
         with self._lock:
             if not force and self._analytics is not None and self._key == key:
                 return self._analytics
-            portfolio = store.build_portfolio(self.settings)
+            portfolio = store.build_portfolio(self.settings, portfolio_id)
             logger.info(
-                "Building analytics for %d positions (force=%s, refresh_prices=%s)",
+                "Building analytics for %d positions in portfolio %d "
+                "(force=%s, refresh_prices=%s)",
                 len(portfolio.holdings),
+                portfolio_id,
                 force,
                 refresh_prices,
             )
@@ -271,15 +284,31 @@ def get_analytics(*, refresh_prices: bool = False) -> PortfolioAnalytics:
     return _service.get(refresh_prices=refresh_prices)
 
 
-def _payload(name: str) -> dict[str, Any]:
+def _payload(name: str, portfolio_id: int = store.DEFAULT_PORTFOLIO_ID) -> dict[str, Any]:
     try:
-        analytics = _service.get()
+        analytics = _service.get(portfolio_id=portfolio_id)
         return getattr(analytics, name)()
     except (store.EmptyPortfolio, AnalyticsUnavailable):
         raise
     except Exception as exc:  # noqa: BLE001 - upstream failure boundary
         logger.exception("Failed to build %s", name)
         raise AnalyticsUnavailable(f"analytics unavailable: {exc}") from exc
+
+
+def _portfolio_id(request: Request) -> int:
+    """The portfolio a request is about.
+
+    Selected with the ``X-Portfolio-Id`` header, or a ``portfolio`` query
+    parameter for links that cannot carry a header. An unknown or malformed
+    value falls back to the default portfolio rather than failing the
+    request: a stale bookmark should not break the dashboard.
+    """
+    raw = request.headers.get("X-Portfolio-Id") or request.query_params.get("portfolio")
+    try:
+        portfolio_id = int(raw) if raw else store.DEFAULT_PORTFOLIO_ID
+    except (TypeError, ValueError):
+        portfolio_id = store.DEFAULT_PORTFOLIO_ID
+    return portfolio_id if portfolio_id > 0 else store.DEFAULT_PORTFOLIO_ID
 
 
 # ---------------------------------------------------------------------------
@@ -301,33 +330,33 @@ def _settings_payload() -> dict[str, Any]:
 
 
 @app.get("/api/v1/health", tags=["meta"])
-def health_live() -> dict[str, Any]:
+def health_live(portfolio_id: int = Depends(_portfolio_id)) -> dict[str, Any]:
     """Fast liveness probe. Does not download prices or require the API key."""
     return {
         "status": "ok",
         "version": API_VERSION,
         "process": STARTED_AT,
         "base_currency": store.get_base_currency(SETTINGS),
-        "positions": len(store.list_holdings(SETTINGS)),
+        "positions": len(store.list_holdings(SETTINGS, portfolio_id)),
         "api_key_required": SETTINGS.requires_api_key,
     }
 
 
 @app.get("/api/v1/bootstrap", tags=["meta"])
-def bootstrap() -> dict[str, Any]:
+def bootstrap(portfolio_id: int = Depends(_portfolio_id)) -> dict[str, Any]:
     """Everything the UI needs on first paint: settings, positions, analytics.
 
     Returns ``analytics: null`` for an empty portfolio instead of a 409 so the
     client can render an empty state with an editor, not an error page.
     """
-    positions = store.list_holdings(SETTINGS)
+    positions = store.list_holdings(SETTINGS, portfolio_id)
     analytics_payload: dict[str, Any] | None = None
     warnings: list[str] = []
     error: str | None = None
 
     if positions:
         try:
-            payloads = _service.get().all_payloads()
+            payloads = _service.get(portfolio_id=portfolio_id).all_payloads()
             analytics_payload = {
                 "health": payloads["/health"],
                 "holdings": payloads["/holdings"],
@@ -350,7 +379,9 @@ def bootstrap() -> dict[str, Any]:
         "source": "api",
         "base_currency": store.get_base_currency(SETTINGS),
         "positions": positions,
-        "cash_flows": store.list_cash_flows(SETTINGS),
+        "portfolio_id": portfolio_id,
+        "portfolios": store.list_portfolios(SETTINGS),
+        "cash_flows": store.list_cash_flows(SETTINGS, portfolio_id),
         "analytics": analytics_payload,
         "warnings": warnings,
         "error": error,
@@ -359,9 +390,9 @@ def bootstrap() -> dict[str, Any]:
 
 
 @app.post("/api/v1/portfolio/refresh", tags=["meta"])
-def refresh() -> dict[str, Any]:
+def refresh(portfolio_id: int = Depends(_portfolio_id)) -> dict[str, Any]:
     """Refetch prices and rebuild every analytic. Always hits the network."""
-    analytics = _service.get(force=True, refresh_prices=True)
+    analytics = _service.get(force=True, refresh_prices=True, portfolio_id=portfolio_id)
     return {
         "status": "refreshed",
         "as_of": analytics.as_of,
@@ -376,33 +407,33 @@ def refresh() -> dict[str, Any]:
 
 
 @app.get("/api/v1/portfolio/summary", tags=["analytics"])
-def summary() -> dict[str, Any]:
-    return _payload("summary")
+def summary(portfolio_id: int = Depends(_portfolio_id)) -> dict[str, Any]:
+    return _payload("summary", portfolio_id)
 
 
 @app.get("/api/v1/portfolio/history", tags=["analytics"])
-def history() -> dict[str, Any]:
-    return _payload("history")
+def history(portfolio_id: int = Depends(_portfolio_id)) -> dict[str, Any]:
+    return _payload("history", portfolio_id)
 
 
 @app.get("/api/v1/portfolio/returns", tags=["analytics"])
-def returns() -> dict[str, Any]:
-    return _payload("returns")
+def returns(portfolio_id: int = Depends(_portfolio_id)) -> dict[str, Any]:
+    return _payload("returns", portfolio_id)
 
 
 @app.get("/api/v1/portfolio/risk", tags=["analytics"])
-def risk() -> dict[str, Any]:
-    return _payload("risk")
+def risk(portfolio_id: int = Depends(_portfolio_id)) -> dict[str, Any]:
+    return _payload("risk", portfolio_id)
 
 
 @app.get("/api/v1/portfolio/montecarlo", tags=["analytics"])
-def montecarlo() -> dict[str, Any]:
-    return _payload("montecarlo")
+def montecarlo(portfolio_id: int = Depends(_portfolio_id)) -> dict[str, Any]:
+    return _payload("montecarlo", portfolio_id)
 
 
 @app.get("/api/v1/holdings", tags=["analytics"])
-def priced_holdings() -> dict[str, Any]:
-    return _payload("holdings")
+def priced_holdings(portfolio_id: int = Depends(_portfolio_id)) -> dict[str, Any]:
+    return _payload("holdings", portfolio_id)
 
 
 # ---------------------------------------------------------------------------
@@ -411,26 +442,36 @@ def priced_holdings() -> dict[str, Any]:
 
 
 @app.get("/api/v1/positions", response_model=list[HoldingOut], tags=["positions"])
-def list_positions() -> list[dict[str, Any]]:
-    return store.list_holdings(SETTINGS)
+def list_positions(portfolio_id: int = Depends(_portfolio_id)) -> list[dict[str, Any]]:
+    return store.list_holdings(SETTINGS, portfolio_id)
 
 @app.post("/api/v1/positions", status_code=201, tags=["positions"])
-def create_position(body: HoldingInput) -> dict[str, Any]:
-    created = store.create_holding(body.as_store_payload(), SETTINGS)
+def create_position(
+    body: HoldingInput, portfolio_id: int = Depends(_portfolio_id)
+) -> dict[str, Any]:
+    created = store.create_holding(body.as_store_payload(), SETTINGS, portfolio_id)
     _service.invalidate()
     return created
 
 
 @app.put("/api/v1/positions/{holding_id}", tags=["positions"])
-def update_position(holding_id: int, body: HoldingInput) -> dict[str, Any]:
-    updated = store.update_holding(holding_id, body.as_store_payload(), SETTINGS)
+def update_position(
+    holding_id: int,
+    body: HoldingInput,
+    portfolio_id: int = Depends(_portfolio_id),
+) -> dict[str, Any]:
+    updated = store.update_holding(holding_id, body.as_store_payload(), SETTINGS, portfolio_id)
     _service.invalidate()
     return updated
 
 
 @app.delete("/api/v1/positions/{holding_id}", status_code=204, tags=["positions"])
-def delete_position(holding_id: int, response: Response) -> Response:
-    store.delete_holding(holding_id, SETTINGS)
+def delete_position(
+    holding_id: int,
+    response: Response,
+    portfolio_id: int = Depends(_portfolio_id),
+) -> Response:
+    store.delete_holding(holding_id, SETTINGS, portfolio_id)
     _service.invalidate()
     response.status_code = 204
     return response
@@ -457,9 +498,11 @@ def instrument(ticker: str) -> dict[str, Any]:
 
 
 @app.put("/api/v1/settings/base-currency", tags=["settings"])
-def update_base_currency(body: BaseCurrencyUpdate) -> dict[str, Any]:
+def update_base_currency(
+    body: BaseCurrencyUpdate, portfolio_id: int = Depends(_portfolio_id)
+) -> dict[str, Any]:
     try:
-        code = store.set_base_currency(body.base_currency, SETTINGS)
+        code = store.set_base_currency(body.base_currency, SETTINGS, portfolio_id)
     except ValueError as exc:
         raise HTTPException(
             status_code=422,
@@ -470,18 +513,66 @@ def update_base_currency(body: BaseCurrencyUpdate) -> dict[str, Any]:
 
 
 # ---------------------------------------------------------------------------
+# Portfolios
+# ---------------------------------------------------------------------------
+
+
+@app.get("/api/v1/portfolios", tags=["portfolios"])
+def list_portfolios() -> list[dict[str, Any]]:
+    """Every tracked portfolio. The active one is chosen per request with the
+    ``X-Portfolio-Id`` header."""
+    return store.list_portfolios(SETTINGS)
+
+
+@app.post("/api/v1/portfolios", status_code=201, tags=["portfolios"])
+def create_portfolio(body: PortfolioIn) -> dict[str, Any]:
+    """Create an empty portfolio with its own reporting currency."""
+    try:
+        return store.create_portfolio(body.name, body.base_currency, SETTINGS)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=422,
+            detail={"code": "invalid_currency", "message": str(exc)},
+        ) from exc
+
+
+@app.delete("/api/v1/portfolios/{portfolio_id}", status_code=204, tags=["portfolios"])
+def delete_portfolio(portfolio_id: int, response: Response) -> Response:
+    """Delete a portfolio and everything in it.
+
+    The default portfolio cannot be deleted: it is what the application falls
+    back to, and removing it would leave the service with nowhere to put
+    positions.
+    """
+    if portfolio_id == store.DEFAULT_PORTFOLIO_ID:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "default_portfolio",
+                "message": "The default portfolio cannot be deleted.",
+            },
+        )
+    store.delete_portfolio(portfolio_id, SETTINGS)
+    _service.invalidate()
+    response.status_code = 204
+    return response
+
+
+# ---------------------------------------------------------------------------
 # Cash flows
 # ---------------------------------------------------------------------------
 
 
 @app.get("/api/v1/cash-flows", tags=["cash-flows"])
-def list_cash_flows() -> list[dict[str, Any]]:
+def list_cash_flows(portfolio_id: int = Depends(_portfolio_id)) -> list[dict[str, Any]]:
     """Every recorded contribution and withdrawal, oldest first."""
-    return store.list_cash_flows(SETTINGS)
+    return store.list_cash_flows(SETTINGS, portfolio_id)
 
 
 @app.post("/api/v1/cash-flows", status_code=201, tags=["cash-flows"])
-def create_cash_flow(body: CashFlowIn) -> dict[str, Any]:
+def create_cash_flow(
+    body: CashFlowIn, portfolio_id: int = Depends(_portfolio_id)
+) -> dict[str, Any]:
     """Record an external contribution (positive) or withdrawal (negative).
 
     Recorded flows are authoritative: once the ledger has any entry, the
@@ -495,30 +586,37 @@ def create_cash_flow(body: CashFlowIn) -> dict[str, Any]:
             "note": body.note,
         },
         SETTINGS,
+        portfolio_id,
     )
     _service.invalidate()
     return created
 
 
 @app.delete("/api/v1/cash-flows/{cash_flow_id}", status_code=204, tags=["cash-flows"])
-def delete_cash_flow(cash_flow_id: int, response: Response) -> Response:
-    store.delete_cash_flow(cash_flow_id, SETTINGS)
+def delete_cash_flow(
+    cash_flow_id: int,
+    response: Response,
+    portfolio_id: int = Depends(_portfolio_id),
+) -> Response:
+    store.delete_cash_flow(cash_flow_id, SETTINGS, portfolio_id)
     _service.invalidate()
     response.status_code = 204
     return response
 
 
 @app.get("/api/v1/portfolio/export", tags=["positions"])
-def export_portfolio(format: str = "json") -> Response:
+def export_portfolio(
+    format: str = "json", portfolio_id: int = Depends(_portfolio_id)
+) -> Response:
     """Download the stored positions and cash flows.
 
     JSON is lossless; CSV suits a spreadsheet. The CSV carries one row per
     position, followed by one row per cash flow, with a ``kind`` column so the
     two can be told apart.
     """
-    rows = store.export_rows(SETTINGS)
-    flows = store.list_cash_flows(SETTINGS)
-    base_currency = store.get_base_currency(SETTINGS)
+    rows = store.export_rows(SETTINGS, portfolio_id)
+    flows = store.list_cash_flows(SETTINGS, portfolio_id)
+    base_currency = store.get_base_currency(SETTINGS, portfolio_id)
     if format not in {"json", "csv"}:
         raise HTTPException(
             status_code=422,

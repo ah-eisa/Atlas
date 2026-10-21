@@ -143,5 +143,5 @@ def analytics_client(
 
     service = api._service
     service._analytics = analytics
-    service._key = service._current_key()
+    service._key = service._current_key(store.DEFAULT_PORTFOLIO_ID)
     return empty_client

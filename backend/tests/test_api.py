@@ -530,3 +530,49 @@ def test_deleting_an_unknown_cash_flow_is_a_404(empty_client: Any) -> None:
     response = empty_client.delete("/api/v1/cash-flows/999")
     assert response.status_code == 404
     assert response.json()["detail"]["code"] == "cash_flow_not_found"
+
+
+def test_portfolios_are_isolated_from_each_other(empty_client: Any) -> None:
+    """A position in one portfolio is invisible to another."""
+    created = empty_client.post("/api/v1/portfolios", json={"name": "Pension"})
+    assert created.status_code == 201
+    other_id = created.json()["id"]
+
+    empty_client.post("/api/v1/positions", json=position())
+    assert len(empty_client.get("/api/v1/positions").json()) == 1
+    assert empty_client.get("/api/v1/positions", headers={"X-Portfolio-Id": str(other_id)}).json() == []
+
+    # The same ticker is allowed in a different portfolio.
+    other = empty_client.post(
+        "/api/v1/positions",
+        json=position(),
+        headers={"X-Portfolio-Id": str(other_id)},
+    )
+    assert other.status_code == 201
+
+
+def test_the_default_portfolio_is_created_with_its_own_currency(empty_client: Any) -> None:
+    portfolios = empty_client.get("/api/v1/portfolios").json()
+    assert len(portfolios) >= 1
+    assert portfolios[0]["base_currency"] == "EUR"
+
+
+def test_a_malformed_portfolio_header_falls_back_to_the_default(empty_client: Any) -> None:
+    """A stale bookmark must not break the dashboard."""
+    response = empty_client.get("/api/v1/positions", headers={"X-Portfolio-Id": "nonsense"})
+    assert response.status_code == 200
+
+
+def test_the_schema_version_is_recorded(temp_settings: Any) -> None:
+    """The database records the schema it is on, and migrates to the latest."""
+    from backend.app import store
+
+    store.init_db(temp_settings)
+    with store.connect(temp_settings) as connection:
+        version = int(connection.execute("PRAGMA user_version").fetchone()[0])
+        columns = {
+            row["name"]
+            for row in connection.execute("PRAGMA table_info(holdings)").fetchall()
+        }
+    assert version == 2
+    assert "portfolio_id" in columns

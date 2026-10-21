@@ -42,6 +42,8 @@ interface TopBarProps {
   holdingsCount: number
   refreshing: boolean
   onRefresh: () => void
+  /** Name of the active portfolio, in live mode. */
+  portfolioName?: string
 }
 
 interface DeltaProps {
@@ -113,6 +115,7 @@ export function TopBar({
   holdingsCount,
   refreshing,
   onRefresh,
+  portfolioName,
 }: TopBarProps) {
   const live = config.source === 'api'
   const analyticsReady = summary !== null
@@ -195,7 +198,7 @@ export function TopBar({
         <div className="topbar__masthead">
           <div className="topbar__identity">
             <div className="topbar__eyebrow">
-              <span className="eyebrow">Portfolio overview</span>
+              <span className="eyebrow">{portfolioName ?? 'Portfolio overview'}</span>
               <span className="panel__subtitle">
                 {summary.holdings_count} holdings · {health?.benchmark ?? '—'} benchmark
               </span>

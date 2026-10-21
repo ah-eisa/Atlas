@@ -366,6 +366,14 @@ export interface SettingsInfo {
   seed_demo: boolean
 }
 
+/** A tracked portfolio. */
+export interface Portfolio {
+  id: number
+  name: string
+  base_currency: string
+  created_at: string
+}
+
 /** An external contribution to, or withdrawal from, the portfolio. */
 export interface CashFlow {
   id: number
@@ -382,6 +390,9 @@ export interface BootstrapResponse {
   base_currency: string
   positions: Position[]
   cash_flows: CashFlow[]
+  /** The portfolio this request was about. */
+  portfolio_id: number
+  portfolios: Portfolio[]
   analytics: Analytics | null
   warnings: string[]
   error: string | null
@@ -396,6 +407,8 @@ export interface PortfolioState {
   analytics: Analytics | null
   positions: Position[]
   cashFlows: CashFlow[]
+  portfolioId: number
+  portfolios: Portfolio[]
   settings: SettingsInfo | null
   warnings: string[]
   error: string | null

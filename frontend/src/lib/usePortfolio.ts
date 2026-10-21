@@ -10,6 +10,7 @@ import {
   refreshPortfolio,
   resolveConfig,
   setStoredApiKey,
+  setStoredPortfolioId,
   type DataConfig,
 } from './api'
 import type { PortfolioState } from './types'
@@ -23,6 +24,8 @@ export interface PortfolioController {
   reload: () => void
   refresh: () => Promise<void>
   setApiKey: (key: string) => void
+  /** Switch to another portfolio and reload everything for it. */
+  setPortfolio: (id: number) => void
   clearError: () => void
 }
 
@@ -85,6 +88,11 @@ export function usePortfolio(): PortfolioController {
     setConfig((current) => ({ ...current, apiKey: key }))
   }, [])
 
+  const setPortfolio = useCallback((id: number) => {
+    setStoredPortfolioId(id)
+    setConfig((current) => ({ ...current, portfolioId: id }))
+  }, [])
+
   const clearError = useCallback(() => setError(null), [])
 
   return useMemo(
@@ -97,8 +105,9 @@ export function usePortfolio(): PortfolioController {
       reload,
       refresh,
       setApiKey,
+      setPortfolio,
       clearError,
     }),
-    [data, error, loading, refreshing, config, reload, refresh, setApiKey, clearError],
+    [data, error, loading, refreshing, config, reload, refresh, setApiKey, setPortfolio, clearError],
   )
 }
