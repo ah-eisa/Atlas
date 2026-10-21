@@ -343,7 +343,7 @@ def health_live(portfolio_id: int = Depends(_portfolio_id)) -> dict[str, Any]:
         "status": "ok",
         "version": API_VERSION,
         "process": STARTED_AT,
-        "base_currency": store.get_base_currency(SETTINGS),
+        "base_currency": store.get_base_currency(SETTINGS, portfolio_id),
         "positions": len(store.list_holdings(SETTINGS, portfolio_id)),
         "api_key_required": SETTINGS.requires_api_key,
     }
@@ -384,7 +384,7 @@ def bootstrap(portfolio_id: int = Depends(_portfolio_id)) -> dict[str, Any]:
     return {
         "api_version": API_VERSION,
         "source": "api",
-        "base_currency": store.get_base_currency(SETTINGS),
+        "base_currency": store.get_base_currency(SETTINGS, portfolio_id),
         "positions": positions,
         "portfolio_id": portfolio_id,
         "portfolios": store.list_portfolios(SETTINGS),

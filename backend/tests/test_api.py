@@ -551,6 +551,30 @@ def test_portfolios_are_isolated_from_each_other(empty_client: Any) -> None:
     assert other.status_code == 201
 
 
+def test_bootstrap_and_health_report_the_requested_portfolios_currency(empty_client: Any) -> None:
+    """The top-level envelope must describe the book that was asked for.
+
+    The bootstrap response is what the front end trusts for its currency, so
+    reporting the default portfolio's currency here would mislabel every
+    figure in a second, differently denominated portfolio.
+    """
+    created = empty_client.post(
+        "/api/v1/portfolios", json={"name": "Dollar book", "base_currency": "USD"}
+    )
+    assert created.status_code == 201
+    other_id = created.json()["id"]
+    headers = {"X-Portfolio-Id": str(other_id)}
+
+    bootstrap = empty_client.get("/api/v1/bootstrap", headers=headers)
+    assert bootstrap.status_code == 200
+    assert bootstrap.json()["base_currency"] == "USD"
+    assert bootstrap.json()["portfolio_id"] == other_id
+
+    health = empty_client.get("/api/v1/health", headers=headers)
+    assert health.status_code == 200
+    assert health.json()["base_currency"] == "USD"
+
+
 def test_the_default_portfolio_is_created_with_its_own_currency(empty_client: Any) -> None:
     portfolios = empty_client.get("/api/v1/portfolios").json()
     assert len(portfolios) >= 1
