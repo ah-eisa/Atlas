@@ -18,6 +18,7 @@
 import type {
   Analytics,
   BootstrapResponse,
+  CashFlow,
   DataSource,
   InstrumentInfo,
   PortfolioState,
@@ -186,6 +187,7 @@ function snapshotToState(snapshot: Snapshot): PortfolioState {
     baseCurrency: snapshot.base_currency,
     analytics,
     positions,
+    cashFlows: [],
     settings: {
       benchmark: analytics.health.benchmark,
       benchmark_name: analytics.risk.benchmark.name,
@@ -225,6 +227,7 @@ export async function loadPortfolio(
     baseCurrency: bootstrap.base_currency,
     analytics: bootstrap.analytics,
     positions: bootstrap.positions,
+    cashFlows: bootstrap.cash_flows ?? [],
     settings: bootstrap.settings,
     warnings: bootstrap.warnings,
     error: bootstrap.error,
@@ -256,6 +259,22 @@ export function updatePosition(
 
 export function deletePosition(config: DataConfig, id: number): Promise<void> {
   return requestJson<void>(apiUrl(config, `/api/v1/positions/${id}`), config, {
+    method: 'DELETE',
+  })
+}
+
+export function createCashFlow(
+  config: DataConfig,
+  input: { occurred_on: string; amount: number; note?: string },
+): Promise<CashFlow> {
+  return requestJson<CashFlow>(apiUrl(config, '/api/v1/cash-flows'), config, {
+    method: 'POST',
+    body: JSON.stringify(input),
+  })
+}
+
+export function deleteCashFlow(config: DataConfig, id: number): Promise<void> {
+  return requestJson<void>(apiUrl(config, `/api/v1/cash-flows/${id}`), config, {
     method: 'DELETE',
   })
 }

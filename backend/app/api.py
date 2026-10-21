@@ -35,7 +35,7 @@ from fastapi.staticfiles import StaticFiles
 from . import instruments, store
 from .config import SETTINGS, Settings
 from .portfolio import API_VERSION, AnalyticsUnavailable, PortfolioAnalytics, build_analytics
-from .schemas import BaseCurrencyUpdate, HoldingInput, HoldingOut
+from .schemas import BaseCurrencyUpdate, CashFlowIn, HoldingInput, HoldingOut
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 logger = logging.getLogger(__name__)
@@ -98,6 +98,11 @@ async def empty_portfolio_handler(_: Request, exc: store.EmptyPortfolio) -> JSON
 @app.exception_handler(store.HoldingNotFound)
 async def not_found_handler(_: Request, exc: store.HoldingNotFound) -> JSONResponse:
     return error_response(404, "holding_not_found", str(exc))
+
+
+@app.exception_handler(store.CashFlowNotFound)
+async def cash_flow_not_found_handler(_: Request, exc: store.CashFlowNotFound) -> JSONResponse:
+    return error_response(404, "cash_flow_not_found", str(exc))
 
 
 @app.exception_handler(store.DuplicateTicker)
@@ -345,6 +350,7 @@ def bootstrap() -> dict[str, Any]:
         "source": "api",
         "base_currency": store.get_base_currency(SETTINGS),
         "positions": positions,
+        "cash_flows": store.list_cash_flows(SETTINGS),
         "analytics": analytics_payload,
         "warnings": warnings,
         "error": error,
@@ -408,7 +414,6 @@ def priced_holdings() -> dict[str, Any]:
 def list_positions() -> list[dict[str, Any]]:
     return store.list_holdings(SETTINGS)
 
-
 @app.post("/api/v1/positions", status_code=201, tags=["positions"])
 def create_position(body: HoldingInput) -> dict[str, Any]:
     created = store.create_holding(body.as_store_payload(), SETTINGS)
@@ -464,10 +469,55 @@ def update_base_currency(body: BaseCurrencyUpdate) -> dict[str, Any]:
     return {"base_currency": code}
 
 
+# ---------------------------------------------------------------------------
+# Cash flows
+# ---------------------------------------------------------------------------
+
+
+@app.get("/api/v1/cash-flows", tags=["cash-flows"])
+def list_cash_flows() -> list[dict[str, Any]]:
+    """Every recorded contribution and withdrawal, oldest first."""
+    return store.list_cash_flows(SETTINGS)
+
+
+@app.post("/api/v1/cash-flows", status_code=201, tags=["cash-flows"])
+def create_cash_flow(body: CashFlowIn) -> dict[str, Any]:
+    """Record an external contribution (positive) or withdrawal (negative).
+
+    Recorded flows are authoritative: once the ledger has any entry, the
+    analytics use it instead of estimating contributions from the dates the
+    positions were acquired.
+    """
+    created = store.create_cash_flow(
+        {
+            "occurred_on": body.occurred_on.isoformat(),
+            "amount": body.amount,
+            "note": body.note,
+        },
+        SETTINGS,
+    )
+    _service.invalidate()
+    return created
+
+
+@app.delete("/api/v1/cash-flows/{cash_flow_id}", status_code=204, tags=["cash-flows"])
+def delete_cash_flow(cash_flow_id: int, response: Response) -> Response:
+    store.delete_cash_flow(cash_flow_id, SETTINGS)
+    _service.invalidate()
+    response.status_code = 204
+    return response
+
+
 @app.get("/api/v1/portfolio/export", tags=["positions"])
 def export_portfolio(format: str = "json") -> Response:
-    """Download the stored positions. JSON is lossless; CSV suits a spreadsheet."""
+    """Download the stored positions and cash flows.
+
+    JSON is lossless; CSV suits a spreadsheet. The CSV carries one row per
+    position, followed by one row per cash flow, with a ``kind`` column so the
+    two can be told apart.
+    """
     rows = store.export_rows(SETTINGS)
+    flows = store.list_cash_flows(SETTINGS)
     base_currency = store.get_base_currency(SETTINGS)
     if format not in {"json", "csv"}:
         raise HTTPException(
@@ -480,20 +530,33 @@ def export_portfolio(format: str = "json") -> Response:
             "base_currency": base_currency,
             "generated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
             "holdings": rows,
+            "cash_flows": flows,
         }
         return JSONResponse(
             body,
             headers={"Content-Disposition": 'attachment; filename="portfolio.json"'},
         )
 
-    fields = list(rows[0]) if rows else [
-        "ticker", "name", "asset_class", "region", "currency",
-        "quantity", "cost_basis_per_unit", "acquired",
+    # One table, one header, one `kind` column: positions and cash flows can
+    # live in the same file and still be told apart on import.
+    fields = [
+        "kind", "ticker", "name", "asset_class", "region", "currency",
+        "quantity", "cost_basis_per_unit", "acquired", "date", "amount", "note",
     ]
     buffer = io.StringIO()
     writer = csv.DictWriter(buffer, fieldnames=fields, lineterminator="\n")
     writer.writeheader()
-    writer.writerows(rows)
+    for row in rows:
+        writer.writerow({**row, "kind": "position"})
+    for flow in flows:
+        writer.writerow(
+            {
+                "kind": "cash_flow",
+                "date": flow["occurred_on"],
+                "amount": flow["amount"],
+                "note": flow["note"],
+            }
+        )
     return PlainTextResponse(
         buffer.getvalue(),
         media_type="text/csv",

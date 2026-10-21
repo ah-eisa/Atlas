@@ -168,12 +168,17 @@ class PortfolioAnalytics:
     def flows(self) -> pd.Series:
         """External contributions, indexed by trading day.
 
-        A position enters the portfolio at its *market value* on the first day
-        it is held. That is the correct external flow for a time-weighted
-        return: the purchase transfers wealth into the portfolio rather than
-        creating it. Using the cost basis instead would report the difference
-        between the entered cost and that day's close as investment
-        performance.
+        When the owner has recorded cash flows, those are authoritative: they
+        are the money that actually moved. The estimate described below is
+        only used when no ledger exists, because inferring a contribution
+        from a purchase date is an approximation of the truth.
+
+        Without a ledger, a position enters the portfolio at its *market
+        value* on the first day it is held. That is the correct external flow
+        for a time-weighted return: the purchase transfers wealth into the
+        portfolio rather than creating it. Using the cost basis instead would
+        report the difference between the entered cost and that day's close
+        as investment performance.
 
         Positions already held on the first observation are part of the opening
         value and produce no flow.
@@ -182,6 +187,19 @@ class PortfolioAnalytics:
         result = pd.Series(0.0, index=index)
         if len(index) == 0:
             return result
+
+        ledger = self.portfolio.cash_flows
+        if ledger:
+            for flow in ledger:
+                target = pd.Timestamp(flow.occurred_on).normalize()
+                position = int(index.searchsorted(target, side="left"))
+                # A flow before the first observation is part of the opening
+                # portfolio; a flow after the last one has not happened yet.
+                if position == 0 or position >= len(index):
+                    continue
+                result.iloc[position] += flow.amount
+            return result
+
         for holding in self.portfolio.holdings:
             target = pd.Timestamp(holding.acquired).normalize()
             position = int(index.searchsorted(target, side="left"))
@@ -192,6 +210,11 @@ class PortfolioAnalytics:
                 continue
             result.iloc[position] += float(self.value_frame[holding.ticker].iloc[position])
         return result
+
+    @property
+    def flow_source(self) -> str:
+        """Whether the flow series is recorded (``ledger``) or estimated."""
+        return "ledger" if self.portfolio.cash_flows else "estimated"
 
     @cached_property
     def portfolio_returns(self) -> pd.Series:
@@ -596,6 +619,7 @@ class PortfolioAnalytics:
                     for stamp, value in self.flows.items()
                     if value
                 ],
+                "flow_source": self.flow_source,
             }
         )
 

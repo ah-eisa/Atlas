@@ -187,3 +187,30 @@ def test_a_position_acquired_before_the_history_has_no_entry_price() -> None:
     attribution = analytics.summary()["fx_attribution"]
     assert attribution["price_effect"] == 0.0
     assert attribution["unattributed"] == pytest.approx(position.unrealized_pnl)
+
+
+def test_a_recorded_ledger_replaces_the_estimated_flows() -> None:
+    """With a ledger, the flow series is the recorded money.
+
+    Without one, flows are estimated from the dates the positions were
+    acquired. That is an approximation; a recorded contribution is not.
+    """
+    from backend.app.data import CashFlow
+
+    # One position opens the window, so the second one is an interior flow.
+    opener = Holding("A", "A", "Stock", "US", "EUR", 10, 100.0, "2025-01-06")
+    later = Holding("B", "B", "Stock", "US", "EUR", 5, 50.0, "2025-01-09")
+    prices = {"A": 100.0, "B": 50.0}
+
+    estimated = analytics_for((opener, later), prices)
+    assert estimated.flow_source == "estimated"
+    assert estimated.flows.abs().sum() > 0
+
+    recorded = Portfolio(
+        base_currency="EUR",
+        holdings=(opener, later),
+        cash_flows=(CashFlow(occurred_on="2025-01-09", amount=12345.0, note="Contribution"),),
+    )
+    with_ledger = PortfolioAnalytics(recorded, market_for(prices))
+    assert with_ledger.flow_source == "ledger"
+    assert with_ledger.flows.abs().sum() == pytest.approx(12345.0)

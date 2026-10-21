@@ -195,7 +195,9 @@ def test_export_json_and_csv(empty_client: Any) -> None:
     assert as_csv.status_code == 200
     assert as_csv.headers["content-type"].startswith("text/csv")
     assert "AAPL" in as_csv.text
-    assert as_csv.text.splitlines()[0].startswith("ticker,name,asset_class")
+    # Positions and cash flows share one table, told apart by a `kind` column.
+    assert as_csv.text.splitlines()[0].startswith("kind,ticker,name,asset_class")
+    assert "position,AAPL" in as_csv.text
 
     invalid = empty_client.get("/api/v1/portfolio/export?format=xlsx")
     assert invalid.status_code == 422
@@ -492,3 +494,39 @@ def test_a_rejected_api_key_still_carries_cors_headers(
     assert response.status_code == 401
     assert response.headers["access-control-allow-origin"] == "http://127.0.0.1:5173"
     assert response.json()["detail"]["code"] == "unauthorized"
+
+
+def test_cash_flows_can_be_recorded_listed_and_deleted(empty_client: Any) -> None:
+    """The ledger is the authoritative record of external money."""
+    created = empty_client.post(
+        "/api/v1/cash-flows",
+        json={"occurred_on": "2026-01-15", "amount": 5000, "note": "Contribution"},
+    )
+    assert created.status_code == 201
+    payload = created.json()
+    assert payload["amount"] == 5000
+    assert payload["occurred_on"] == "2026-01-15"
+
+    listed = empty_client.get("/api/v1/cash-flows")
+    assert listed.status_code == 200
+    assert len(listed.json()) == 1
+
+    deleted = empty_client.delete(f"/api/v1/cash-flows/{payload['id']}")
+    assert deleted.status_code == 204
+    assert empty_client.get("/api/v1/cash-flows").json() == []
+
+
+def test_cash_flow_validation_rejects_a_bad_amount(empty_client: Any) -> None:
+    """A flow without a usable amount is a validation error, not a crash."""
+    response = empty_client.post(
+        "/api/v1/cash-flows",
+        json={"occurred_on": "2026-01-15", "amount": "not-a-number"},
+    )
+    assert response.status_code == 422
+    assert response.json()["detail"]["code"] == "validation_error"
+
+
+def test_deleting_an_unknown_cash_flow_is_a_404(empty_client: Any) -> None:
+    response = empty_client.delete("/api/v1/cash-flows/999")
+    assert response.status_code == 404
+    assert response.json()["detail"]["code"] == "cash_flow_not_found"

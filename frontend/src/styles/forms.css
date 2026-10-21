@@ -317,3 +317,82 @@
     grid-template-columns: 100px minmax(0, 1fr);
   }
 }
+/* ------------------------------------------------------------------ *
+ * Cash-flow ledger                                                   *
+ * ------------------------------------------------------------------ */
+
+.flows {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  padding: var(--space-5);
+}
+
+.flows__empty {
+  margin: 0;
+  font-size: var(--size-micro);
+  line-height: var(--leading-normal);
+  color: var(--text-tertiary);
+  max-width: 62ch;
+}
+
+.flows__table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--size-micro);
+}
+
+.flows__table th {
+  padding: var(--space-2) var(--space-3);
+  border-bottom: 1px solid var(--line);
+  color: var(--text-tertiary);
+  font-weight: var(--weight-medium);
+  letter-spacing: var(--tracking-wide);
+  text-transform: uppercase;
+  text-align: left;
+}
+
+.flows__table td {
+  padding: var(--space-2) var(--space-3);
+  border-bottom: 1px solid var(--line-faint);
+  color: var(--text-secondary);
+}
+
+.flows__table th.tabular-right,
+.flows__table td.tabular-right {
+  text-align: right;
+}
+
+.flows__table tfoot td {
+  border-top: 1px solid var(--line);
+  border-bottom: 0;
+  color: var(--text-primary);
+  font-weight: var(--weight-medium);
+}
+
+.flows__date {
+  color: var(--text-primary);
+}
+
+.flows__note {
+  color: var(--text-tertiary);
+}
+
+.flows__actions {
+  text-align: right;
+}
+
+.flows__form {
+  display: grid;
+  grid-template-columns: 160px 180px minmax(0, 1fr) auto;
+  gap: var(--space-4);
+  align-items: end;
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--line);
+}
+
+@media (max-width: 900px) {
+  .flows__form {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

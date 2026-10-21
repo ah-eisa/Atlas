@@ -362,12 +362,22 @@ export interface SettingsInfo {
   seed_demo: boolean
 }
 
+/** An external contribution to, or withdrawal from, the portfolio. */
+export interface CashFlow {
+  id: number
+  occurred_on: string
+  amount: number
+  note: string
+  created_at?: string
+}
+
 /** Live API bootstrap payload. */
 export interface BootstrapResponse {
   api_version: string
   source: 'api'
   base_currency: string
   positions: Position[]
+  cash_flows: CashFlow[]
   analytics: Analytics | null
   warnings: string[]
   error: string | null
@@ -381,6 +391,7 @@ export interface PortfolioState {
   baseCurrency: string
   analytics: Analytics | null
   positions: Position[]
+  cashFlows: CashFlow[]
   settings: SettingsInfo | null
   warnings: string[]
   error: string | null

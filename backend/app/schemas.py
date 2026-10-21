@@ -128,6 +128,16 @@ class BaseCurrencyUpdate(BaseModel):
         return cleaned
 
 
+class CashFlowIn(BaseModel):
+    """An external contribution to, or withdrawal from, the portfolio."""
+
+    occurred_on: date
+    amount: float = Field(
+        description="Signed amount in the base currency: positive is money in."
+    )
+    note: str = Field(default="", max_length=200)
+
+
 class InstrumentInfo(BaseModel):
     """Best-effort metadata for a ticker entered in the portfolio editor."""
 

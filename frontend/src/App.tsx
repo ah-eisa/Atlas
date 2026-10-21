@@ -12,6 +12,7 @@ import { useState } from 'react'
 
 import { AllocationPanel } from './components/AllocationPanel'
 import { BenchmarkPanel } from './components/BenchmarkPanel'
+import { CashFlowEditor } from './components/CashFlowEditor'
 import { CorrelationPanel } from './components/CorrelationPanel'
 import { DataPanel } from './components/DataPanel'
 import { DrawdownPanel } from './components/DrawdownPanel'
@@ -387,6 +388,15 @@ function AnalyticsViews({
           ) : (
             <SnapshotHoldingsNotice />
           )}
+          {state.editable ? (
+            <CashFlowEditor
+              cashFlows={state.cashFlows}
+              config={config}
+              baseCurrency={currency}
+              onSaved={onReload}
+              onApiKey={onApiKey}
+            />
+          ) : null}
         </main>
       )
 

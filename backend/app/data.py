@@ -118,11 +118,28 @@ class Holding:
 
 
 @dataclass(frozen=True)
+class CashFlow:
+    """An external contribution to, or withdrawal from, the portfolio.
+
+    Attributes:
+        occurred_on: ISO date the money moved.
+        amount: Signed amount in the base currency. Positive is money in,
+            negative is money out.
+        note: Free-text description, for the user's own bookkeeping.
+    """
+
+    occurred_on: str
+    amount: float
+    note: str = ""
+
+
+@dataclass(frozen=True)
 class Portfolio:
     """The portfolio definition as loaded from ``holdings.json``."""
 
     base_currency: str
     holdings: tuple[Holding, ...]
+    cash_flows: tuple[CashFlow, ...] = ()
 
     @property
     def tickers(self) -> tuple[str, ...]:
@@ -218,7 +235,26 @@ def load_portfolio(path: Path | None = None) -> Portfolio:
     if duplicates:
         raise ValueError(f"{path}: duplicate tickers {duplicates}")
 
-    return Portfolio(base_currency=str(raw.get("base_currency", "EUR")), holdings=tuple(holdings))
+    # Cash flows are optional. When present they replace the estimated flows
+    # derived from position acquisition dates.
+    cash_flows: list[CashFlow] = []
+    for index, item in enumerate(raw.get("cash_flows", []) or []):
+        try:
+            cash_flows.append(
+                CashFlow(
+                    occurred_on=str(item["date"]),
+                    amount=float(item["amount"]),
+                    note=str(item.get("note", "")),
+                )
+            )
+        except (KeyError, TypeError, ValueError) as exc:
+            raise ValueError(f"{path}: cash flow #{index} is invalid: {exc}") from exc
+
+    return Portfolio(
+        base_currency=str(raw.get("base_currency", "EUR")),
+        holdings=tuple(holdings),
+        cash_flows=tuple(cash_flows),
+    )
 
 
 def _cache_file(cache_dir: Path, symbols: Sequence[str], years: int) -> Path:

@@ -23,7 +23,7 @@ from pathlib import Path
 from typing import Any, Iterator
 
 from .config import SETTINGS, Settings
-from .data import Holding, Portfolio, normalise_currency
+from .data import CashFlow, Holding, Portfolio, normalise_currency
 
 logger = logging.getLogger(__name__)
 
@@ -48,6 +48,19 @@ CREATE TABLE IF NOT EXISTS holdings (
 );
 
 CREATE INDEX IF NOT EXISTS ix_holdings_ticker ON holdings (ticker);
+
+-- The cash-flow ledger: money the owner put in or took out, on a date.
+-- Recorded flows replace the estimated flows derived from acquisition dates,
+-- so the time-weighted return is measured against the real money.
+CREATE TABLE IF NOT EXISTS cash_flows (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    occurred_on TEXT NOT NULL,
+    amount     REAL NOT NULL,
+    note       TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS ix_cash_flows_date ON cash_flows (occurred_on);
 """
 
 
@@ -65,6 +78,10 @@ class HoldingNotFound(StoreError):
 
 class EmptyPortfolio(StoreError):
     """Analytics were requested before any positions were added."""
+
+
+class CashFlowNotFound(StoreError):
+    """No cash flow with the requested id."""
 
 
 def _now() -> str:
@@ -139,6 +156,18 @@ def _row_to_dict(row: sqlite3.Row) -> dict[str, Any]:
         "acquired": str(row["acquired"]),
         "created_at": str(row["created_at"]),
         "updated_at": str(row["updated_at"]),
+    }
+
+
+def _cash_flow_row_to_dict(row: sqlite3.Row) -> dict[str, Any]:
+    """Map a cash-flow row. Separate from the holdings mapper: the two
+    tables do not share a shape, and one generic mapper would hide that."""
+    return {
+        "id": int(row["id"]),
+        "occurred_on": str(row["occurred_on"]),
+        "amount": float(row["amount"]),
+        "note": str(row["note"]),
+        "created_at": str(row["created_at"]),
     }
 
 
@@ -294,7 +323,64 @@ def build_portfolio(settings: Settings = SETTINGS) -> Portfolio:
         )
         for row in rows
     )
-    return Portfolio(base_currency=get_base_currency(settings), holdings=holdings)
+    cash_flows = tuple(
+        CashFlow(
+            occurred_on=row["occurred_on"],
+            amount=row["amount"],
+            note=row["note"],
+        )
+        for row in list_cash_flows(settings)
+    )
+    return Portfolio(
+        base_currency=get_base_currency(settings),
+        holdings=holdings,
+        cash_flows=cash_flows,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Cash flows
+# ---------------------------------------------------------------------------
+
+
+def list_cash_flows(settings: Settings = SETTINGS) -> list[dict[str, Any]]:
+    """Every recorded contribution and withdrawal, oldest first."""
+    with connect(settings) as connection:
+        rows = connection.execute(
+            "SELECT id, occurred_on, amount, note, created_at "
+            "FROM cash_flows ORDER BY occurred_on, id"
+        ).fetchall()
+    return [_cash_flow_row_to_dict(row) for row in rows]
+
+
+def create_cash_flow(
+    data: dict[str, Any], settings: Settings = SETTINGS
+) -> dict[str, Any]:
+    """Record one external contribution (positive) or withdrawal (negative)."""
+    occurred_on = str(data["occurred_on"]).strip()
+    amount = float(data["amount"])
+    note = str(data.get("note", "")).strip()
+    with connect(settings) as connection:
+        cursor = connection.execute(
+            "INSERT INTO cash_flows (occurred_on, amount, note, created_at) "
+            "VALUES (?, ?, ?, ?)",
+            (occurred_on, amount, note, _now()),
+        )
+        _bump_revision(connection)
+        row = connection.execute(
+            "SELECT id, occurred_on, amount, note, created_at FROM cash_flows WHERE id = ?",
+            (cursor.lastrowid,),
+        ).fetchone()
+    return _cash_flow_row_to_dict(row)
+
+
+def delete_cash_flow(cash_flow_id: int, settings: Settings = SETTINGS) -> None:
+    """Remove a recorded cash flow."""
+    with connect(settings) as connection:
+        cursor = connection.execute("DELETE FROM cash_flows WHERE id = ?", (cash_flow_id,))
+        if cursor.rowcount == 0:
+            raise CashFlowNotFound(f"no cash flow with id {cash_flow_id}")
+        _bump_revision(connection)
 
 
 def seed_from_demo(settings: Settings = SETTINGS) -> int:
