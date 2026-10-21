@@ -1,7 +1,7 @@
 /**
  * Application shell and view routing.
  *
- * The dashboard is organised as six peer views rather than one very long page.
+ * The dashboard is organised as peer views rather than one very long page.
  * Overview remains the default and keeps the whole-portfolio answer in one
  * screen; the remaining views go deeper without forcing every chart to load on
  * first paint. All data still arrives in one analytics payload, so switching
@@ -11,6 +11,7 @@
 import { lazy, Suspense, useState } from 'react'
 
 import { NewPortfolioModal } from './components/NewPortfolioModal'
+import { OrderModal } from './components/OrderModal'
 import { PositionModal } from './components/PositionModal'
 import { TopBar } from './components/TopBar'
 import { ApiError, deletePosition, type DataConfig } from './lib/api'
@@ -18,7 +19,7 @@ import { formatDate, formatTimestamp } from './lib/format'
 import { useTheme } from './lib/theme'
 import { useHashRoute, type ViewKey } from './lib/useHashRoute'
 import { usePortfolio } from './lib/usePortfolio'
-import type { DataSource, PortfolioState, Position } from './lib/types'
+import type { DataSource, OrderType, PortfolioState, Position } from './lib/types'
 
 // Views are code-split: the shell and the KPI band render without waiting for
 // a view's panels and, more importantly, without waiting for the charting
@@ -29,6 +30,7 @@ const PerformanceView = lazy(() => import('./views/PerformanceView'))
 const RiskView = lazy(() => import('./views/RiskView'))
 const ProjectionView = lazy(() => import('./views/ProjectionView'))
 const HoldingsView = lazy(() => import('./views/HoldingsView'))
+const TransactionsView = lazy(() => import('./views/TransactionsView'))
 const DataView = lazy(() => import('./views/DataView'))
 
 function Shell({
@@ -40,6 +42,7 @@ function Shell({
   onSelectPortfolio,
   onCreatePortfolio,
   onAddPosition,
+  onOpenTradeModal,
   onSwitchSource,
   children,
 }: {
@@ -51,6 +54,7 @@ function Shell({
   onSelectPortfolio?: (id: number) => void
   onCreatePortfolio?: () => void
   onAddPosition?: () => void
+  onOpenTradeModal?: () => void
   onSwitchSource?: (source: DataSource) => void
   children: React.ReactNode
 }) {
@@ -79,6 +83,7 @@ function Shell({
         onSelectPortfolio={onSelectPortfolio}
         onCreatePortfolio={onCreatePortfolio}
         onAddPosition={onAddPosition}
+        onOpenTradeModal={onOpenTradeModal}
         onSwitchSource={onSwitchSource}
         editable={state?.editable ?? false}
       />
@@ -194,10 +199,12 @@ function AnalyticsUnavailable({
   state,
   onRetry,
   onAddPosition,
+  onOpenTradeModal,
 }: {
   state: PortfolioState
   onRetry: () => void
   onAddPosition?: () => void
+  onOpenTradeModal?: () => void
 }) {
   return (
     <main className="app__main">
@@ -208,12 +215,17 @@ function AnalyticsUnavailable({
         </span>
         <p className="state__detail">
           {state.error ??
-            'Add your first investment asset to start monitoring valuations, risk distribution and returns.'}
+            'Execute a BUY trade or add your first investment asset to start monitoring valuations, risk distribution and returns.'}
         </p>
         <div className="state__actions">
+          {onOpenTradeModal && state.editable && (
+            <button type="button" className="button button--primary" onClick={onOpenTradeModal}>
+              + Place Buy Order
+            </button>
+          )}
           {onAddPosition && state.editable && (
-            <button type="button" className="button button--primary" onClick={onAddPosition}>
-              + Add First Position
+            <button type="button" className="button" onClick={onAddPosition}>
+              Add Position Manually
             </button>
           )}
           <a className="button" href="#/holdings">
@@ -284,6 +296,7 @@ function ViewContent({
   onAddPosition,
   onEditPosition,
   onDeletePosition,
+  onOpenTradeModal,
   onSwitchSource,
 }: {
   state: PortfolioState
@@ -297,6 +310,7 @@ function ViewContent({
   onAddPosition?: () => void
   onEditPosition?: (position: Position) => void
   onDeletePosition?: (id: number) => Promise<void>
+  onOpenTradeModal?: (ticker?: string, type?: OrderType) => void
   onSwitchSource?: (source: DataSource) => void
 }) {
   if (view === 'data') {
@@ -313,6 +327,17 @@ function ViewContent({
     )
   }
 
+  if (view === 'trades') {
+    return (
+      <TransactionsView
+        state={state}
+        config={config}
+        onReload={onReload}
+        onOpenTradeModal={(ticker, type) => onOpenTradeModal?.(ticker, type)}
+      />
+    )
+  }
+
   if (view === 'holdings') {
     return (
       <HoldingsView
@@ -323,6 +348,7 @@ function ViewContent({
         onAddPosition={onAddPosition}
         onEditPosition={onEditPosition}
         onDeletePosition={onDeletePosition}
+        onOpenTradeModal={onOpenTradeModal}
         onSwitchSource={onSwitchSource}
       />
     )
@@ -334,6 +360,7 @@ function ViewContent({
         state={state}
         onRetry={onReload}
         onAddPosition={onAddPosition}
+        onOpenTradeModal={onOpenTradeModal}
       />
     )
   }
@@ -353,6 +380,7 @@ function ViewContent({
           state={state}
           onRetry={onReload}
           onAddPosition={onAddPosition}
+          onOpenTradeModal={onOpenTradeModal}
         />
       )
   }
@@ -384,6 +412,15 @@ export default function App() {
     position: null,
   })
 
+  const [tradeModal, setTradeModal] = useState<{
+    isOpen: boolean
+    ticker?: string
+    type?: OrderType
+  }>({
+    isOpen: false,
+    type: 'BUY',
+  })
+
   const handleOpenAddPosition = () => {
     setPositionModal({ isOpen: true, position: null })
   }
@@ -394,6 +431,14 @@ export default function App() {
 
   const handleClosePositionModal = () => {
     setPositionModal({ isOpen: false, position: null })
+  }
+
+  const handleOpenTradeModal = (ticker?: string, type?: OrderType) => {
+    setTradeModal({ isOpen: true, ticker, type: type || 'BUY' })
+  }
+
+  const handleCloseTradeModal = () => {
+    setTradeModal({ isOpen: false })
   }
 
   const handleCreatePortfolio = async (name: string, baseCurrency: string) => {
@@ -456,6 +501,7 @@ export default function App() {
         onAddPosition={handleOpenAddPosition}
         onEditPosition={handleOpenEditPosition}
         onDeletePosition={handleDeletePosition}
+        onOpenTradeModal={handleOpenTradeModal}
         onSwitchSource={setSource}
       />
     </Suspense>
@@ -471,6 +517,7 @@ export default function App() {
       onSelectPortfolio={setPortfolio}
       onCreatePortfolio={() => setIsNewPortfolioOpen(true)}
       onAddPosition={handleOpenAddPosition}
+      onOpenTradeModal={() => handleOpenTradeModal()}
       onSwitchSource={setSource}
     >
       <WarningStrip state={data} error={error} onClearError={clearError} />
@@ -490,6 +537,17 @@ export default function App() {
         onClose={handleClosePositionModal}
         onSaved={reload}
         onDelete={handleDeletePosition}
+      />
+
+      <OrderModal
+        isOpen={tradeModal.isOpen}
+        positions={data.positions}
+        config={config}
+        baseCurrency={data.baseCurrency || 'USD'}
+        initialTicker={tradeModal.ticker}
+        initialType={tradeModal.type}
+        onClose={handleCloseTradeModal}
+        onSaved={reload}
       />
     </Shell>
   )

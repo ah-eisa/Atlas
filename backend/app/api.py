@@ -42,7 +42,10 @@ from .schemas import (
     CashFlowIn,
     HoldingInput,
     HoldingOut,
+    OrderInput,
     PortfolioIn,
+    RealizedPnlSummaryOut,
+    TransactionOut,
     WhatIfRequest,
 )
 
@@ -655,6 +658,68 @@ def delete_cash_flow(
     _service.invalidate()
     response.status_code = 204
     return response
+
+
+# ---------------------------------------------------------------------------
+# Orders & FIFO Transactions
+# ---------------------------------------------------------------------------
+
+
+@app.get("/api/v1/transactions", response_model=list[TransactionOut], tags=["transactions"])
+def list_transactions(portfolio_id: int = Depends(_portfolio_id)) -> list[dict[str, Any]]:
+    """Every executed Buy and Sell trade for the portfolio, newest first."""
+    return store.list_transactions(SETTINGS, portfolio_id)
+
+
+@app.post("/api/v1/orders", status_code=201, response_model=TransactionOut, tags=["transactions"])
+def place_order(
+    body: OrderInput, portfolio_id: int = Depends(_portfolio_id)
+) -> dict[str, Any]:
+    """Execute a Buy or Sell order with FIFO lot matching and update portfolio positions."""
+    try:
+        created = store.place_order(
+            {
+                "ticker": body.ticker,
+                "order_type": body.order_type,
+                "quantity": body.quantity,
+                "price": body.price,
+                "executed_at": body.executed_at.isoformat(),
+                "notes": body.notes,
+            },
+            SETTINGS,
+            portfolio_id,
+        )
+        _service.invalidate()
+        return created
+    except store.OrderValidationError as exc:
+        raise HTTPException(
+            status_code=422,
+            detail={"code": "order_validation_error", "message": str(exc)},
+        ) from exc
+
+
+@app.delete("/api/v1/transactions/{transaction_id}", status_code=204, tags=["transactions"])
+def delete_transaction(
+    transaction_id: int,
+    response: Response,
+    portfolio_id: int = Depends(_portfolio_id),
+) -> Response:
+    try:
+        store.delete_transaction(transaction_id, SETTINGS, portfolio_id)
+        _service.invalidate()
+        response.status_code = 204
+        return response
+    except store.TransactionNotFound as exc:
+        raise HTTPException(
+            status_code=404,
+            detail={"code": "not_found", "message": str(exc)},
+        ) from exc
+
+
+@app.get("/api/v1/portfolio/realized-pnl", response_model=RealizedPnlSummaryOut, tags=["transactions"])
+def get_realized_pnl(portfolio_id: int = Depends(_portfolio_id)) -> dict[str, Any]:
+    """Summary of realized gains, win rate and trade statistics."""
+    return store.get_realized_pnl_summary(SETTINGS, portfolio_id)
 
 
 @app.post("/api/v1/portfolio/what-if", tags=["analytics"])

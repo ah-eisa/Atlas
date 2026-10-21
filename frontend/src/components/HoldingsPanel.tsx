@@ -66,6 +66,7 @@ interface HoldingsPanelProps {
   onAddPosition?: () => void
   onEditHolding?: (holding: Holding) => void
   onDeleteHolding?: (holding: Holding) => void
+  onOpenTradeModal?: (ticker?: string, type?: 'BUY' | 'SELL') => void
 }
 
 export function HoldingsPanel({
@@ -76,6 +77,7 @@ export function HoldingsPanel({
   onAddPosition,
   onEditHolding,
   onDeleteHolding,
+  onOpenTradeModal,
 }: HoldingsPanelProps) {
   const [filterQuery, setFilterQuery] = useState('')
 
@@ -210,6 +212,16 @@ export function HoldingsPanel({
           cell: (info) =>
             editable ? (
               <div className="grid__actions">
+                {onOpenTradeModal && (
+                  <button
+                    type="button"
+                    className="button button--primary button--mini"
+                    onClick={() => onOpenTradeModal(info.row.original.ticker)}
+                    title={`Trade ${info.row.original.ticker}`}
+                  >
+                    Trade
+                  </button>
+                )}
                 {onEditHolding && (
                   <button
                     type="button"
@@ -234,7 +246,7 @@ export function HoldingsPanel({
             ) : null,
         }),
       ]),
-    [editable, onEditHolding, onDeleteHolding, currency],
+    [editable, onEditHolding, onDeleteHolding, onOpenTradeModal, currency],
   )
 
   const table = useTable({
@@ -254,15 +266,29 @@ export function HoldingsPanel({
       title="Holdings"
       subtitle={`${holdings.length} positions · values in ${currency}`}
       actions={
-        editable && onAddPosition ? (
-          <button
-            type="button"
-            className="button button--primary button--sm"
-            onClick={onAddPosition}
-            title="Add a new position"
-          >
-            + Add Position
-          </button>
+        editable ? (
+          <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
+            {onOpenTradeModal && (
+              <button
+                type="button"
+                className="button button--primary button--sm"
+                onClick={() => onOpenTradeModal()}
+                title="Execute a trade order"
+              >
+                + Trade Order
+              </button>
+            )}
+            {onAddPosition && (
+              <button
+                type="button"
+                className="button button--quiet button--sm"
+                onClick={onAddPosition}
+                title="Add a new position manually"
+              >
+                + Add Asset
+              </button>
+            )}
+          </div>
         ) : undefined
       }
     >

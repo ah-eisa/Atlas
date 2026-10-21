@@ -14,6 +14,7 @@ export const VIEW_KEYS = [
   'performance',
   'risk',
   'holdings',
+  'trades',
   'projection',
   'data',
 ] as const

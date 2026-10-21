@@ -189,5 +189,56 @@ class ErrorResponse(BaseModel):
     detail: ErrorDetail
 
 
+OrderType = Literal["BUY", "SELL"]
+
+
+class OrderInput(BaseModel):
+    """Execution of a Buy or Sell order."""
+
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
+
+    ticker: str = Field(min_length=1, max_length=20)
+    order_type: OrderType
+    quantity: float = Field(gt=0, le=1e12, allow_inf_nan=False)
+    price: float = Field(ge=0, le=1e15, allow_inf_nan=False)
+    executed_at: date
+    notes: str = Field(default="", max_length=200)
+
+    @field_validator("ticker")
+    @classmethod
+    def _ticker(cls, value: str) -> str:
+        normalised = value.strip().upper()
+        if not TICKER_PATTERN.match(normalised):
+            raise ValueError(
+                "ticker must be a Yahoo Finance symbol (letters, digits, '.', '-', '=' or a leading '^')"
+            )
+        return normalised
+
+
+class TransactionOut(BaseModel):
+    id: int
+    portfolio_id: int
+    ticker: str
+    order_type: OrderType
+    quantity: float
+    price: float
+    realized_pnl: float
+    executed_at: str
+    notes: str
+    created_at: str
+
+
+class RealizedPnlSummaryOut(BaseModel):
+    total_realized_pnl: float
+    total_trades: int
+    total_buys: int
+    total_sells: int
+    winning_trades: int
+    losing_trades: int
+    win_rate_pct: float | None
+    total_buy_volume: float
+    total_sell_volume: float
+
+
 def is_finite(value: float) -> bool:
     return math.isfinite(value)

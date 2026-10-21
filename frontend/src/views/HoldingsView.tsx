@@ -21,6 +21,7 @@ interface HoldingsViewProps {
   onEditPosition?: (position: Position) => void
   onDeletePosition?: (id: number) => Promise<void>
   onSwitchSource?: (source: 'api' | 'snapshot') => void
+  onOpenTradeModal?: (ticker?: string, type?: 'BUY' | 'SELL') => void
 }
 
 function SnapshotNotice({ onSwitchSource }: { onSwitchSource?: (source: 'api' | 'snapshot') => void }) {
@@ -62,6 +63,7 @@ export default function HoldingsView({
   onEditPosition,
   onDeletePosition,
   onSwitchSource,
+  onOpenTradeModal,
 }: HoldingsViewProps) {
   const analytics = state.analytics
   const apiKeyRequired = state.settings?.api_key_required ?? false
@@ -166,6 +168,7 @@ export default function HoldingsView({
         onAddPosition={onAddPosition}
         onEditHolding={handleEditHolding}
         onDeleteHolding={handleDeleteHolding}
+        onOpenTradeModal={onOpenTradeModal}
       />
       <AllocationPanel
         byClass={summary.allocation_by_class}

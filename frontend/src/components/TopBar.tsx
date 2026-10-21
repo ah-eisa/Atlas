@@ -37,6 +37,7 @@ const VIEWS: ViewDefinition[] = [
   { key: 'performance', label: 'Performance', needsAnalytics: true },
   { key: 'risk', label: 'Risk', needsAnalytics: true },
   { key: 'holdings', label: 'Holdings', needsAnalytics: false },
+  { key: 'trades', label: 'Trades', needsAnalytics: false },
   { key: 'projection', label: 'Projection', needsAnalytics: true },
   { key: 'data', label: 'Data', needsAnalytics: false },
 ]
@@ -57,6 +58,7 @@ interface TopBarProps {
   onSelectPortfolio?: (id: number) => void
   onCreatePortfolio?: () => void
   onAddPosition?: () => void
+  onOpenTradeModal?: () => void
   onSwitchSource?: (source: DataSource) => void
   editable?: boolean
 }
@@ -133,6 +135,7 @@ export function TopBar({
   onSelectPortfolio,
   onCreatePortfolio,
   onAddPosition,
+  onOpenTradeModal,
   onSwitchSource,
   editable = false,
 }: TopBarProps) {
@@ -214,10 +217,21 @@ export function TopBar({
         </nav>
 
         <div className="topbar__actions">
-          {editable && onAddPosition && (
+          {editable && onOpenTradeModal && (
             <button
               type="button"
               className="button button--primary button--sm"
+              onClick={onOpenTradeModal}
+              title="Execute a Buy or Sell trade order"
+            >
+              + Trade
+            </button>
+          )}
+
+          {editable && onAddPosition && (
+            <button
+              type="button"
+              className="button button--quiet button--sm"
               onClick={onAddPosition}
               title="Add a position to current portfolio"
             >

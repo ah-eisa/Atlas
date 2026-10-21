@@ -992,3 +992,94 @@
 .button--danger-text:hover {
   background: rgba(250, 77, 86, 0.15);
 }
+
+/* ------------------------------------------------------------------ *
+ * Trade Execution (Order Modal) & Trade Ledger Styles                 *
+ * ------------------------------------------------------------------ */
+
+.trade-side-selector {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-3);
+  margin-bottom: var(--space-2);
+}
+
+.trade-side-btn {
+  height: 38px;
+  border: 1px solid var(--line-strong);
+  background: var(--surface-raised);
+  font-family: var(--font-mono);
+  font-weight: var(--weight-semibold);
+  font-size: var(--size-caption);
+  letter-spacing: 0.5px;
+  cursor: pointer;
+  border-radius: 3px;
+  color: var(--text-tertiary);
+  transition: all var(--duration-fast) var(--easing);
+}
+
+.trade-side-btn:hover {
+  color: var(--text-primary);
+  border-color: var(--line);
+}
+
+.trade-side-btn--buy.trade-side-btn--active {
+  background: rgba(66, 190, 101, 0.14);
+  border-color: var(--positive);
+  color: var(--positive);
+}
+
+.trade-side-btn--sell.trade-side-btn--active {
+  background: rgba(250, 77, 86, 0.14);
+  border-color: var(--negative);
+  color: var(--negative);
+}
+
+.trade-preview-card {
+  padding: var(--space-3) var(--space-4);
+  background: var(--surface-raised);
+  border: 1px solid var(--line-strong);
+  border-radius: 3px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin-top: var(--space-1);
+}
+
+.trade-preview-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: var(--size-caption);
+}
+
+.trade-preview-label {
+  color: var(--text-tertiary);
+}
+
+.trade-preview-value {
+  font-weight: var(--weight-semibold);
+}
+
+.trade-pill--buy {
+  color: var(--positive);
+  background: rgba(66, 190, 101, 0.12);
+  font-weight: var(--weight-bold);
+}
+
+.trade-pill--sell {
+  color: var(--negative);
+  background: rgba(250, 77, 86, 0.12);
+  font-weight: var(--weight-bold);
+}
+
+.button--danger {
+  background: var(--negative);
+  color: #ffffff;
+  border: 1px solid var(--negative);
+}
+
+.button--danger:hover {
+  background: #d12730;
+  border-color: #d12730;
+}

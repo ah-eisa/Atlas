@@ -42,7 +42,7 @@ def daily_returns(prices: pd.Series) -> pd.Series:
 
     The first observation has no predecessor and is dropped.
     """
-    return prices.astype(float).pct_change().dropna()
+    return prices.astype(float).pct_change(fill_method=None).dropna()
 
 
 def daily_returns_frame(prices: pd.DataFrame) -> pd.DataFrame:
@@ -50,7 +50,7 @@ def daily_returns_frame(prices: pd.DataFrame) -> pd.DataFrame:
 
     Formula: ``r_{t,i} = p_{t,i} / p_{t-1,i} - 1``
     """
-    return prices.astype(float).pct_change().dropna(how="any")
+    return prices.astype(float).pct_change(fill_method=None).dropna(how="any")
 
 
 # --------------------------------------------------------------------------

@@ -61,6 +61,23 @@ CREATE TABLE IF NOT EXISTS cash_flows (
 );
 
 CREATE INDEX IF NOT EXISTS ix_cash_flows_date ON cash_flows (occurred_on);
+
+-- The trade ledger: Buy and Sell orders with FIFO realized gain tracking.
+CREATE TABLE IF NOT EXISTS transactions (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    portfolio_id INTEGER NOT NULL DEFAULT 1,
+    ticker       TEXT NOT NULL COLLATE NOCASE,
+    order_type   TEXT NOT NULL CHECK (order_type IN ('BUY', 'SELL')),
+    quantity     REAL NOT NULL CHECK (quantity > 0),
+    price        REAL NOT NULL CHECK (price >= 0),
+    realized_pnl REAL NOT NULL DEFAULT 0.0,
+    executed_at  TEXT NOT NULL,
+    notes        TEXT NOT NULL DEFAULT '',
+    created_at   TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS ix_transactions_portfolio ON transactions (portfolio_id);
+CREATE INDEX IF NOT EXISTS ix_transactions_date ON transactions (executed_at);
 """
 
 
@@ -87,7 +104,35 @@ MIGRATIONS: list[tuple[int, str, Any]] = [
         "target_weights",
         lambda connection: _add_target_weight(connection),
     ),
+    (
+        4,
+        "transactions",
+        lambda connection: _add_transactions_table(connection),
+    ),
 ]
+
+
+def _add_transactions_table(connection: sqlite3.Connection) -> None:
+    """Create the trade ledger transactions table."""
+    connection.execute(
+        """
+        CREATE TABLE IF NOT EXISTS transactions (
+            id           INTEGER PRIMARY KEY AUTOINCREMENT,
+            portfolio_id INTEGER NOT NULL DEFAULT 1,
+            ticker       TEXT NOT NULL COLLATE NOCASE,
+            order_type   TEXT NOT NULL CHECK (order_type IN ('BUY', 'SELL')),
+            quantity     REAL NOT NULL CHECK (quantity > 0),
+            price        REAL NOT NULL CHECK (price >= 0),
+            realized_pnl REAL NOT NULL DEFAULT 0.0,
+            executed_at  TEXT NOT NULL,
+            notes        TEXT NOT NULL DEFAULT '',
+            created_at   TEXT NOT NULL
+        )
+        """
+    )
+    connection.execute("CREATE INDEX IF NOT EXISTS ix_transactions_portfolio ON transactions (portfolio_id)")
+    connection.execute("CREATE INDEX IF NOT EXISTS ix_transactions_ticker ON transactions (ticker)")
+    connection.execute("CREATE INDEX IF NOT EXISTS ix_transactions_date ON transactions (executed_at)")
 
 
 def _add_target_weight(connection: sqlite3.Connection) -> None:
@@ -200,6 +245,14 @@ class EmptyPortfolio(StoreError):
 
 class CashFlowNotFound(StoreError):
     """No cash flow with the requested id."""
+
+
+class TransactionNotFound(StoreError):
+    """No transaction with the requested id."""
+
+
+class OrderValidationError(StoreError):
+    """An order cannot be executed (e.g. selling more than owned)."""
 
 
 def _now() -> str:
@@ -320,6 +373,22 @@ def _cash_flow_row_to_dict(row: sqlite3.Row) -> dict[str, Any]:
         "occurred_on": str(row["occurred_on"]),
         "amount": float(row["amount"]),
         "note": str(row["note"]),
+        "created_at": str(row["created_at"]),
+    }
+
+
+def _transaction_row_to_dict(row: sqlite3.Row) -> dict[str, Any]:
+    """Map a transaction row."""
+    return {
+        "id": int(row["id"]),
+        "portfolio_id": int(row["portfolio_id"]),
+        "ticker": str(row["ticker"]),
+        "order_type": str(row["order_type"]),
+        "quantity": float(row["quantity"]),
+        "price": float(row["price"]),
+        "realized_pnl": float(row["realized_pnl"]),
+        "executed_at": str(row["executed_at"]),
+        "notes": str(row["notes"]),
         "created_at": str(row["created_at"]),
     }
 
@@ -672,6 +741,221 @@ def delete_cash_flow(
         _bump_revision(connection)
 
 
+# ---------------------------------------------------------------------------
+# Trade Ledger & FIFO Transactions
+# ---------------------------------------------------------------------------
+
+
+def list_transactions(
+    settings: Settings = SETTINGS, portfolio_id: int = DEFAULT_PORTFOLIO_ID
+) -> list[dict[str, Any]]:
+    """Every executed Buy/Sell order for this portfolio, newest first."""
+    with connect(settings) as connection:
+        rows = connection.execute(
+            """
+            SELECT id, portfolio_id, ticker, order_type, quantity, price,
+                   realized_pnl, executed_at, notes, created_at
+            FROM transactions
+            WHERE portfolio_id = ?
+            ORDER BY executed_at DESC, id DESC
+            """,
+            (portfolio_id,),
+        ).fetchall()
+    return [_transaction_row_to_dict(row) for row in rows]
+
+
+def place_order(
+    data: dict[str, Any],
+    settings: Settings = SETTINGS,
+    portfolio_id: int = DEFAULT_PORTFOLIO_ID,
+) -> dict[str, Any]:
+    """Execute a Buy or Sell order with FIFO lot matching and update portfolio positions."""
+    ticker_clean = str(data["ticker"]).strip().upper()
+    order_type_clean = str(data["order_type"]).strip().upper()
+    quantity = float(data["quantity"])
+    price = float(data["price"])
+    executed_at = str(data["executed_at"])
+    notes = str(data.get("notes", "")).strip()
+
+    if quantity <= 0:
+        raise OrderValidationError("Order quantity must be positive")
+    if price < 0:
+        raise OrderValidationError("Order price must be non-negative")
+    if order_type_clean not in ("BUY", "SELL"):
+        raise OrderValidationError(f"Invalid order type: {order_type_clean}")
+
+    now = _now()
+
+    with connect(settings) as connection:
+        # Find current holding
+        row = connection.execute(
+            """
+            SELECT id, ticker, name, asset_class, region, currency,
+                   quantity, cost_basis_per_unit, acquired, target_weight
+            FROM holdings
+            WHERE portfolio_id = ? AND ticker = ? COLLATE NOCASE
+            """,
+            (portfolio_id, ticker_clean),
+        ).fetchone()
+
+        realized_pnl = 0.0
+
+        if order_type_clean == "BUY":
+            if row is not None:
+                current_qty = float(row["quantity"])
+                current_cost = float(row["cost_basis_per_unit"])
+                new_qty = current_qty + quantity
+                new_cost = (current_qty * current_cost + quantity * price) / new_qty
+                connection.execute(
+                    """
+                    UPDATE holdings
+                    SET quantity = ?, cost_basis_per_unit = ?, updated_at = ?
+                    WHERE id = ?
+                    """,
+                    (new_qty, new_cost, now, row["id"]),
+                )
+            else:
+                try:
+                    from .instruments import lookup
+                    inst = lookup(ticker_clean)
+                    name = inst.name or ticker_clean
+                    asset_class = inst.asset_class or "Stock"
+                    region = inst.region
+                    currency = inst.currency or "USD"
+                except Exception:
+                    name = ticker_clean
+                    asset_class = "Stock"
+                    region = None
+                    currency = "USD"
+
+                connection.execute(
+                    """
+                    INSERT INTO holdings (
+                        portfolio_id, ticker, name, asset_class, region, currency,
+                        quantity, cost_basis_per_unit, acquired, target_weight,
+                        created_at, updated_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?)
+                    """,
+                    (
+                        portfolio_id,
+                        ticker_clean,
+                        name,
+                        asset_class,
+                        region,
+                        currency,
+                        quantity,
+                        price,
+                        executed_at,
+                        now,
+                        now,
+                    ),
+                )
+        elif order_type_clean == "SELL":
+            if row is None:
+                raise OrderValidationError(f"Cannot sell {ticker_clean}: no position in portfolio")
+            current_qty = float(row["quantity"])
+            if current_qty < quantity:
+                raise OrderValidationError(
+                    f"Cannot sell {quantity} shares of {ticker_clean}: only {current_qty} held"
+                )
+            cost_basis = float(row["cost_basis_per_unit"])
+            realized_pnl = (price - cost_basis) * quantity
+            remaining_qty = current_qty - quantity
+            if remaining_qty <= 1e-6:
+                connection.execute("DELETE FROM holdings WHERE id = ?", (row["id"],))
+            else:
+                connection.execute(
+                    """
+                    UPDATE holdings
+                    SET quantity = ?, updated_at = ?
+                    WHERE id = ?
+                    """,
+                    (remaining_qty, now, row["id"]),
+                )
+
+        cursor = connection.execute(
+            """
+            INSERT INTO transactions (
+                portfolio_id, ticker, order_type, quantity, price,
+                realized_pnl, executed_at, notes, created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                portfolio_id,
+                ticker_clean,
+                order_type_clean,
+                quantity,
+                price,
+                realized_pnl,
+                executed_at,
+                notes,
+                now,
+            ),
+        )
+        tx_id = cursor.lastrowid
+        _bump_revision(connection)
+
+        tx_row = connection.execute(
+            "SELECT id, portfolio_id, ticker, order_type, quantity, price, realized_pnl, executed_at, notes, created_at "
+            "FROM transactions WHERE id = ?",
+            (tx_id,),
+        ).fetchone()
+
+    return _transaction_row_to_dict(tx_row)
+
+
+def delete_transaction(
+    transaction_id: int,
+    settings: Settings = SETTINGS,
+    portfolio_id: int = DEFAULT_PORTFOLIO_ID,
+) -> None:
+    """Delete a recorded transaction."""
+    with connect(settings) as connection:
+        cursor = connection.execute(
+            "DELETE FROM transactions WHERE id = ? AND portfolio_id = ?",
+            (transaction_id, portfolio_id),
+        )
+        if cursor.rowcount == 0:
+            raise TransactionNotFound(f"no transaction with id {transaction_id}")
+        _bump_revision(connection)
+
+
+def get_realized_pnl_summary(
+    settings: Settings = SETTINGS, portfolio_id: int = DEFAULT_PORTFOLIO_ID
+) -> dict[str, Any]:
+    """Calculate realized P&L, win/loss stats and trade volume."""
+    with connect(settings) as connection:
+        rows = connection.execute(
+            """
+            SELECT order_type, quantity, price, realized_pnl
+            FROM transactions
+            WHERE portfolio_id = ?
+            """,
+            (portfolio_id,),
+        ).fetchall()
+
+    total_realized_pnl = sum(float(r["realized_pnl"]) for r in rows if r["order_type"] == "SELL")
+    total_buys = sum(1 for r in rows if r["order_type"] == "BUY")
+    total_sells = sum(1 for r in rows if r["order_type"] == "SELL")
+    winning_trades = sum(1 for r in rows if r["order_type"] == "SELL" and float(r["realized_pnl"]) > 0)
+    losing_trades = sum(1 for r in rows if r["order_type"] == "SELL" and float(r["realized_pnl"]) < 0)
+    total_buy_volume = sum(float(r["quantity"]) * float(r["price"]) for r in rows if r["order_type"] == "BUY")
+    total_sell_volume = sum(float(r["quantity"]) * float(r["price"]) for r in rows if r["order_type"] == "SELL")
+    win_rate_pct = (winning_trades / total_sells) if total_sells > 0 else None
+
+    return {
+        "total_realized_pnl": round(total_realized_pnl, 2),
+        "total_trades": len(rows),
+        "total_buys": total_buys,
+        "total_sells": total_sells,
+        "winning_trades": winning_trades,
+        "losing_trades": losing_trades,
+        "win_rate_pct": win_rate_pct,
+        "total_buy_volume": round(total_buy_volume, 2),
+        "total_sell_volume": round(total_sell_volume, 2),
+    }
+
+
 def seed_from_demo(settings: Settings = SETTINGS) -> int:
     """Import ``holdings.json`` once, on first boot, into an empty store.
 
@@ -824,6 +1108,12 @@ __all__ = [
     "EmptyPortfolio",
     "HoldingNotFound",
     "StoreError",
+    "TransactionNotFound",
+    "OrderValidationError",
+    "list_transactions",
+    "place_order",
+    "delete_transaction",
+    "get_realized_pnl_summary",
     "build_portfolio",
     "create_cash_flow",
     "create_holding",

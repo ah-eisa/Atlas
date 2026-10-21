@@ -208,3 +208,112 @@ def test_a_provider_outage_falls_back_to_the_last_known_prices(
     assert market.stale is True
     assert market.fetched_at == datetime(2026, 1, 1, tzinfo=timezone.utc)
     assert len(market.prices_base) > 0
+
+
+def test_place_order_buy_and_sell_with_fifo(temp_settings: Any) -> None:
+    """Placing buy and sell orders tracks positions, weighted cost and realized gains."""
+    import pytest
+    from backend.app import store
+
+    store.init_db(temp_settings)
+
+    # 1. First BUY order
+    buy1 = store.place_order(
+        {
+            "ticker": "AAPL",
+            "order_type": "BUY",
+            "quantity": 10.0,
+            "price": 100.0,
+            "executed_at": "2026-01-10",
+            "notes": "Initial batch",
+        },
+        temp_settings,
+        portfolio_id=1,
+    )
+    assert buy1["ticker"] == "AAPL"
+    assert buy1["order_type"] == "BUY"
+    assert buy1["realized_pnl"] == 0.0
+
+    holdings = store.list_holdings(temp_settings, portfolio_id=1)
+    assert len(holdings) == 1
+    assert holdings[0]["ticker"] == "AAPL"
+    assert holdings[0]["quantity"] == 10.0
+    assert holdings[0]["cost_basis_per_unit"] == 100.0
+
+    # 2. Second BUY order at higher price (rolling average cost)
+    buy2 = store.place_order(
+        {
+            "ticker": "AAPL",
+            "order_type": "BUY",
+            "quantity": 10.0,
+            "price": 200.0,
+            "executed_at": "2026-02-10",
+        },
+        temp_settings,
+        portfolio_id=1,
+    )
+    assert buy2["order_type"] == "BUY"
+
+    holdings = store.list_holdings(temp_settings, portfolio_id=1)
+    assert holdings[0]["quantity"] == 20.0
+    assert holdings[0]["cost_basis_per_unit"] == 150.0
+
+    # 3. SELL 10 shares at $250 -> gain of (250 - 150) * 10 = +1000
+    sell1 = store.place_order(
+        {
+            "ticker": "AAPL",
+            "order_type": "SELL",
+            "quantity": 10.0,
+            "price": 250.0,
+            "executed_at": "2026-03-01",
+        },
+        temp_settings,
+        portfolio_id=1,
+    )
+    assert sell1["realized_pnl"] == 1000.0
+    holdings = store.list_holdings(temp_settings, portfolio_id=1)
+    assert len(holdings) == 1
+    assert holdings[0]["quantity"] == 10.0
+    assert holdings[0]["cost_basis_per_unit"] == 150.0
+
+    # 4. SELL remaining 10 shares at $100 -> loss of (100 - 150) * 10 = -500
+    sell2 = store.place_order(
+        {
+            "ticker": "AAPL",
+            "order_type": "SELL",
+            "quantity": 10.0,
+            "price": 100.0,
+            "executed_at": "2026-03-15",
+        },
+        temp_settings,
+        portfolio_id=1,
+    )
+    assert sell2["realized_pnl"] == -500.0
+    # Position should be closed / deleted
+    holdings = store.list_holdings(temp_settings, portfolio_id=1)
+    assert len(holdings) == 0
+
+    # 5. Verify transaction history and realized P&L summary
+    txs = store.list_transactions(temp_settings, portfolio_id=1)
+    assert len(txs) == 4
+
+    summary = store.get_realized_pnl_summary(temp_settings, portfolio_id=1)
+    assert summary["total_realized_pnl"] == 500.0
+    assert summary["winning_trades"] == 1
+    assert summary["losing_trades"] == 1
+    assert summary["win_rate_pct"] == 0.5
+    assert summary["total_trades"] == 4
+
+    # 6. Selling non-existent stock raises OrderValidationError
+    with pytest.raises(store.OrderValidationError):
+        store.place_order(
+            {
+                "ticker": "TSLA",
+                "order_type": "SELL",
+                "quantity": 5.0,
+                "price": 200.0,
+                "executed_at": "2026-03-20",
+            },
+            temp_settings,
+            portfolio_id=1,
+        )

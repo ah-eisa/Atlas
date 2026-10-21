@@ -423,6 +423,42 @@ export interface CashFlow {
   created_at?: string
 }
 
+export type OrderType = 'BUY' | 'SELL'
+
+export interface Transaction {
+  id: number
+  portfolio_id: number
+  ticker: string
+  order_type: OrderType
+  quantity: number
+  price: number
+  realized_pnl: number
+  executed_at: string
+  notes: string
+  created_at: string
+}
+
+export interface OrderInput {
+  ticker: string
+  order_type: OrderType
+  quantity: number
+  price: number
+  executed_at: string
+  notes?: string
+}
+
+export interface RealizedPnlSummary {
+  total_realized_pnl: number
+  total_trades: number
+  total_buys: number
+  total_sells: number
+  winning_trades: number
+  losing_trades: number
+  win_rate_pct: number | null
+  total_buy_volume: number
+  total_sell_volume: number
+}
+
 /** Live API bootstrap payload. */
 export interface BootstrapResponse {
   api_version: string

@@ -21,11 +21,14 @@ import type {
   CashFlow,
   DataSource,
   InstrumentInfo,
+  OrderInput,
   Portfolio,
   PortfolioState,
   Position,
   PositionInput,
+  RealizedPnlSummary,
   Snapshot,
+  Transaction,
 } from './types'
 
 const DEFAULT_API_PORT = 8000
@@ -330,6 +333,31 @@ export function deletePortfolio(config: DataConfig, id: number): Promise<void> {
   return requestJson<void>(apiUrl(config, `/api/v1/portfolios/${id}`), config, {
     method: 'DELETE',
   })
+}
+
+export function listTransactions(config: DataConfig): Promise<Transaction[]> {
+  return requestJson<Transaction[]>(apiUrl(config, '/api/v1/transactions'), config, {})
+}
+
+export function placeOrder(config: DataConfig, input: OrderInput): Promise<Transaction> {
+  return requestJson<Transaction>(apiUrl(config, '/api/v1/orders'), config, {
+    method: 'POST',
+    body: JSON.stringify(input),
+  })
+}
+
+export function deleteTransaction(config: DataConfig, id: number): Promise<void> {
+  return requestJson<void>(apiUrl(config, `/api/v1/transactions/${id}`), config, {
+    method: 'DELETE',
+  })
+}
+
+export function getRealizedPnlSummary(config: DataConfig): Promise<RealizedPnlSummary> {
+  return requestJson<RealizedPnlSummary>(
+    apiUrl(config, '/api/v1/portfolio/realized-pnl'),
+    config,
+    {},
+  )
 }
 
 /** The risk before and after a proposed rebalance. */
