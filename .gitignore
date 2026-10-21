@@ -20,6 +20,14 @@ node_modules/
 frontend/dist/
 frontend/.vite/
 
+# Test output: Playwright traces, screenshots and HTML reports, plus the
+# pytest run directory when TEMP points inside the repository.
+frontend/test-results/
+frontend/playwright-report/
+frontend/blob-report/
+frontend/.playwright/
+.pytest_temp/
+
 # Environment
 .env
 .env.*

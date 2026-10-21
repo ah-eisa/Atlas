@@ -468,15 +468,17 @@ export default function App() {
   let content: React.ReactNode
   if (view === 'data') {
     content = (
-      <DataPanel
-        state={data}
-        config={config}
-        refreshing={refreshing}
-        onRefresh={() => void refresh()}
-        onReload={reload}
-        onApiKey={setApiKey}
-        onPortfolio={setPortfolio}
-      />
+      <main className="app__main">
+        <DataPanel
+          state={data}
+          config={config}
+          refreshing={refreshing}
+          onRefresh={() => void refresh()}
+          onReload={reload}
+          onApiKey={setApiKey}
+          onPortfolio={setPortfolio}
+        />
+      </main>
     )
   } else if (!analytics && view === 'holdings') {
     content = (

@@ -25,11 +25,13 @@ export function AnimatedNumber({ value, format, delay = 0, className }: Animated
 
   return (
     <span className={className ? `counter ${className}` : 'counter'}>
-      {/* Reserves the final width; hidden from assistive tech and from view. */}
-      <span className="counter__reserve" aria-hidden="true">
-        {format(value)}
+      {/* Reserves the final width; hidden from view but not from assistive
+          technology, so the figure is announced once, at its true value,
+          rather than counted up from zero. */}
+      <span className="counter__reserve">{format(value)}</span>
+      <span className="counter__value" aria-hidden="true">
+        {format(animated)}
       </span>
-      <span className="counter__value">{format(animated)}</span>
     </span>
   )
 }

@@ -268,8 +268,13 @@ body {
   grid-area: 1 / 1;
 }
 
+/* The final figure reserves the width but is not painted: it is made
+   transparent rather than hidden, so it keeps its place in the layout and
+   stays in the accessibility tree. A screen reader therefore announces the
+   true value once instead of counting it up from zero, while the animated
+   copy on top of it is the one that is painted. */
 .counter__reserve {
-  visibility: hidden;
+  color: transparent;
 }
 
 /* Right-aligned contexts keep the digits pinned to the right edge. */

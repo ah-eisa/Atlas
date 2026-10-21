@@ -9,7 +9,7 @@ PY     := $(VENV)/bin/python
 PIP    := $(VENV)/bin/pip
 
 .DEFAULT_GOAL := help
-.PHONY: help setup holdings holdings-csv snapshot api dev build test lint clean
+.PHONY: help setup holdings holdings-csv snapshot api dev build test test-frontend test-e2e lint docker clean
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) \
@@ -44,6 +44,12 @@ build: ## Produce a static build in frontend/dist
 
 test: ## Run the backend test suite
 	$(PY) -m pytest
+
+test-frontend: ## Run the frontend unit tests
+	cd frontend && npm run test
+
+test-e2e: ## Build the app and run the browser smoke suite
+	cd frontend && npm run test:e2e
 
 lint: ## Lint the frontend
 	cd frontend && npx oxlint src

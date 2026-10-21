@@ -84,6 +84,10 @@ export function TimeSeriesChart({
   const hostRef = useRef<HTMLDivElement | null>(null)
   const chartRef = useRef<IChartApi | null>(null)
   const seriesRef = useRef(new Map<string, ISeriesApi<'Line'>>())
+  // Set when the chart is torn down. Effects clean up in definition order, so
+  // the chart is already gone by the time the series and price-line cleanups
+  // run; touching a disposed instance throws "Object is disposed".
+  const disposedRef = useRef(false)
 
   // Reveal runs at most once per mounted chart.
   const revealDoneRef = useRef(!revealOnMount || prefersReducedMotion())
@@ -106,7 +110,10 @@ export function TimeSeriesChart({
   const chartOptions = (): DeepPartial<TimeChartOptions> => {
     const theme = chartTheme()
     return {
-      autoSize: true,
+      // The size is owned by this component, not by the library: its own
+      // `autoSize` observer can deliver a resize after the chart has been
+      // removed, which throws "Object is disposed" during a view change.
+      autoSize: false,
       layout: {
         background: { color: 'transparent' },
         textColor: theme.textTertiary,
@@ -160,7 +167,23 @@ export function TimeSeriesChart({
     // Captured here so the cleanup closes over the same Map instance rather
     // than reading `.current` after unmount.
     const seriesMap = seriesRef.current
-    const chart = createChart(host, chartOptions())
+    const chart = createChart(host, {
+      ...chartOptions(),
+      width: Math.max(host.clientWidth, 1),
+      height: Math.max(host.clientHeight, 1),
+    })
+    disposedRef.current = false
+
+    // Track the container ourselves. The callback is guarded, so a resize that
+    // is already queued when the view changes is dropped rather than applied
+    // to a disposed chart.
+    const observer = new ResizeObserver((entries) => {
+      const entry = entries[entries.length - 1]
+      if (!entry || disposedRef.current) return
+      const { width, height } = entry.contentRect
+      if (width > 0 && height > 0) chart.applyOptions({ width, height })
+    })
+    observer.observe(host)
 
     chart.subscribeCrosshairMove((params: MouseEventParams<Time>) => {
       const report = crosshairRef.current
@@ -181,6 +204,10 @@ export function TimeSeriesChart({
 
     chartRef.current = chart
     return () => {
+      // Mark first: the cleanups below run after this one and must not touch
+      // a disposed chart.
+      disposedRef.current = true
+      observer.disconnect()
       chart.remove()
       chartRef.current = null
       seriesMap.clear()
@@ -269,6 +296,7 @@ export function TimeSeriesChart({
 
     const start = performance.now()
     const step = (now: number) => {
+      if (disposedRef.current) return
       const t = Math.min((now - start) / MOTION.plot, 1)
       const drawn = Math.max(2, Math.floor(easeOutSine(t) * longest))
 
@@ -318,6 +346,7 @@ export function TimeSeriesChart({
       title: '',
     })
     return () => {
+      if (disposedRef.current) return
       first.removePriceLine(line)
     }
   }, [series, baselineValue])

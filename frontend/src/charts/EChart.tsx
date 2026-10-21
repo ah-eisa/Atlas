@@ -63,6 +63,15 @@ export function EChart({ option, height, fill, ariaLabel, className }: EChartPro
 
     return () => {
       observer.disconnect()
+      // Stop the render loop before disposing. An animation frame that
+      // lands after the instance is gone throws "Object is disposed", which
+      // surfaces as an unhandled error when a view is changed while its
+      // charts are still animating.
+      try {
+        chart.getZr().animation.stop()
+      } catch {
+        // A chart that never initialised has no renderer to stop.
+      }
       chart.dispose()
       chartRef.current = null
     }
