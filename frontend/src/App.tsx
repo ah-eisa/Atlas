@@ -10,13 +10,15 @@
 
 import { lazy, Suspense, useState } from 'react'
 
+import { NewPortfolioModal } from './components/NewPortfolioModal'
+import { PositionModal } from './components/PositionModal'
 import { TopBar } from './components/TopBar'
-import { ApiError, type DataConfig } from './lib/api'
+import { ApiError, deletePosition, type DataConfig } from './lib/api'
 import { formatDate, formatTimestamp } from './lib/format'
 import { useTheme } from './lib/theme'
 import { useHashRoute, type ViewKey } from './lib/useHashRoute'
 import { usePortfolio } from './lib/usePortfolio'
-import type { PortfolioState } from './lib/types'
+import type { DataSource, PortfolioState, Position } from './lib/types'
 
 // Views are code-split: the shell and the KPI band render without waiting for
 // a view's panels and, more importantly, without waiting for the charting
@@ -35,6 +37,10 @@ function Shell({
   config,
   refreshing,
   onRefresh,
+  onSelectPortfolio,
+  onCreatePortfolio,
+  onAddPosition,
+  onSwitchSource,
   children,
 }: {
   state: PortfolioState | null
@@ -42,12 +48,14 @@ function Shell({
   config: ReturnType<typeof usePortfolio>['config']
   refreshing: boolean
   onRefresh: () => void
+  onSelectPortfolio?: (id: number) => void
+  onCreatePortfolio?: () => void
+  onAddPosition?: () => void
+  onSwitchSource?: (source: DataSource) => void
   children: React.ReactNode
 }) {
   const summary = state?.analytics?.summary ?? null
   const health = state?.analytics?.health ?? null
-  // Subscribing here makes the whole shell re-render when the theme changes,
-  // which is what lets the panels rebuild their chart palettes.
   const { theme } = useTheme()
   const portfolioName =
     state?.source === 'api'
@@ -66,11 +74,18 @@ function Shell({
         refreshing={refreshing}
         onRefresh={onRefresh}
         portfolioName={portfolioName}
+        portfolios={state?.portfolios}
+        activePortfolioId={state?.portfolioId}
+        onSelectPortfolio={onSelectPortfolio}
+        onCreatePortfolio={onCreatePortfolio}
+        onAddPosition={onAddPosition}
+        onSwitchSource={onSwitchSource}
+        editable={state?.editable ?? false}
       />
       {children}
       <footer className="footer">
         <span>
-          {state?.source === 'snapshot' ? 'Demo portfolio' : 'Self-hosted portfolio'} · not
+          {state?.source === 'snapshot' ? 'Demo portfolio (Snapshot)' : 'Self-hosted portfolio'} · not
           investment advice · market data via Yahoo Finance
         </span>
         <span>
@@ -102,16 +117,14 @@ function ErrorState({
   config,
   onRetry,
   onApiKey,
+  onSwitchSource,
 }: {
   error: Error
   config: ReturnType<typeof usePortfolio>['config']
   onRetry: () => void
   onApiKey: (key: string) => void
+  onSwitchSource?: (source: DataSource) => void
 }) {
-  // A rejected key is a different problem from an unreachable server, and the
-  // remedy is different too: one needs a credential, the other needs a
-  // running process. Collapsing both into "connection error" sends people
-  // looking in the wrong place.
   const unauthorised = error instanceof ApiError && (error.status === 401 || error.status === 403)
   const [key, setKey] = useState('')
 
@@ -124,7 +137,7 @@ function ErrorState({
         <span className="state__title">
           {unauthorised
             ? 'This API needs a valid key'
-            : 'Unable to load the portfolio'}
+            : 'Unable to connect to the portfolio API'}
         </span>
         <p className="state__detail">{error.message}</p>
 
@@ -158,41 +171,55 @@ function ErrorState({
             <button type="button" className="button button--primary" onClick={onRetry}>
               Retry
             </button>
-            <a className="button" href="?source=api#/data">
-              Try live API
-            </a>
-            <a className="text-button" href="?source=snapshot#/data">
-              Use demo snapshot
-            </a>
+            <button
+              type="button"
+              className="button"
+              onClick={() => onSwitchSource?.('snapshot')}
+            >
+              Open Demo Snapshot Mode
+            </button>
           </div>
         )}
 
         <p className="state__detail state__detail--muted">
-          Snapshot mode reads <code>snapshot.json</code> beside the application. API mode
-          expects the FastAPI service on <code>{config.apiBaseUrl}</code>.
+          Snapshot mode reads <code>snapshot.json</code> demo. Live API mode
+          expects the FastAPI backend service running at <code>{config.apiBaseUrl}</code>.
         </p>
       </div>
     </main>
   )
 }
 
-function AnalyticsUnavailable({ state, onRetry }: { state: PortfolioState; onRetry: () => void }) {
+function AnalyticsUnavailable({
+  state,
+  onRetry,
+  onAddPosition,
+}: {
+  state: PortfolioState
+  onRetry: () => void
+  onAddPosition?: () => void
+}) {
   return (
     <main className="app__main">
       <div className="state">
-        <span className="state__kicker">Analytics unavailable</span>
+        <span className="state__kicker">Empty Portfolio</span>
         <span className="state__title">
-          {state.positions.length === 0 ? 'No positions yet' : 'Could not build the model'}
+          {state.positions.length === 0 ? 'No positions added yet' : 'Could not build the model'}
         </span>
         <p className="state__detail">
           {state.error ??
-            'Add a position to create the first portfolio, then the analytics will build from its acquisition date.'}
+            'Add your first investment asset to start monitoring valuations, risk distribution and returns.'}
         </p>
         <div className="state__actions">
-          <a className="button button--primary" href="#/holdings">
-            Open holdings
+          {onAddPosition && state.editable && (
+            <button type="button" className="button button--primary" onClick={onAddPosition}>
+              + Add First Position
+            </button>
+          )}
+          <a className="button" href="#/holdings">
+            Open Holdings
           </a>
-          <button type="button" className="button" onClick={onRetry}>
+          <button type="button" className="button button--quiet" onClick={onRetry}>
             Retry
           </button>
         </div>
@@ -254,6 +281,10 @@ function ViewContent({
   onRefresh,
   onApiKey,
   onPortfolio,
+  onAddPosition,
+  onEditPosition,
+  onDeletePosition,
+  onSwitchSource,
 }: {
   state: PortfolioState
   view: ViewKey
@@ -263,6 +294,10 @@ function ViewContent({
   onRefresh: () => void
   onApiKey: (key: string) => void
   onPortfolio: (id: number) => void
+  onAddPosition?: () => void
+  onEditPosition?: (position: Position) => void
+  onDeletePosition?: (id: number) => Promise<void>
+  onSwitchSource?: (source: DataSource) => void
 }) {
   if (view === 'data') {
     return (
@@ -278,9 +313,6 @@ function ViewContent({
     )
   }
 
-  // Holdings is reachable with no analytics at all: an empty live portfolio
-  // still needs its editor, and a pricing failure must not hide the positions
-  // that are already stored.
   if (view === 'holdings') {
     return (
       <HoldingsView
@@ -288,15 +320,22 @@ function ViewContent({
         config={config}
         onReload={onReload}
         onApiKey={onApiKey}
+        onAddPosition={onAddPosition}
+        onEditPosition={onEditPosition}
+        onDeletePosition={onDeletePosition}
+        onSwitchSource={onSwitchSource}
       />
     )
   }
 
-  // A live API can bootstrap successfully with no analytics (empty portfolio
-  // or an upstream data failure). Keep the shell reachable instead of showing
-  // an unrecoverable error page.
   if (!state.analytics) {
-    return <AnalyticsUnavailable state={state} onRetry={onReload} />
+    return (
+      <AnalyticsUnavailable
+        state={state}
+        onRetry={onReload}
+        onAddPosition={onAddPosition}
+      />
+    )
   }
 
   switch (view) {
@@ -309,14 +348,63 @@ function ViewContent({
     case 'projection':
       return <ProjectionView state={state} />
     default:
-      return <AnalyticsUnavailable state={state} onRetry={onReload} />
+      return (
+        <AnalyticsUnavailable
+          state={state}
+          onRetry={onReload}
+          onAddPosition={onAddPosition}
+        />
+      )
   }
 }
 
 export default function App() {
   const [view] = useHashRoute()
-  const { data, error, loading, refreshing, config, reload, refresh, setApiKey, setPortfolio, clearError } =
-    usePortfolio()
+  const {
+    data,
+    error,
+    loading,
+    refreshing,
+    config,
+    reload,
+    refresh,
+    setApiKey,
+    setSource,
+    setPortfolio,
+    createPortfolioAndSelect,
+    clearError,
+  } = usePortfolio()
+
+  const [isNewPortfolioOpen, setIsNewPortfolioOpen] = useState(false)
+  const [positionModal, setPositionModal] = useState<{
+    isOpen: boolean
+    position: Position | null
+  }>({
+    isOpen: false,
+    position: null,
+  })
+
+  const handleOpenAddPosition = () => {
+    setPositionModal({ isOpen: true, position: null })
+  }
+
+  const handleOpenEditPosition = (pos: Position) => {
+    setPositionModal({ isOpen: true, position: pos })
+  }
+
+  const handleClosePositionModal = () => {
+    setPositionModal({ isOpen: false, position: null })
+  }
+
+  const handleCreatePortfolio = async (name: string, baseCurrency: string) => {
+    await createPortfolioAndSelect(name, baseCurrency)
+    reload()
+  }
+
+  const handleDeletePosition = async (id: number) => {
+    await deletePosition(config, id)
+    reload()
+  }
 
   if (loading && !data) {
     return (
@@ -326,6 +414,7 @@ export default function App() {
         config={config}
         refreshing={refreshing}
         onRefresh={reload}
+        onSwitchSource={setSource}
       >
         <LoadingState />
       </Shell>
@@ -340,19 +429,19 @@ export default function App() {
         config={config}
         refreshing={refreshing}
         onRefresh={reload}
+        onSwitchSource={setSource}
       >
         <ErrorState
           error={error ?? new Error('The API returned no data.')}
           config={config}
           onRetry={reload}
           onApiKey={setApiKey}
+          onSwitchSource={setSource}
         />
       </Shell>
     )
   }
 
-  // Views are resolved lazily; the fallback is a panel-shaped skeleton so the
-  // page does not jump when a chunk arrives.
   const content = (
     <Suspense fallback={<ViewLoading />}>
       <ViewContent
@@ -364,6 +453,10 @@ export default function App() {
         onRefresh={() => void refresh()}
         onApiKey={setApiKey}
         onPortfolio={setPortfolio}
+        onAddPosition={handleOpenAddPosition}
+        onEditPosition={handleOpenEditPosition}
+        onDeletePosition={handleDeletePosition}
+        onSwitchSource={setSource}
       />
     </Suspense>
   )
@@ -375,9 +468,29 @@ export default function App() {
       config={config}
       refreshing={refreshing}
       onRefresh={() => void refresh()}
+      onSelectPortfolio={setPortfolio}
+      onCreatePortfolio={() => setIsNewPortfolioOpen(true)}
+      onAddPosition={handleOpenAddPosition}
+      onSwitchSource={setSource}
     >
       <WarningStrip state={data} error={error} onClearError={clearError} />
       {content}
+
+      <NewPortfolioModal
+        isOpen={isNewPortfolioOpen}
+        onClose={() => setIsNewPortfolioOpen(false)}
+        onSubmit={handleCreatePortfolio}
+      />
+
+      <PositionModal
+        isOpen={positionModal.isOpen}
+        position={positionModal.position}
+        config={config}
+        baseCurrency={data.baseCurrency || 'USD'}
+        onClose={handleClosePositionModal}
+        onSaved={reload}
+        onDelete={handleDeletePosition}
+      />
     </Shell>
   )
 }

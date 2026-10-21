@@ -2,19 +2,27 @@
  * Application chrome: wordmark, primary navigation, data controls, and the
  * headline portfolio readout.
  *
- * The header is deliberately two-tier. The chrome row (brand / navigation /
- * actions) stays fixed in function across every view, while the masthead row
- * carries the portfolio identity and is allowed to disappear when there is no
- * analytics payload yet. That keeps the navigation usable in an empty state
- * instead of replacing the whole application with a spinner.
+ * Enhanced with:
+ *   - Direct Portfolio Switcher & "+ New Portfolio" action
+ *   - 1-click Live API / Demo Snapshot toggle
+ *   - Quick "+ Add Position" button accessible from any view
+ *   - Real-time Market Ticker banner (S&P 500, NASDAQ, BTC, Gold, 10Y Yield)
  */
 
-import { formatDate, formatMoneyCompact, formatMoneySigned, formatPercentSigned, formatTimestamp, signClass } from '../lib/format'
+import {
+  formatDate,
+  formatMoneyCompact,
+  formatMoneySigned,
+  formatPercentSigned,
+  formatTimestamp,
+  signClass,
+} from '../lib/format'
 import type { DataConfig } from '../lib/api'
 import { useTheme } from '../lib/theme'
-import type { Health, SummaryPayload } from '../lib/types'
+import type { DataSource, Health, Portfolio, SummaryPayload } from '../lib/types'
 import type { ViewKey } from '../lib/useHashRoute'
 import { AnimatedNumber } from './AnimatedNumber'
+import { MarketTickerBar } from './MarketTickerBar'
 import { Sparkline } from './Sparkline'
 
 interface ViewDefinition {
@@ -44,6 +52,13 @@ interface TopBarProps {
   onRefresh: () => void
   /** Name of the active portfolio, in live mode. */
   portfolioName?: string
+  portfolios?: Portfolio[]
+  activePortfolioId?: number
+  onSelectPortfolio?: (id: number) => void
+  onCreatePortfolio?: () => void
+  onAddPosition?: () => void
+  onSwitchSource?: (source: DataSource) => void
+  editable?: boolean
 }
 
 interface DeltaProps {
@@ -74,9 +89,6 @@ function Delta({ label, absolute, percent, delay }: DeltaProps) {
 
 /**
  * Sun / moon glyph for the theme switch.
- *
- * The icon shows the theme that will be applied by pressing it, which is the
- * convention that avoids a toggle that appears to do nothing.
  */
 function ThemeIcon({ theme }: { theme: 'dark' | 'light' }) {
   if (theme === 'dark') {
@@ -116,6 +128,13 @@ export function TopBar({
   refreshing,
   onRefresh,
   portfolioName,
+  portfolios = [],
+  activePortfolioId,
+  onSelectPortfolio,
+  onCreatePortfolio,
+  onAddPosition,
+  onSwitchSource,
+  editable = false,
 }: TopBarProps) {
   const live = config.source === 'api'
   const analyticsReady = summary !== null
@@ -123,11 +142,44 @@ export function TopBar({
 
   return (
     <header className={analyticsReady ? 'topbar' : 'topbar topbar--compact'}>
+      <MarketTickerBar />
+
       <div className="topbar__chrome">
-        <a className="topbar__brand" href="#/overview" aria-label="Atlas portfolio analytics home">
-          <span className="topbar__wordmark">ATLAS</span>
-          <span className="topbar__product">Portfolio intelligence</span>
-        </a>
+        <div className="topbar__brand-group">
+          <a className="topbar__brand" href="#/overview" aria-label="Atlas portfolio analytics home">
+            <span className="topbar__wordmark">ATLAS</span>
+            <span className="topbar__product">Terminal</span>
+          </a>
+
+          {live && portfolios.length > 0 && onSelectPortfolio && (
+            <div className="portfolio-select-pill">
+              <span className="portfolio-select-label">BOOK:</span>
+              <select
+                className="portfolio-select"
+                value={activePortfolioId}
+                onChange={(e) => onSelectPortfolio(Number(e.target.value))}
+                title="Switch active portfolio"
+              >
+                {portfolios.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name} ({p.base_currency})
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          {live && onCreatePortfolio && (
+            <button
+              type="button"
+              className="button button--quiet button--mini topbar__new-portfolio-btn"
+              onClick={onCreatePortfolio}
+              title="Create a new portfolio"
+            >
+              + New
+            </button>
+          )}
+        </div>
 
         <nav className="nav" aria-label="Primary">
           {VIEWS.map((item) => {
@@ -162,7 +214,27 @@ export function TopBar({
         </nav>
 
         <div className="topbar__actions">
-          <a className="topbar__source" href="#/data" title="Data source and settings">
+          {editable && onAddPosition && (
+            <button
+              type="button"
+              className="button button--primary button--sm"
+              onClick={onAddPosition}
+              title="Add a position to current portfolio"
+            >
+              + Add Position
+            </button>
+          )}
+
+          <button
+            type="button"
+            className="topbar__source topbar__source--btn"
+            onClick={() => onSwitchSource?.(live ? 'snapshot' : 'api')}
+            title={
+              live
+                ? 'Running live against API. Click to switch to Demo Snapshot.'
+                : 'Running Demo snapshot. Click to switch to Live API mode.'
+            }
+          >
             <span
               className={
                 live
@@ -170,8 +242,12 @@ export function TopBar({
                   : 'topbar__source-dot topbar__source-dot--snapshot'
               }
             />
-            {live ? 'Live API' : 'Demo snapshot'}
-          </a>
+            <span>{live ? 'Live API' : 'Demo snapshot'}</span>
+            <span className="topbar__source-toggle-hint" aria-hidden="true">
+              ⇄
+            </span>
+          </button>
+
           <button
             type="button"
             className="button button--quiet topbar__theme"
@@ -181,6 +257,7 @@ export function TopBar({
           >
             <ThemeIcon theme={theme} />
           </button>
+
           <button
             type="button"
             className="button button--quiet"
@@ -248,27 +325,19 @@ export function TopBar({
                 Base <span className="topbar__meta-value num">{baseCurrency}</span>
               </span>
               <span>
-                As of <span className="topbar__meta-value num">{formatDate(summary.as_of)}</span>
+                As of{' '}
+                <span className="topbar__meta-value num">{formatDate(summary.as_of)}</span>
               </span>
               <span>
-                Built{' '}
+                Prices{' '}
                 <span className="topbar__meta-value num">
-                  {formatTimestamp(summary.generated_at)}
+                  {formatTimestamp(health?.prices_fetched_at ?? summary.generated_at)}
                 </span>
               </span>
             </div>
           </div>
         </div>
-      ) : (
-        <div className="topbar__empty">
-          <span className="eyebrow">No analytics yet</span>
-          <span>
-            {live
-              ? 'Add a position in Holdings to build the portfolio analytics.'
-              : 'This snapshot contains no usable analytics. Open the API source to create a portfolio.'}
-          </span>
-        </div>
-      )}
+      ) : null}
     </header>
   )
 }

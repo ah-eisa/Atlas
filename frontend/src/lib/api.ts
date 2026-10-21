@@ -326,6 +326,12 @@ export function createPortfolio(
   })
 }
 
+export function deletePortfolio(config: DataConfig, id: number): Promise<void> {
+  return requestJson<void>(apiUrl(config, `/api/v1/portfolios/${id}`), config, {
+    method: 'DELETE',
+  })
+}
+
 /** The risk before and after a proposed rebalance. */
 export interface WhatIfResult {
   trades: {

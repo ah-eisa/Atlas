@@ -10,56 +10,133 @@ import { HoldingsPanel } from '../components/HoldingsPanel'
 import { Panel } from '../components/Panel'
 import { PortfolioEditor } from '../components/PortfolioEditor'
 import type { DataConfig } from '../lib/api'
-import type { PortfolioState } from '../lib/types'
+import type { Holding, PortfolioState, Position } from '../lib/types'
 
 interface HoldingsViewProps {
   state: PortfolioState
   config: DataConfig
   onReload: () => void
   onApiKey: (key: string) => void
+  onAddPosition?: () => void
+  onEditPosition?: (position: Position) => void
+  onDeletePosition?: (id: number) => Promise<void>
+  onSwitchSource?: (source: 'api' | 'snapshot') => void
 }
 
-function SnapshotNotice() {
+function SnapshotNotice({ onSwitchSource }: { onSwitchSource?: (source: 'api' | 'snapshot') => void }) {
   return (
     <Panel title="Editing" subtitle="snapshot mode is read-only">
       <div className="snapshot-note">
         <p>
-          This view is running from the committed <code>snapshot.json</code>. Positions can
-          be inspected but not changed, because a static file has no database behind it.
+          This view is running from the committed <code>snapshot.json</code> demo. Positions can
+          be inspected but not changed, because a static snapshot has no writable database.
         </p>
         <p>
-          Start the FastAPI service and switch the data source to add positions, refresh
-          prices, set the reporting currency, and export the stored portfolio.
+          Switch to <strong>Live API</strong> mode to create multiple portfolios, add or edit positions,
+          and track real-time valuations.
         </p>
-        <a className="button button--primary" href="?source=api#/holdings">
-          Open live API
-        </a>
+        {onSwitchSource ? (
+          <button
+            type="button"
+            className="button button--primary"
+            onClick={() => onSwitchSource('api')}
+          >
+            Switch to Live API
+          </button>
+        ) : (
+          <a className="button button--primary" href="?source=api#/holdings">
+            Open live API
+          </a>
+        )}
       </div>
     </Panel>
   )
 }
 
-export default function HoldingsView({ state, config, onReload, onApiKey }: HoldingsViewProps) {
+export default function HoldingsView({
+  state,
+  config,
+  onReload,
+  onApiKey,
+  onAddPosition,
+  onEditPosition,
+  onDeletePosition,
+  onSwitchSource,
+}: HoldingsViewProps) {
   const analytics = state.analytics
   const apiKeyRequired = state.settings?.api_key_required ?? false
+
+  const handleEditHolding = (holding: Holding) => {
+    const pos = state.positions.find(
+      (p) => p.ticker.toUpperCase() === holding.ticker.toUpperCase(),
+    )
+    if (pos && onEditPosition) {
+      onEditPosition(pos)
+    }
+  }
+
+  const handleDeleteHolding = async (holding: Holding) => {
+    const pos = state.positions.find(
+      (p) => p.ticker.toUpperCase() === holding.ticker.toUpperCase(),
+    )
+    if (pos && onDeletePosition) {
+      await onDeletePosition(pos.id)
+    }
+  }
 
   if (!analytics) {
     return (
       <main className="app__main">
-        <Panel title="Holdings" subtitle={`${state.positions.length} stored positions`}>
+        <Panel
+          title="Holdings"
+          subtitle={`${state.positions.length} stored positions`}
+          actions={
+            state.editable && onAddPosition ? (
+              <button
+                type="button"
+                className="button button--primary"
+                onClick={onAddPosition}
+              >
+                + Add Position
+              </button>
+            ) : undefined
+          }
+        >
           <div className="state state--inline">
             <span className="state__kicker">
               {state.positions.length === 0 ? 'Empty portfolio' : 'Pricing unavailable'}
             </span>
             <span className="state__title">
               {state.positions.length === 0
-                ? 'Add the first position to build the portfolio'
+                ? 'Add your first position to build and monitor the portfolio'
                 : 'Positions are stored, but market data could not be loaded'}
             </span>
             <p className="state__detail">
               {state.error ??
-                'The editor is ready. Analytics will appear once the portfolio has at least one position and prices can be fetched.'}
+                'The editor is ready. Analytics and charts will appear once the portfolio has at least one position and prices are fetched.'}
             </p>
+            {state.positions.length === 0 && state.editable && onAddPosition && (
+              <div style={{ marginTop: 'var(--space-4)' }}>
+                <button
+                  type="button"
+                  className="button button--primary"
+                  onClick={onAddPosition}
+                >
+                  + Add First Position
+                </button>
+              </div>
+            )}
+            {!state.editable && (
+              <div style={{ marginTop: 'var(--space-4)' }}>
+                <button
+                  type="button"
+                  className="button button--primary"
+                  onClick={() => onSwitchSource?.('api')}
+                >
+                  Switch to Live API to Build Portfolio
+                </button>
+              </div>
+            )}
           </div>
         </Panel>
         {state.editable ? (
@@ -85,6 +162,10 @@ export default function HoldingsView({ state, config, onReload, onApiKey }: Hold
         holdings={holdings.holdings}
         totalValue={holdings.total_value}
         currency={currency}
+        editable={state.editable}
+        onAddPosition={onAddPosition}
+        onEditHolding={handleEditHolding}
+        onDeleteHolding={handleDeleteHolding}
       />
       <AllocationPanel
         byClass={summary.allocation_by_class}
@@ -102,7 +183,7 @@ export default function HoldingsView({ state, config, onReload, onApiKey }: Hold
           onApiKey={onApiKey}
         />
       ) : (
-        <SnapshotNotice />
+        <SnapshotNotice onSwitchSource={onSwitchSource} />
       )}
       {state.editable ? (
         <CashFlowEditor

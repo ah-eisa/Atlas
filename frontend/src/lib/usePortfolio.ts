@@ -6,6 +6,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import {
+  createPortfolio,
+  deletePortfolio,
   loadPortfolio,
   refreshPortfolio,
   resolveConfig,
@@ -13,7 +15,7 @@ import {
   setStoredPortfolioId,
   type DataConfig,
 } from './api'
-import type { PortfolioState } from './types'
+import type { DataSource, Portfolio, PortfolioState } from './types'
 
 export interface PortfolioController {
   data: PortfolioState | null
@@ -24,8 +26,11 @@ export interface PortfolioController {
   reload: () => void
   refresh: () => Promise<void>
   setApiKey: (key: string) => void
+  setSource: (source: DataSource) => void
   /** Switch to another portfolio and reload everything for it. */
   setPortfolio: (id: number) => void
+  createPortfolioAndSelect: (name: string, baseCurrency: string) => Promise<Portfolio>
+  deletePortfolioAndSelect: (id: number) => Promise<void>
   clearError: () => void
 }
 
@@ -93,6 +98,34 @@ export function usePortfolio(): PortfolioController {
     setConfig((current) => ({ ...current, portfolioId: id }))
   }, [])
 
+  const setSource = useCallback((source: DataSource) => {
+    setConfig((current) => ({ ...current, source }))
+    if (typeof window !== 'undefined') {
+      const url = new URL(window.location.href)
+      url.searchParams.set('source', source)
+      window.history.replaceState({}, '', url.toString())
+    }
+  }, [])
+
+  const createPortfolioAndSelect = useCallback(
+    async (name: string, baseCurrency: string) => {
+      const created = await createPortfolio(config, name, baseCurrency)
+      setPortfolio(created.id)
+      return created
+    },
+    [config, setPortfolio],
+  )
+
+  const deletePortfolioAndSelect = useCallback(
+    async (id: number) => {
+      await deletePortfolio(config, id)
+      const remaining = data?.portfolios.filter((p) => p.id !== id) ?? []
+      const nextId = remaining[0]?.id ?? 1
+      setPortfolio(nextId)
+    },
+    [config, data, setPortfolio],
+  )
+
   const clearError = useCallback(() => setError(null), [])
 
   return useMemo(
@@ -105,9 +138,26 @@ export function usePortfolio(): PortfolioController {
       reload,
       refresh,
       setApiKey,
+      setSource,
       setPortfolio,
+      createPortfolioAndSelect,
+      deletePortfolioAndSelect,
       clearError,
     }),
-    [data, error, loading, refreshing, config, reload, refresh, setApiKey, setPortfolio, clearError],
+    [
+      data,
+      error,
+      loading,
+      refreshing,
+      config,
+      reload,
+      refresh,
+      setApiKey,
+      setSource,
+      setPortfolio,
+      createPortfolioAndSelect,
+      deletePortfolioAndSelect,
+      clearError,
+    ],
   )
 }

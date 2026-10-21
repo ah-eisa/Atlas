@@ -1,9 +1,8 @@
 /**
  * Dense, sortable holdings grid built on TanStack Table.
  *
- * Only the features the grid actually uses are registered (core + row
- * sorting), which is TanStack v9's model for keeping the runtime small. Every
- * numeric cell is monospaced with tabular figures so columns align exactly.
+ * Enhanced with instant search/filter, quick "+ Add Position" action, and
+ * inline Edit & Delete actions for each holding in live editable mode.
  */
 
 import {
@@ -16,7 +15,7 @@ import {
   tableFeatures,
   useTable,
 } from '@tanstack/react-table'
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 
 import {
   formatDate,
@@ -59,129 +58,189 @@ function SortCaret({ direction }: { direction: false | 'asc' | 'desc' }) {
   )
 }
 
-// `helper.columns([...])` (rather than a bare array) preserves each column's
-// own value type through the tuple, which a plain array would widen away.
-const columns = column.columns([
-  column.accessor('ticker', {
-    header: 'Ticker',
-    sortFn: 'text',
-    cell: (info) => <span className="num grid__ticker">{info.getValue()}</span>,
-  }),
-  column.accessor('name', {
-    header: 'Name',
-    sortFn: 'text',
-    cell: (info) => <span className="grid__name">{info.getValue()}</span>,
-  }),
-  column.accessor('asset_class', {
-    header: 'Class',
-    sortFn: 'text',
-    cell: (info) => <span className="grid__tag">{info.getValue()}</span>,
-  }),
-  column.accessor('region', {
-    header: 'Region',
-    sortFn: 'text',
-    cell: (info) => <span className="grid__tag">{info.getValue()}</span>,
-  }),
-  column.accessor('acquired', {
-    header: 'Acquired',
-    sortFn: 'text',
-    cell: (info) => <span className="num grid__date">{formatDate(info.getValue())}</span>,
-  }),
-  column.accessor('quantity', {
-    header: 'Quantity',
-    sortFn: 'basic',
-    meta: { align: 'right' },
-    cell: (info) => <Num>{formatQuantity(info.getValue())}</Num>,
-  }),
-  column.accessor('price_base', {
-    header: 'Price',
-    sortFn: 'basic',
-    meta: { align: 'right' },
-    cell: (info) => {
-      const holding = info.row.original
-      // Native price is shown on hover for instruments not quoted in the base
-      // currency, so the FX conversion stays inspectable.
-      const title =
-        holding.currency === 'EUR'
-          ? undefined
-          : `${formatPrice(holding.price_native, holding.currency)} native`
-      return (
-        <span className="num" title={title}>
-          {formatMoney(info.getValue())}
-        </span>
-      )
-    },
-  }),
-  column.accessor('value_base', {
-    header: 'Value',
-    sortFn: 'basic',
-    meta: { align: 'right' },
-    cell: (info) => <Num tone="grid__strong">{formatMoney(info.getValue())}</Num>,
-  }),
-  column.accessor('allocation_pct', {
-    header: 'Weight',
-    sortFn: 'basic',
-    meta: { align: 'right' },
-    cell: (info) => {
-      const weight = info.getValue()
-      // Scaled so the largest position fills the cell, making the bars a true
-      // proportional comparison rather than an arbitrary multiple.
-      const heaviest = info.table.options.data.reduce(
-        (max, holding) => Math.max(max, holding.allocation_pct),
-        0,
-      )
-      const share = heaviest > 0 ? (weight / heaviest) * 100 : 0
-      return (
-        <span className="grid__weight">
-          <span className="num">{formatPercent(weight, 1)}</span>
-          <span className="grid__weight-bar" style={{ width: `${share}%` }} />
-        </span>
-      )
-    },
-  }),
-  column.accessor('unrealized_pnl', {
-    header: 'Unreal. P&L',
-    sortFn: 'basic',
-    meta: { align: 'right' },
-    cell: (info) => <Num tone={signClass(info.getValue())}>{formatMoneySigned(info.getValue())}</Num>,
-  }),
-  column.accessor('unrealized_pnl_pct', {
-    header: 'P&L %',
-    sortFn: 'basic',
-    meta: { align: 'right' },
-    cell: (info) => <Num tone={signClass(info.getValue())}>{formatPercentSigned(info.getValue())}</Num>,
-  }),
-  column.accessor('day_change_pct', {
-    header: 'Day',
-    sortFn: 'basic',
-    meta: { align: 'right' },
-    cell: (info) => <Num tone={signClass(info.getValue())}>{formatPercentSigned(info.getValue())}</Num>,
-  }),
-  column.display({
-    id: 'sparkline',
-    header: '90D',
-    cell: (info) => (
-      <Sparkline
-        values={info.row.original.sparkline}
-        width={84}
-        height={18}
-        ariaLabel={`${info.row.original.ticker} price over the last 90 trading days`}
-      />
-    ),
-  }),
-])
-
 interface HoldingsPanelProps {
   holdings: Holding[]
   totalValue: number
   currency: string
+  editable?: boolean
+  onAddPosition?: () => void
+  onEditHolding?: (holding: Holding) => void
+  onDeleteHolding?: (holding: Holding) => void
 }
 
-export function HoldingsPanel({ holdings, totalValue, currency }: HoldingsPanelProps) {
+export function HoldingsPanel({
+  holdings,
+  totalValue,
+  currency,
+  editable = false,
+  onAddPosition,
+  onEditHolding,
+  onDeleteHolding,
+}: HoldingsPanelProps) {
+  const [filterQuery, setFilterQuery] = useState('')
+
+  const filteredHoldings = useMemo(() => {
+    const q = filterQuery.trim().toLowerCase()
+    if (!q) return holdings
+    return holdings.filter(
+      (h) =>
+        h.ticker.toLowerCase().includes(q) ||
+        h.name.toLowerCase().includes(q) ||
+        h.asset_class.toLowerCase().includes(q) ||
+        (h.region && h.region.toLowerCase().includes(q)),
+    )
+  }, [holdings, filterQuery])
+
+  const tableColumns = useMemo(
+    () =>
+      column.columns([
+        column.accessor('ticker', {
+          header: 'Ticker',
+          sortFn: 'text',
+          cell: (info) => <span className="num grid__ticker">{info.getValue()}</span>,
+        }),
+        column.accessor('name', {
+          header: 'Name',
+          sortFn: 'text',
+          cell: (info) => <span className="grid__name">{info.getValue()}</span>,
+        }),
+        column.accessor('asset_class', {
+          header: 'Class',
+          sortFn: 'text',
+          cell: (info) => <span className="grid__tag">{info.getValue()}</span>,
+        }),
+        column.accessor('region', {
+          header: 'Region',
+          sortFn: 'text',
+          cell: (info) => <span className="grid__tag">{info.getValue() ?? '—'}</span>,
+        }),
+        column.accessor('acquired', {
+          header: 'Acquired',
+          sortFn: 'text',
+          cell: (info) => <span className="num grid__date">{formatDate(info.getValue())}</span>,
+        }),
+        column.accessor('quantity', {
+          header: 'Quantity',
+          sortFn: 'basic',
+          meta: { align: 'right' },
+          cell: (info) => <Num>{formatQuantity(info.getValue())}</Num>,
+        }),
+        column.accessor('price_base', {
+          header: 'Price',
+          sortFn: 'basic',
+          meta: { align: 'right' },
+          cell: (info) => {
+            const holding = info.row.original
+            const title =
+              holding.currency === currency
+                ? undefined
+                : `${formatPrice(holding.price_native, holding.currency)} native`
+            return (
+              <span className="num" title={title}>
+                {formatMoney(info.getValue())}
+              </span>
+            )
+          },
+        }),
+        column.accessor('value_base', {
+          header: 'Value',
+          sortFn: 'basic',
+          meta: { align: 'right' },
+          cell: (info) => <Num tone="grid__strong">{formatMoney(info.getValue())}</Num>,
+        }),
+        column.accessor('allocation_pct', {
+          header: 'Weight',
+          sortFn: 'basic',
+          meta: { align: 'right' },
+          cell: (info) => {
+            const weight = info.getValue()
+            const heaviest = info.table.options.data.reduce(
+              (max, holding) => Math.max(max, holding.allocation_pct),
+              0,
+            )
+            const share = heaviest > 0 ? (weight / heaviest) * 100 : 0
+            return (
+              <span className="grid__weight">
+                <span className="num">{formatPercent(weight, 1)}</span>
+                <span className="grid__weight-bar" style={{ width: `${share}%` }} />
+              </span>
+            )
+          },
+        }),
+        column.accessor('unrealized_pnl', {
+          header: 'Unreal. P&L',
+          sortFn: 'basic',
+          meta: { align: 'right' },
+          cell: (info) => (
+            <Num tone={signClass(info.getValue())}>{formatMoneySigned(info.getValue())}</Num>
+          ),
+        }),
+        column.accessor('unrealized_pnl_pct', {
+          header: 'P&L %',
+          sortFn: 'basic',
+          meta: { align: 'right' },
+          cell: (info) => (
+            <Num tone={signClass(info.getValue())}>{formatPercentSigned(info.getValue())}</Num>
+          ),
+        }),
+        column.accessor('day_change_pct', {
+          header: 'Day',
+          sortFn: 'basic',
+          meta: { align: 'right' },
+          cell: (info) => (
+            <Num tone={signClass(info.getValue())}>{formatPercentSigned(info.getValue())}</Num>
+          ),
+        }),
+        column.display({
+          id: 'sparkline',
+          header: '90D',
+          cell: (info) => (
+            <Sparkline
+              values={info.row.original.sparkline}
+              width={84}
+              height={18}
+              ariaLabel={`${info.row.original.ticker} price over the last 90 trading days`}
+            />
+          ),
+        }),
+        column.display({
+          id: 'actions',
+          header: 'Actions',
+          meta: { align: 'right' },
+          cell: (info) =>
+            editable ? (
+              <div className="grid__actions">
+                {onEditHolding && (
+                  <button
+                    type="button"
+                    className="button button--quiet button--mini"
+                    onClick={() => onEditHolding(info.row.original)}
+                    title={`Edit ${info.row.original.ticker}`}
+                  >
+                    Edit
+                  </button>
+                )}
+                {onDeleteHolding && (
+                  <button
+                    type="button"
+                    className="button button--danger-text button--mini"
+                    onClick={() => onDeleteHolding(info.row.original)}
+                    title={`Delete ${info.row.original.ticker}`}
+                  >
+                    &times;
+                  </button>
+                )}
+              </div>
+            ) : null,
+        }),
+      ]),
+    [editable, onEditHolding, onDeleteHolding, currency],
+  )
+
   const table = useTable({
     features,
-    columns,
-    data: holdings,
+    columns: tableColumns,
+    data: filteredHoldings,
     initialState: { sorting: [{ id: 'value_base', desc: true }] },
   })
 
@@ -191,7 +250,48 @@ export function HoldingsPanel({ holdings, totalValue, currency }: HoldingsPanelP
   )
 
   return (
-    <Panel title="Holdings" subtitle={`${holdings.length} positions · values in ${currency}`}>
+    <Panel
+      title="Holdings"
+      subtitle={`${holdings.length} positions · values in ${currency}`}
+      actions={
+        editable && onAddPosition ? (
+          <button
+            type="button"
+            className="button button--primary button--sm"
+            onClick={onAddPosition}
+            title="Add a new position"
+          >
+            + Add Position
+          </button>
+        ) : undefined
+      }
+    >
+      <div className="holdings-toolbar">
+        <div className="holdings-toolbar__search">
+          <input
+            className="holdings-toolbar__input"
+            type="search"
+            placeholder="Filter holdings by ticker or name..."
+            value={filterQuery}
+            onChange={(e) => setFilterQuery(e.target.value)}
+          />
+          {filterQuery && (
+            <button
+              type="button"
+              className="button button--quiet button--mini"
+              onClick={() => setFilterQuery('')}
+            >
+              Clear
+            </button>
+          )}
+        </div>
+        <div className="holdings-toolbar__meta">
+          <span className="panel__subtitle">
+            Showing {filteredHoldings.length} of {holdings.length} positions
+          </span>
+        </div>
+      </div>
+
       <div className="grid__scroll">
         <table className="grid">
           <thead>
@@ -204,7 +304,6 @@ export function HoldingsPanel({ holdings, totalValue, currency }: HoldingsPanelP
                   return (
                     <th
                       key={header.id}
-                      // Drives responsive column hiding in panels.css.
                       data-column={header.column.id}
                       className={align === 'right' ? 'grid__th grid__th--right' : 'grid__th'}
                       aria-sort={sorted ? (sorted === 'asc' ? 'ascending' : 'descending') : undefined}
@@ -259,7 +358,7 @@ export function HoldingsPanel({ holdings, totalValue, currency }: HoldingsPanelP
               <td className="grid__td grid__td--right">
                 <Num tone={signClass(totalPnl)}>{formatMoneySigned(totalPnl)}</Num>
               </td>
-              <td className="grid__td" colSpan={3} />
+              <td className="grid__td" colSpan={editable ? 4 : 3} />
             </tr>
           </tfoot>
         </table>
