@@ -29,6 +29,14 @@ jobs:
       - name: Run tests
         run: python -m pytest
 
+      # The payload contract is committed. If the backend's payloads change,
+      # the contract must change with them, and the front end's types must
+      # still agree with it.
+      - name: The payload contract is up to date
+        run: |
+          python backend/export_schema.py
+          git diff --exit-code frontend/src/lib/payload-schema.json
+
   frontend:
     name: Frontend typecheck and build
     runs-on: ubuntu-latest
@@ -48,6 +56,10 @@ jobs:
       - name: Lint
         working-directory: frontend
         run: npx oxlint src
+
+      - name: Unit tests
+        working-directory: frontend
+        run: npm run test
 
       # `npm run build` runs `tsc -b` first, so this covers typechecking too.
       # It also proves the committed snapshot.json is valid, since the Vite

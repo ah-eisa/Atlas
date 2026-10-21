@@ -22,7 +22,8 @@ export type ViewKey = (typeof VIEW_KEYS)[number]
 
 const DEFAULT_VIEW: ViewKey = 'overview'
 
-function parseHash(hash: string): ViewKey {
+/** Read a view key out of a hash. Exported so it can be tested directly. */
+export function parseHash(hash: string): ViewKey {
   const candidate = hash.replace(/^#\/?/, '').split('?')[0].split('/')[0]
   return (VIEW_KEYS as readonly string[]).includes(candidate)
     ? (candidate as ViewKey)

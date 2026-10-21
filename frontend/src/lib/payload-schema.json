@@ -1,0 +1,1238 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "health": {
+      "additionalProperties": true,
+      "properties": {
+        "as_of": {
+          "type": "string"
+        },
+        "base_currency": {
+          "type": "string"
+        },
+        "benchmark": {
+          "type": "string"
+        },
+        "generated_at": {
+          "type": "string"
+        },
+        "history_days": {
+          "type": "number"
+        },
+        "history_start": {
+          "type": "string"
+        },
+        "holdings_count": {
+          "type": "number"
+        },
+        "observations": {
+          "type": "number"
+        },
+        "prices_fetched_at": {
+          "type": "string"
+        },
+        "prices_stale": {
+          "type": "boolean"
+        },
+        "status": {
+          "type": "string"
+        },
+        "version": {
+          "type": "string"
+        },
+        "warnings": {
+          "type": "array"
+        }
+      },
+      "type": "object"
+    },
+    "history": {
+      "additionalProperties": true,
+      "properties": {
+        "as_of": {
+          "type": "string"
+        },
+        "base_currency": {
+          "type": "string"
+        },
+        "benchmark": {
+          "type": "string"
+        },
+        "benchmark_name": {
+          "type": "string"
+        },
+        "benchmark_rebased": {
+          "items": {
+            "type": "number"
+          },
+          "type": "array"
+        },
+        "dates": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "drawdown_pct": {
+          "items": {
+            "type": "number"
+          },
+          "type": "array"
+        },
+        "flow_source": {
+          "type": "string"
+        },
+        "flows": {
+          "items": {
+            "additionalProperties": true,
+            "properties": {
+              "amount": {
+                "type": "number"
+              },
+              "date": {
+                "type": "string"
+              }
+            },
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "generated_at": {
+          "type": "string"
+        },
+        "methodology": {
+          "type": "string"
+        },
+        "per_holding": {
+          "additionalProperties": true,
+          "properties": {
+            "AAPL": {
+              "items": {
+                "type": "number"
+              },
+              "type": "array"
+            },
+            "ASML.AS": {
+              "items": {
+                "type": "number"
+              },
+              "type": "array"
+            },
+            "BABA": {
+              "items": {
+                "type": "number"
+              },
+              "type": "array"
+            },
+            "BTC-USD": {
+              "items": {
+                "type": "number"
+              },
+              "type": "array"
+            },
+            "ETH-USD": {
+              "items": {
+                "type": "number"
+              },
+              "type": "array"
+            },
+            "EXW1.DE": {
+              "items": {
+                "type": "number"
+              },
+              "type": "array"
+            },
+            "IWDA.AS": {
+              "items": {
+                "type": "number"
+              },
+              "type": "array"
+            },
+            "MSFT": {
+              "items": {
+                "type": "number"
+              },
+              "type": "array"
+            },
+            "NVDA": {
+              "items": {
+                "type": "number"
+              },
+              "type": "array"
+            },
+            "PDD": {
+              "items": {
+                "type": "number"
+              },
+              "type": "array"
+            },
+            "SIE.DE": {
+              "items": {
+                "type": "number"
+              },
+              "type": "array"
+            },
+            "VUSA.AS": {
+              "items": {
+                "type": "number"
+              },
+              "type": "array"
+            }
+          },
+          "type": "object"
+        },
+        "portfolio": {
+          "items": {
+            "type": "number"
+          },
+          "type": "array"
+        },
+        "portfolio_value": {
+          "items": {
+            "type": "number"
+          },
+          "type": "array"
+        }
+      },
+      "type": "object"
+    },
+    "holdings": {
+      "additionalProperties": true,
+      "properties": {
+        "as_of": {
+          "type": "string"
+        },
+        "base_currency": {
+          "type": "string"
+        },
+        "generated_at": {
+          "type": "string"
+        },
+        "holdings": {
+          "items": {
+            "additionalProperties": true,
+            "properties": {
+              "acquired": {
+                "type": "string"
+              },
+              "allocation_pct": {
+                "type": "number"
+              },
+              "asset_class": {
+                "type": "string"
+              },
+              "cost_basis_base": {
+                "type": "number"
+              },
+              "cost_basis_native": {
+                "type": "number"
+              },
+              "cost_total_base": {
+                "type": "number"
+              },
+              "currency": {
+                "type": "string"
+              },
+              "day_change_pct": {
+                "type": "number"
+              },
+              "drift": {
+                "type": [
+                  "null",
+                  "string",
+                  "number",
+                  "boolean",
+                  "array",
+                  "object"
+                ]
+              },
+              "fx_effect": {
+                "type": "number"
+              },
+              "fx_rate_at_acquisition": {
+                "type": "number"
+              },
+              "fx_rate_now": {
+                "type": "number"
+              },
+              "name": {
+                "type": "string"
+              },
+              "price_base": {
+                "type": "number"
+              },
+              "price_effect": {
+                "type": "number"
+              },
+              "price_native": {
+                "type": "number"
+              },
+              "price_native_at_acquisition": {
+                "type": "number"
+              },
+              "quantity": {
+                "type": "number"
+              },
+              "region": {
+                "type": "string"
+              },
+              "sparkline": {
+                "items": {
+                  "type": "number"
+                },
+                "type": "array"
+              },
+              "target_weight": {
+                "type": [
+                  "null",
+                  "string",
+                  "number",
+                  "boolean",
+                  "array",
+                  "object"
+                ]
+              },
+              "ticker": {
+                "type": "string"
+              },
+              "unrealized_pnl": {
+                "type": "number"
+              },
+              "unrealized_pnl_pct": {
+                "type": "number"
+              },
+              "value_base": {
+                "type": "number"
+              }
+            },
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "total_value": {
+          "type": "number"
+        }
+      },
+      "type": "object"
+    },
+    "montecarlo": {
+      "additionalProperties": true,
+      "properties": {
+        "annualized_drift_pct": {
+          "type": "number"
+        },
+        "as_of": {
+          "type": "string"
+        },
+        "assumptions": {
+          "additionalProperties": true,
+          "properties": {
+            "correlation": {
+              "type": "string"
+            },
+            "distribution": {
+              "type": "string"
+            },
+            "fees": {
+              "type": "string"
+            },
+            "lookback_days": {
+              "type": "number"
+            },
+            "rebalancing": {
+              "type": "string"
+            }
+          },
+          "type": "object"
+        },
+        "base_currency": {
+          "type": "string"
+        },
+        "dates": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "expected_return_pct": {
+          "type": "number"
+        },
+        "expected_value": {
+          "type": "number"
+        },
+        "final_values": {
+          "additionalProperties": true,
+          "properties": {
+            "p25": {
+              "type": "number"
+            },
+            "p5": {
+              "type": "number"
+            },
+            "p50": {
+              "type": "number"
+            },
+            "p75": {
+              "type": "number"
+            },
+            "p95": {
+              "type": "number"
+            }
+          },
+          "type": "object"
+        },
+        "generated_at": {
+          "type": "string"
+        },
+        "histogram": {
+          "items": {
+            "additionalProperties": true,
+            "properties": {
+              "count": {
+                "type": "number"
+              },
+              "end": {
+                "type": "number"
+              },
+              "probability": {
+                "type": "number"
+              },
+              "start": {
+                "type": "number"
+              }
+            },
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "horizon_days": {
+          "type": "number"
+        },
+        "median_value": {
+          "type": "number"
+        },
+        "paths": {
+          "type": "number"
+        },
+        "percentile_bands": {
+          "additionalProperties": true,
+          "properties": {
+            "p25": {
+              "items": {
+                "type": "number"
+              },
+              "type": "array"
+            },
+            "p5": {
+              "items": {
+                "type": "number"
+              },
+              "type": "array"
+            },
+            "p50": {
+              "items": {
+                "type": "number"
+              },
+              "type": "array"
+            },
+            "p75": {
+              "items": {
+                "type": "number"
+              },
+              "type": "array"
+            },
+            "p95": {
+              "items": {
+                "type": "number"
+              },
+              "type": "array"
+            }
+          },
+          "type": "object"
+        },
+        "probability_below_start_pct": {
+          "type": "number"
+        },
+        "start_value": {
+          "type": "number"
+        }
+      },
+      "type": "object"
+    },
+    "returns": {
+      "additionalProperties": true,
+      "properties": {
+        "annualized_return_pct": {
+          "type": "number"
+        },
+        "as_of": {
+          "type": "string"
+        },
+        "average_gain_pct": {
+          "type": "number"
+        },
+        "average_loss_pct": {
+          "type": "number"
+        },
+        "base_currency": {
+          "type": "string"
+        },
+        "best_day": {
+          "additionalProperties": true,
+          "properties": {
+            "date": {
+              "type": "string"
+            },
+            "pct": {
+              "type": "number"
+            }
+          },
+          "type": "object"
+        },
+        "best_month_pct": {
+          "type": "number"
+        },
+        "cumulative_pct": {
+          "items": {
+            "type": "number"
+          },
+          "type": "array"
+        },
+        "daily_pct": {
+          "items": {
+            "type": "number"
+          },
+          "type": "array"
+        },
+        "dates": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "generated_at": {
+          "type": "string"
+        },
+        "histogram": {
+          "items": {
+            "additionalProperties": true,
+            "properties": {
+              "count": {
+                "type": "number"
+              },
+              "end": {
+                "type": "number"
+              },
+              "start": {
+                "type": "number"
+              }
+            },
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "hit_rate_pct": {
+          "type": "number"
+        },
+        "methodology": {
+          "type": "string"
+        },
+        "monthly_pct": {
+          "items": {
+            "additionalProperties": true,
+            "properties": {
+              "month": {
+                "type": "string"
+              },
+              "pct": {
+                "type": "number"
+              }
+            },
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "negative_days": {
+          "type": "number"
+        },
+        "observations": {
+          "type": "number"
+        },
+        "positive_days": {
+          "type": "number"
+        },
+        "worst_day": {
+          "additionalProperties": true,
+          "properties": {
+            "date": {
+              "type": "string"
+            },
+            "pct": {
+              "type": "number"
+            }
+          },
+          "type": "object"
+        },
+        "worst_month_pct": {
+          "type": "number"
+        },
+        "yearly_pct": {
+          "items": {
+            "additionalProperties": true,
+            "properties": {
+              "pct": {
+                "type": "number"
+              },
+              "year": {
+                "type": "string"
+              }
+            },
+            "type": "object"
+          },
+          "type": "array"
+        }
+      },
+      "type": "object"
+    },
+    "risk": {
+      "additionalProperties": true,
+      "properties": {
+        "annualized_return_pct": {
+          "type": "number"
+        },
+        "as_of": {
+          "type": "string"
+        },
+        "base_currency": {
+          "type": "string"
+        },
+        "benchmark": {
+          "additionalProperties": true,
+          "properties": {
+            "alpha_annualized_pct": {
+              "type": "number"
+            },
+            "annualized_return_pct": {
+              "type": "number"
+            },
+            "correlation": {
+              "type": "number"
+            },
+            "down_capture": {
+              "type": "number"
+            },
+            "includes_dividends": {
+              "type": "boolean"
+            },
+            "information_ratio": {
+              "type": "number"
+            },
+            "max_drawdown_pct": {
+              "type": "number"
+            },
+            "name": {
+              "type": "string"
+            },
+            "observations": {
+              "type": "number"
+            },
+            "return_pct": {
+              "type": "number"
+            },
+            "sharpe_ratio": {
+              "type": "number"
+            },
+            "symbol": {
+              "type": "string"
+            },
+            "tracking_error_pct": {
+              "type": "number"
+            },
+            "up_capture": {
+              "type": "number"
+            },
+            "volatility_annualized_pct": {
+              "type": "number"
+            }
+          },
+          "type": "object"
+        },
+        "beta": {
+          "additionalProperties": true,
+          "properties": {
+            "benchmark": {
+              "type": "string"
+            },
+            "benchmark_name": {
+              "type": "string"
+            },
+            "value": {
+              "type": "number"
+            }
+          },
+          "type": "object"
+        },
+        "calmar_ratio": {
+          "type": "number"
+        },
+        "concentration": {
+          "additionalProperties": true,
+          "properties": {
+            "effective_holdings": {
+              "type": "number"
+            },
+            "herfindahl": {
+              "type": "number"
+            },
+            "largest_pct": {
+              "type": "number"
+            },
+            "top_five_pct": {
+              "type": "number"
+            }
+          },
+          "type": "object"
+        },
+        "correlation": {
+          "additionalProperties": true,
+          "properties": {
+            "matrix": {
+              "items": {
+                "items": {
+                  "type": "number"
+                },
+                "type": "array"
+              },
+              "type": "array"
+            },
+            "tickers": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            }
+          },
+          "type": "object"
+        },
+        "downside_deviation_pct": {
+          "type": "number"
+        },
+        "generated_at": {
+          "type": "string"
+        },
+        "lookback_days": {
+          "type": "number"
+        },
+        "max_drawdown": {
+          "additionalProperties": true,
+          "properties": {
+            "pct": {
+              "type": "number"
+            },
+            "peak_date": {
+              "type": "string"
+            },
+            "peak_value": {
+              "type": "number"
+            },
+            "recovery_date": {
+              "type": [
+                "null",
+                "string",
+                "number",
+                "boolean",
+                "array",
+                "object"
+              ]
+            },
+            "trough_date": {
+              "type": "string"
+            },
+            "trough_value": {
+              "type": "number"
+            }
+          },
+          "type": "object"
+        },
+        "money_weighted_return_pct": {
+          "type": "number"
+        },
+        "money_weighted_source": {
+          "type": "string"
+        },
+        "risk_contribution": {
+          "items": {
+            "additionalProperties": true,
+            "properties": {
+              "contribution_pct": {
+                "type": "number"
+              },
+              "ticker": {
+                "type": "string"
+              },
+              "weight": {
+                "type": "number"
+              }
+            },
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "risk_free_rate": {
+          "type": "number"
+        },
+        "sharpe_ratio": {
+          "type": "number"
+        },
+        "sortino_ratio": {
+          "type": "number"
+        },
+        "trading_days_per_year": {
+          "type": "number"
+        },
+        "value_at_risk": {
+          "additionalProperties": true,
+          "properties": {
+            "95": {
+              "additionalProperties": true,
+              "properties": {
+                "confidence": {
+                  "type": "number"
+                },
+                "cvar_pct": {
+                  "type": "number"
+                },
+                "cvar_value": {
+                  "type": "number"
+                },
+                "historical_pct": {
+                  "type": "number"
+                },
+                "historical_value": {
+                  "type": "number"
+                },
+                "parametric_pct": {
+                  "type": "number"
+                },
+                "parametric_value": {
+                  "type": "number"
+                }
+              },
+              "type": "object"
+            },
+            "99": {
+              "additionalProperties": true,
+              "properties": {
+                "confidence": {
+                  "type": "number"
+                },
+                "cvar_pct": {
+                  "type": "number"
+                },
+                "cvar_value": {
+                  "type": "number"
+                },
+                "historical_pct": {
+                  "type": "number"
+                },
+                "historical_value": {
+                  "type": "number"
+                },
+                "parametric_pct": {
+                  "type": "number"
+                },
+                "parametric_value": {
+                  "type": "number"
+                }
+              },
+              "type": "object"
+            }
+          },
+          "type": "object"
+        },
+        "volatility_annualized_pct": {
+          "type": "number"
+        },
+        "warnings": {
+          "type": "array"
+        }
+      },
+      "type": "object"
+    },
+    "summary": {
+      "additionalProperties": true,
+      "properties": {
+        "allocation_by_class": {
+          "items": {
+            "additionalProperties": true,
+            "properties": {
+              "allocation_pct": {
+                "type": "number"
+              },
+              "holdings": {
+                "type": "number"
+              },
+              "key": {
+                "type": "string"
+              },
+              "value": {
+                "type": "number"
+              }
+            },
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "allocation_by_currency": {
+          "items": {
+            "additionalProperties": true,
+            "properties": {
+              "allocation_pct": {
+                "type": "number"
+              },
+              "holdings": {
+                "type": "number"
+              },
+              "key": {
+                "type": "string"
+              },
+              "value": {
+                "type": "number"
+              }
+            },
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "allocation_by_region": {
+          "items": {
+            "additionalProperties": true,
+            "properties": {
+              "allocation_pct": {
+                "type": "number"
+              },
+              "holdings": {
+                "type": "number"
+              },
+              "key": {
+                "type": "string"
+              },
+              "value": {
+                "type": "number"
+              }
+            },
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "as_of": {
+          "type": "string"
+        },
+        "attribution": {
+          "additionalProperties": true,
+          "properties": {
+            "active_return_pct": {
+              "type": "number"
+            },
+            "by_asset_class": {
+              "items": {
+                "additionalProperties": true,
+                "properties": {
+                  "contribution_pct": {
+                    "type": "number"
+                  },
+                  "key": {
+                    "type": "string"
+                  }
+                },
+                "type": "object"
+              },
+              "type": "array"
+            },
+            "by_region": {
+              "items": {
+                "additionalProperties": true,
+                "properties": {
+                  "contribution_pct": {
+                    "type": "number"
+                  },
+                  "key": {
+                    "type": "string"
+                  }
+                },
+                "type": "object"
+              },
+              "type": "array"
+            },
+            "positions": {
+              "items": {
+                "additionalProperties": true,
+                "properties": {
+                  "asset_class": {
+                    "type": "string"
+                  },
+                  "contribution_pct": {
+                    "type": "number"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "region": {
+                    "type": "string"
+                  },
+                  "ticker": {
+                    "type": "string"
+                  },
+                  "weight": {
+                    "type": "number"
+                  }
+                },
+                "type": "object"
+              },
+              "type": "array"
+            },
+            "residual": {
+              "type": "number"
+            }
+          },
+          "type": "object"
+        },
+        "base_currency": {
+          "type": "string"
+        },
+        "changes": {
+          "additionalProperties": true,
+          "properties": {
+            "all": {
+              "additionalProperties": true,
+              "properties": {
+                "absolute": {
+                  "type": "number"
+                },
+                "end_value": {
+                  "type": "number"
+                },
+                "flows": {
+                  "type": "number"
+                },
+                "pct": {
+                  "type": "number"
+                },
+                "period": {
+                  "type": "string"
+                },
+                "start_date": {
+                  "type": "string"
+                },
+                "start_value": {
+                  "type": "number"
+                }
+              },
+              "type": "object"
+            },
+            "day": {
+              "additionalProperties": true,
+              "properties": {
+                "absolute": {
+                  "type": "number"
+                },
+                "end_value": {
+                  "type": "number"
+                },
+                "flows": {
+                  "type": "number"
+                },
+                "pct": {
+                  "type": "number"
+                },
+                "period": {
+                  "type": "string"
+                },
+                "start_date": {
+                  "type": "string"
+                },
+                "start_value": {
+                  "type": "number"
+                }
+              },
+              "type": "object"
+            },
+            "month": {
+              "additionalProperties": true,
+              "properties": {
+                "absolute": {
+                  "type": "number"
+                },
+                "end_value": {
+                  "type": "number"
+                },
+                "flows": {
+                  "type": "number"
+                },
+                "pct": {
+                  "type": "number"
+                },
+                "period": {
+                  "type": "string"
+                },
+                "start_date": {
+                  "type": "string"
+                },
+                "start_value": {
+                  "type": "number"
+                }
+              },
+              "type": "object"
+            },
+            "week": {
+              "additionalProperties": true,
+              "properties": {
+                "absolute": {
+                  "type": "number"
+                },
+                "end_value": {
+                  "type": "number"
+                },
+                "flows": {
+                  "type": "number"
+                },
+                "pct": {
+                  "type": "number"
+                },
+                "period": {
+                  "type": "string"
+                },
+                "start_date": {
+                  "type": "string"
+                },
+                "start_value": {
+                  "type": "number"
+                }
+              },
+              "type": "object"
+            },
+            "ytd": {
+              "additionalProperties": true,
+              "properties": {
+                "absolute": {
+                  "type": "number"
+                },
+                "end_value": {
+                  "type": "number"
+                },
+                "flows": {
+                  "type": "number"
+                },
+                "pct": {
+                  "type": "number"
+                },
+                "period": {
+                  "type": "string"
+                },
+                "start_date": {
+                  "type": "string"
+                },
+                "start_value": {
+                  "type": "number"
+                }
+              },
+              "type": "object"
+            }
+          },
+          "type": "object"
+        },
+        "drift": {
+          "additionalProperties": true,
+          "properties": {
+            "has_targets": {
+              "type": "boolean"
+            },
+            "positions": {
+              "type": "array"
+            },
+            "residual": {
+              "type": "number"
+            },
+            "target_sum": {
+              "type": "number"
+            },
+            "total_drift": {
+              "type": "number"
+            },
+            "turnover": {
+              "type": "number"
+            }
+          },
+          "type": "object"
+        },
+        "fx_attribution": {
+          "additionalProperties": true,
+          "properties": {
+            "fx_effect": {
+              "type": "number"
+            },
+            "price_effect": {
+              "type": "number"
+            },
+            "total": {
+              "type": "number"
+            },
+            "unattributed": {
+              "type": "number"
+            }
+          },
+          "type": "object"
+        },
+        "generated_at": {
+          "type": "string"
+        },
+        "holdings_count": {
+          "type": "number"
+        },
+        "sparkline": {
+          "additionalProperties": true,
+          "properties": {
+            "dates": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "values": {
+              "items": {
+                "type": "number"
+              },
+              "type": "array"
+            }
+          },
+          "type": "object"
+        },
+        "total_cost": {
+          "type": "number"
+        },
+        "total_unrealized_pnl": {
+          "type": "number"
+        },
+        "total_unrealized_pnl_pct": {
+          "type": "number"
+        },
+        "total_value": {
+          "type": "number"
+        }
+      },
+      "type": "object"
+    }
+  },
+  "required": [
+    "health",
+    "history",
+    "holdings",
+    "montecarlo",
+    "returns",
+    "risk",
+    "summary"
+  ],
+  "title": "ATLAS analytics payload contract",
+  "type": "object"
+}

@@ -168,7 +168,13 @@ async function requestJson<T>(
   return (await response.json()) as T
 }
 
-function snapshotToState(snapshot: Snapshot): PortfolioState {
+/**
+ * Turn a committed snapshot into the state the components read.
+ *
+ * Exported for the unit tests: this is the function where a renamed field
+ * becomes a screen full of zeros.
+ */
+export function snapshotToState(snapshot: Snapshot): PortfolioState {
   const endpoints = snapshot.endpoints
   if (!endpoints?.['/portfolio/summary']) {
     throw new ApiError(

@@ -2,7 +2,10 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
 import react from '@vitejs/plugin-react'
-import { defineConfig, type Plugin } from 'vite'
+// Vitest's config helper, so the `test` block below is typed. It extends
+// Vite's own configuration, so this file still builds the app unchanged.
+import { defineConfig } from 'vitest/config'
+import type { Plugin } from 'vite'
 
 const SNAPSHOT_PATH = resolve(import.meta.dirname, '../snapshot.json')
 const SNAPSHOT_ROUTE = '/snapshot.json'
@@ -58,5 +61,13 @@ export default defineConfig({
         },
       },
     },
+  },
+  test: {
+    // The unit tests cover the pure logic: formatters, the hash router and
+    // the snapshot normaliser. They need a DOM only for the router's
+    // window access, which jsdom provides.
+    environment: 'jsdom',
+    include: ['src/**/*.test.ts', 'src/**/*.test.tsx'],
+    reporters: 'default',
   },
 })
