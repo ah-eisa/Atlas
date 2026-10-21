@@ -33,12 +33,14 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 
-from . import fixed_income, instruments, macro_sec, store
+from . import fixed_income, instruments, macro_sec, options, store
 from .config import SETTINGS, Settings
 from .observability import METRICS
 from .portfolio import API_VERSION, AnalyticsUnavailable, PortfolioAnalytics, build_analytics
 from .schemas import (
     BaseCurrencyUpdate,
+    BlackScholesInput,
+    BlackScholesOutput,
     BondCalculatorInput,
     BondCalculatorOutput,
     CashFlowIn,
@@ -47,6 +49,7 @@ from .schemas import (
     HoldingOut,
     MacroHistoryPoint,
     MacroSummaryResponse,
+    OptionChainResponse,
     OrderInput,
     PortfolioIn,
     RealizedPnlSummaryOut,
@@ -780,6 +783,26 @@ def get_macro_history(series: str = "CPIAUCSL", range: str = "5Y") -> list[Macro
     """Historical time series for macroeconomic indicators."""
     service = macro_sec.get_macro_sec_service()
     return service.get_macro_history(series_id=series, range_key=range)
+
+
+# ---------------------------------------------------------------------------
+# Options Derivatives & Black-Scholes Greeks
+# ---------------------------------------------------------------------------
+
+
+@app.get("/api/v1/options/chain", response_model=OptionChainResponse, tags=["options"])
+def get_option_chain(
+    ticker: str, expiry: str | None = None
+) -> OptionChainResponse:
+    """Option chain with strikes, bid/ask, implied volatility, volume and open interest."""
+    service = options.get_options_service()
+    return service.get_option_chain(ticker=ticker, expiry=expiry)
+
+
+@app.post("/api/v1/options/calculator", response_model=BlackScholesOutput, tags=["options"])
+def calculate_option(params: BlackScholesInput) -> BlackScholesOutput:
+    """Black-Scholes theoretical pricing, Greeks (Delta, Gamma, Vega, Theta, Rho), and payoff curve."""
+    return options.calculate_black_scholes(params)
 
 
 @app.post("/api/v1/portfolio/what-if", tags=["analytics"])

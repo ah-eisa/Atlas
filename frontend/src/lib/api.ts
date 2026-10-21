@@ -17,6 +17,8 @@
 
 import type {
   Analytics,
+  BlackScholesInput,
+  BlackScholesOutput,
   BondCalculatorInput,
   BondCalculatorOutput,
   BootstrapResponse,
@@ -26,6 +28,7 @@ import type {
   InstrumentInfo,
   MacroHistoryPoint,
   MacroSummaryResponse,
+  OptionChainResponse,
   OrderInput,
   Portfolio,
   PortfolioState,
@@ -864,4 +867,152 @@ export async function getSecFilings(
       filings: [],
     }
   }
+}
+
+// --------------------------------------------------------------------------
+// Options & Black-Scholes API
+// --------------------------------------------------------------------------
+
+function normalCdf(x: number): number {
+  const t = 1 / (1 + 0.2316419 * Math.abs(x))
+  const d = 0.3989423 * Math.exp((-x * x) / 2)
+  const p = d * t * (0.3193815 + t * (-0.3565638 + t * (1.781478 + t * (-1.821256 + t * 1.330274))))
+  return x > 0 ? 1 - p : p
+}
+
+export async function getOptionChain(
+  config: DataConfig,
+  ticker: string,
+  expiry?: string,
+): Promise<OptionChainResponse> {
+  const clean = ticker.trim().toUpperCase()
+  const expParam = expiry ? `&expiry=${encodeURIComponent(expiry)}` : ''
+  const url = apiUrl(config, `/api/v1/options/chain?ticker=${encodeURIComponent(clean)}${expParam}`)
+
+  if (config.source === 'snapshot') {
+    const basePrice = clean === 'AAPL' ? 230 : clean === 'NVDA' ? 135 : 150
+    const expirations = ['2026-11-20', '2026-12-18', '2027-01-15', '2027-03-19']
+    const selExp = expiry || expirations[0]
+    const strikes = [0.85, 0.9, 0.95, 1.0, 1.05, 1.1, 1.15].map((mult) => Math.round(basePrice * mult))
+
+    return {
+      ticker: clean,
+      underlying_price: basePrice,
+      expirations,
+      selected_expiration: selExp,
+      calls: strikes.map((k) => ({
+        contract_symbol: `${clean}C${k}`,
+        strike: k,
+        last_price: Number(Math.max(0.5, (basePrice - k) + 5).toFixed(2)),
+        bid: Number(Math.max(0.4, (basePrice - k) + 4.8).toFixed(2)),
+        ask: Number(Math.max(0.6, (basePrice - k) + 5.2).toFixed(2)),
+        volume: 240,
+        open_interest: 1100,
+        implied_volatility: 0.26,
+        in_the_money: k < basePrice,
+        delta: Number((k < basePrice ? 0.72 : 0.28).toFixed(2)),
+        gamma: 0.02,
+        vega: 0.32,
+        theta: -0.06,
+      })),
+      puts: strikes.map((k) => ({
+        contract_symbol: `${clean}P${k}`,
+        strike: k,
+        last_price: Number(Math.max(0.5, (k - basePrice) + 5).toFixed(2)),
+        bid: Number(Math.max(0.4, (k - basePrice) + 4.8).toFixed(2)),
+        ask: Number(Math.max(0.6, (k - basePrice) + 5.2).toFixed(2)),
+        volume: 180,
+        open_interest: 850,
+        implied_volatility: 0.26,
+        in_the_money: k > basePrice,
+        delta: Number((k > basePrice ? -0.72 : -0.28).toFixed(2)),
+        gamma: 0.02,
+        vega: 0.32,
+        theta: -0.05,
+      })),
+    }
+  }
+
+  return requestJson<OptionChainResponse>(url, config)
+}
+
+export async function calculateOption(
+  config: DataConfig,
+  input: BlackScholesInput,
+): Promise<BlackScholesOutput> {
+  if (config.source === 'snapshot') {
+    // Client-side analytical fallback
+    const S = input.underlying_price
+    const K = input.strike_price
+    const T = Math.max(1e-4, input.dte / 365)
+    const sigma = Math.max(1e-4, input.volatility_pct / 100)
+    const r = Math.max(0, input.risk_free_rate_pct / 100)
+    const q = Math.max(0, input.dividend_yield_pct / 100)
+
+    const sqrtT = Math.sqrt(T)
+    const d1 = (Math.log(S / K) + (r - q + 0.5 * sigma * sigma) * T) / (sigma * sqrtT)
+    const d2 = d1 - sigma * sqrtT
+
+    const dfR = Math.exp(-r * T)
+    const dfQ = Math.exp(-q * T)
+    const nd1 = normalCdf(d1)
+    const nd2 = normalCdf(d2)
+    const nNegD1 = normalCdf(-d1)
+    const nNegD2 = normalCdf(-d2)
+    const pdfD1 = Math.exp((-d1 * d1) / 2) / Math.sqrt(2 * Math.PI)
+
+    const callPrice = Math.max(0, S * dfQ * nd1 - K * dfR * nd2)
+    const putPrice = Math.max(0, K * dfR * nNegD2 - S * dfQ * nNegD1)
+
+    const callDelta = dfQ * nd1
+    const putDelta = dfQ * (nd1 - 1)
+    const gamma = (dfQ * pdfD1) / (S * sigma * sqrtT)
+    const vega = S * dfQ * sqrtT * pdfD1 * 0.01
+    const callTheta = (-(S * dfQ * pdfD1 * sigma) / (2 * sqrtT) - r * K * dfR * nd2 + q * S * dfQ * nd1) / 365
+    const putTheta = (-(S * dfQ * pdfD1 * sigma) / (2 * sqrtT) + r * K * dfR * nNegD2 - q * S * dfQ * nNegD1) / 365
+    const callRho = K * T * dfR * nd2 * 0.01
+    const putRho = -K * T * dfR * nNegD2 * 0.01
+
+    const payoffCurve = []
+    const minP = Math.max(1, S * 0.7)
+    const maxP = S * 1.3
+    const steps = 25
+    for (let i = 0; i < steps; i++) {
+      const p = minP + (i / (steps - 1)) * (maxP - minP)
+      payoffCurve.push({
+        underlying_price: Number(p.toFixed(2)),
+        call_payoff: Number((Math.max(0, p - K) - callPrice).toFixed(2)),
+        put_payoff: Number((Math.max(0, K - p) - putPrice).toFixed(2)),
+      })
+    }
+
+    return {
+      call_price: Number(callPrice.toFixed(2)),
+      put_price: Number(putPrice.toFixed(2)),
+      call_greeks: {
+        delta: Number(callDelta.toFixed(4)),
+        gamma: Number(gamma.toFixed(4)),
+        vega: Number(vega.toFixed(4)),
+        theta: Number(callTheta.toFixed(4)),
+        rho: Number(callRho.toFixed(4)),
+      },
+      put_greeks: {
+        delta: Number(putDelta.toFixed(4)),
+        gamma: Number(gamma.toFixed(4)),
+        vega: Number(vega.toFixed(4)),
+        theta: Number(putTheta.toFixed(4)),
+        rho: Number(putRho.toFixed(4)),
+      },
+      call_intrinsic: Number(Math.max(0, S - K).toFixed(2)),
+      call_time_value: Number(Math.max(0, callPrice - Math.max(0, S - K)).toFixed(2)),
+      put_intrinsic: Number(Math.max(0, K - S).toFixed(2)),
+      put_time_value: Number(Math.max(0, putPrice - Math.max(0, K - S)).toFixed(2)),
+      payoff_curve: payoffCurve,
+    }
+  }
+
+  return requestJson<BlackScholesOutput>(apiUrl(config, '/api/v1/options/calculator'), config, {
+    method: 'POST',
+    body: JSON.stringify(input),
+  })
 }

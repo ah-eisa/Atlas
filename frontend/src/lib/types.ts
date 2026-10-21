@@ -602,3 +602,67 @@ export interface MacroHistoryPoint {
   date: string
   value: number
 }
+
+// --------------------------------------------------------------------------
+// Options & Derivatives Types
+// --------------------------------------------------------------------------
+
+export interface OptionContract {
+  contract_symbol: string
+  strike: number
+  last_price: number
+  bid?: number | null
+  ask?: number | null
+  volume: number
+  open_interest: number
+  implied_volatility: number
+  in_the_money: boolean
+  delta?: number | null
+  gamma?: number | null
+  vega?: number | null
+  theta?: number | null
+}
+
+export interface OptionChainResponse {
+  ticker: string
+  underlying_price: number
+  expirations: string[]
+  selected_expiration: string
+  calls: OptionContract[]
+  puts: OptionContract[]
+}
+
+export interface BlackScholesInput {
+  underlying_price: number
+  strike_price: number
+  dte: number
+  volatility_pct: number
+  risk_free_rate_pct: number
+  dividend_yield_pct: number
+}
+
+export interface OptionGreeks {
+  delta: number
+  gamma: number
+  vega: number
+  theta: number
+  rho: number
+}
+
+export interface PayoffPoint {
+  underlying_price: number
+  call_payoff: number
+  put_payoff: number
+}
+
+export interface BlackScholesOutput {
+  call_price: number
+  put_price: number
+  call_greeks: OptionGreeks
+  put_greeks: OptionGreeks
+  call_intrinsic: number
+  call_time_value: number
+  put_intrinsic: number
+  put_time_value: number
+  payoff_curve: PayoffPoint[]
+}

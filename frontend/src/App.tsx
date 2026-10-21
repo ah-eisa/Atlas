@@ -33,6 +33,7 @@ const HoldingsView = lazy(() => import('./views/HoldingsView'))
 const TransactionsView = lazy(() => import('./views/TransactionsView'))
 const FixedIncomeView = lazy(() => import('./views/FixedIncomeView'))
 const MacroSecView = lazy(() => import('./views/MacroSecView'))
+const OptionsView = lazy(() => import('./views/OptionsView'))
 const DataView = lazy(() => import('./views/DataView'))
 
 function Shell({
@@ -346,6 +347,10 @@ function ViewContent({
 
   if (view === 'macro') {
     return <MacroSecView state={state} config={config} />
+  }
+
+  if (view === 'options') {
+    return <OptionsView state={state} config={config} />
   }
 
   if (view === 'holdings') {

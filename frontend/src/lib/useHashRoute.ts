@@ -17,6 +17,7 @@ export const VIEW_KEYS = [
   'trades',
   'bonds',
   'macro',
+  'options',
   'projection',
   'data',
 ] as const

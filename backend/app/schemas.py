@@ -352,5 +352,70 @@ class MacroHistoryPoint(BaseModel):
     value: float
 
 
+# --------------------------------------------------------------------------
+# Options & Black-Scholes Greeks Models
+# --------------------------------------------------------------------------
+
+
+class OptionContract(BaseModel):
+    contract_symbol: str
+    strike: float
+    last_price: float
+    bid: float | None = None
+    ask: float | None = None
+    volume: int = 0
+    open_interest: int = 0
+    implied_volatility: float
+    in_the_money: bool
+    delta: float | None = None
+    gamma: float | None = None
+    vega: float | None = None
+    theta: float | None = None
+
+
+class OptionChainResponse(BaseModel):
+    ticker: str
+    underlying_price: float
+    expirations: list[str]
+    selected_expiration: str
+    calls: list[OptionContract]
+    puts: list[OptionContract]
+
+
+class BlackScholesInput(BaseModel):
+    underlying_price: float = Field(default=100.0, gt=0, le=1e6)
+    strike_price: float = Field(default=100.0, gt=0, le=1e6)
+    dte: float = Field(default=30.0, gt=0, le=3650.0)
+    volatility_pct: float = Field(default=25.0, gt=0, le=500.0)
+    risk_free_rate_pct: float = Field(default=4.5, ge=0, le=100.0)
+    dividend_yield_pct: float = Field(default=0.0, ge=0, le=100.0)
+
+
+class OptionGreeks(BaseModel):
+    delta: float
+    gamma: float
+    vega: float
+    theta: float
+    rho: float
+
+
+class PayoffPoint(BaseModel):
+    underlying_price: float
+    call_payoff: float
+    put_payoff: float
+
+
+class BlackScholesOutput(BaseModel):
+    call_price: float
+    put_price: float
+    call_greeks: OptionGreeks
+    put_greeks: OptionGreeks
+    call_intrinsic: float
+    call_time_value: float
+    put_intrinsic: float
+    put_time_value: float
+    payoff_curve: list[PayoffPoint]
+
+
 def is_finite(value: float) -> bool:
     return math.isfinite(value)

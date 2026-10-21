@@ -40,6 +40,7 @@ const VIEWS: ViewDefinition[] = [
   { key: 'trades', label: 'Trades', needsAnalytics: false },
   { key: 'bonds', label: 'Fixed Income', needsAnalytics: false },
   { key: 'macro', label: 'Macro & SEC', needsAnalytics: false },
+  { key: 'options', label: 'Options & Greeks', needsAnalytics: false },
   { key: 'projection', label: 'Projection', needsAnalytics: true },
   { key: 'data', label: 'Data', needsAnalytics: false },
 ]
