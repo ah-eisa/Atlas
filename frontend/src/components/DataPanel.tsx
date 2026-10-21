@@ -316,6 +316,13 @@ export function DataPanel({
               The equity line is the growth index scaled to today&apos;s market value;
               the actual value line includes the contribution jumps.
             </p>
+            <p>
+              The money-weighted return (IRR) is reported alongside it. The two answer
+              different questions: the time-weighted return judges the strategy, while the
+              IRR judges what the money in the account actually earned. When contributions
+              are unevenly timed they diverge, and the gap is the cost of the timing
+              decision itself.
+            </p>
           </div>
           <div>
             <h3>Positions activate on acquisition</h3>

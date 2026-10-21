@@ -361,3 +361,56 @@ def test_period_change_excludes_flows_inside_the_window() -> None:
     assert change.absolute == pytest.approx(30.0)
     assert change.percent == pytest.approx(0.10)
 
+
+
+def test_money_weighted_return_solves_a_known_irr() -> None:
+    """A single contribution that doubles in a year is a 100% IRR.
+
+    Flows follow the portfolio's convention: a positive amount is money that
+    came in. The function flips the sign for the investor's side of the
+    ledger, and adds the terminal value as money coming back out.
+    """
+    from backend.app import metrics
+
+    flows = [(pd.Timestamp("2025-01-01"), 1000.0)]
+    rate = metrics.money_weighted_return(flows, 2000.0, pd.Timestamp("2026-01-01"))
+    assert rate is not None
+    assert rate == pytest.approx(1.0, abs=1e-3)
+
+
+def test_a_money_weighted_loss_is_a_negative_rate_not_a_missing_one() -> None:
+    """Losing money has an IRR: it is negative."""
+    from backend.app import metrics
+
+    flows = [(pd.Timestamp("2025-01-01"), 1000.0)]
+    rate = metrics.money_weighted_return(flows, 500.0, pd.Timestamp("2026-01-01"))
+    assert rate is not None
+    assert rate == pytest.approx(-0.5, abs=1e-3)
+
+
+def test_money_weighted_return_is_none_without_a_terminal_value() -> None:
+    """No money coming back means no rate to report."""
+    from backend.app import metrics
+
+    flows = [(pd.Timestamp("2025-01-01"), 1000.0)]
+    assert metrics.money_weighted_return(flows, 0.0, pd.Timestamp("2026-01-01")) is None
+    assert metrics.money_weighted_return([], 1000.0, pd.Timestamp("2026-01-01")) is None
+
+
+def test_money_weighted_return_weights_early_money_more_heavily() -> None:
+    """Two portfolios, same end value, different timing of the contribution.
+
+    Money that was invested for the whole period is weighted more heavily,
+    so the same ending value produces a lower rate when the contribution
+    came early. This is the whole point of reporting both returns.
+    """
+    from backend.app import metrics
+
+    early = metrics.money_weighted_return(
+        [(pd.Timestamp("2023-01-01"), 1000.0)], 1100.0, pd.Timestamp("2026-01-01")
+    )
+    late = metrics.money_weighted_return(
+        [(pd.Timestamp("2025-01-01"), 1000.0)], 1100.0, pd.Timestamp("2026-01-01")
+    )
+    assert early is not None and late is not None
+    assert early < late

@@ -231,6 +231,10 @@ export interface RiskPayload extends Envelope {
   risk_free_rate: number
   trading_days_per_year: number
   annualized_return_pct: number | null
+  /** Annualised return on the money actually invested (IRR). */
+  money_weighted_return_pct: number | null
+  /** Whether the cash flows behind the IRR are recorded or estimated. */
+  money_weighted_source: 'ledger' | 'estimated'
   volatility_annualized_pct: number | null
   downside_deviation_pct: number | null
   sharpe_ratio: number | null

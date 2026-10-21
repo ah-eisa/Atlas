@@ -59,6 +59,16 @@ export function KpiStrip({ risk, montecarlo, summary, currency }: KpiStripProps)
       context: `geometric · ${risk.lookback_days}d sample`,
     },
     {
+      label: 'Money-weighted',
+      raw: risk.money_weighted_return_pct,
+      format: (value) => formatPercentSigned(value),
+      tone: signClass(risk.money_weighted_return_pct),
+      context:
+        risk.money_weighted_source === 'ledger'
+          ? 'IRR on recorded cash flows'
+          : 'IRR on estimated cash flows',
+    },
+    {
       label: 'Volatility',
       raw: risk.volatility_annualized_pct,
       format: (value) => formatPercent(value),

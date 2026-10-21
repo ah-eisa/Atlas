@@ -16,10 +16,11 @@ Conventions
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 from datetime import date
 from statistics import NormalDist
-from typing import Literal
+from typing import Literal, Sequence
 
 import numpy as np
 import pandas as pd
@@ -703,3 +704,94 @@ def risk_contributions(
         },
         index=weights.index,
     )
+
+
+# ---------------------------------------------------------------------------
+# Money-weighted return
+# ---------------------------------------------------------------------------
+
+
+def xnpv(rate: float, flows: Sequence[tuple[pd.Timestamp, float]]) -> float:
+    """Net present value of dated cash flows at an annual rate.
+
+    ``flows`` are ``(date, amount)`` pairs, from the investor's point of
+    view: money out is negative, money in is positive.
+    """
+    if not flows:
+        return float("nan")
+    origin = flows[0][0]
+    total = 0.0
+    for stamp, amount in flows:
+        years = (stamp - origin).days / 365.0
+        total += amount / ((1.0 + rate) ** years)
+    return total
+
+
+def xirr(
+    flows: Sequence[tuple[pd.Timestamp, float]],
+    lower: float = -0.9999,
+    upper: float = 10.0,
+    tolerance: float = 1e-7,
+    max_iterations: int = 200,
+) -> float | None:
+    """Annualised internal rate of return for dated cash flows.
+
+    Solved by bisection rather than Newton's method: the NPV of a portfolio
+    is not monotonic in pathological cases, and a bisection that brackets a
+    sign change either converges or reports no solution. It cannot jump to a
+    nonsense root the way a Newton step can.
+
+    Returns ``None`` when there is no sign change in the bracket, which is
+    the honest answer for a portfolio that never turned a profit or a loss.
+    """
+    if len(flows) < 2:
+        return None
+
+    low, high = lower, upper
+    low_value = xnpv(low, flows)
+    high_value = xnpv(high, flows)
+    if not (math.isfinite(low_value) and math.isfinite(high_value)):
+        return None
+    if low_value * high_value > 0:
+        return None
+
+    for _ in range(max_iterations):
+        middle = (low + high) / 2.0
+        value = xnpv(middle, flows)
+        if not math.isfinite(value):
+            return None
+        if abs(value) < tolerance:
+            return middle
+        if low_value * value <= 0:
+            high = middle
+            high_value = value
+        else:
+            low = middle
+            low_value = value
+    return (low + high) / 2.0
+
+
+def money_weighted_return(
+    flows: Sequence[tuple[pd.Timestamp, float]],
+    terminal_value: float,
+    final_date: pd.Timestamp,
+) -> float | None:
+    """Annualised IRR of a portfolio, from its cash flows and terminal value.
+
+    The investor's cash flows are the negatives of the contributions (money
+    out), and the terminal value is the money in when the portfolio is
+    liquidated. Solving for the rate that discounts the two to the same
+    present value gives the return on the money actually invested, which is
+    not the same number as the time-weighted return when contributions are
+    unevenly timed.
+    """
+    if terminal_value <= 0:
+        return None
+    series: list[tuple[pd.Timestamp, float]] = [
+        (stamp, -amount) for stamp, amount in flows if amount
+    ]
+    series.append((pd.Timestamp(final_date), float(terminal_value)))
+    if len(series) < 2:
+        return None
+    series.sort(key=lambda item: item[0])
+    return xirr(series)

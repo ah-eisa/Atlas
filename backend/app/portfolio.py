@@ -216,6 +216,29 @@ class PortfolioAnalytics:
         """Whether the flow series is recorded (``ledger``) or estimated."""
         return "ledger" if self.portfolio.cash_flows else "estimated"
 
+    def money_weighted_return(self) -> float | None:
+        """Annualised return on the money actually invested.
+
+        The time-weighted return measures the portfolio's behaviour, and is
+        the right number for judging the strategy. It is not the right
+        number for judging the investor's experience: money that arrived
+        late, or arrived in instalments, is weighted by how long it was
+        there. This is the internal rate of return on the same cash flows,
+        and the two together are the honest picture.
+
+        Returns ``None`` when there is no solution - a portfolio that never
+        turned a profit or a loss has no meaningful rate.
+        """
+        flows = [
+            (pd.Timestamp(stamp), float(amount))
+            for stamp, amount in self.flows.items()
+            if amount
+        ]
+        if not flows:
+            return None
+        final_date = self.market.prices_base.index[-1]
+        return metrics.money_weighted_return(flows, float(self.total_value), final_date)
+
     @cached_property
     def portfolio_returns(self) -> pd.Series:
         """Daily time-weighted returns, net of external contributions.
@@ -720,6 +743,7 @@ class PortfolioAnalytics:
         benchmark_drawdown = metrics.max_drawdown(
             self.market.benchmark.reindex(self.active_index).ffill()
         )
+        money_weighted = self.money_weighted_return()
 
         return json_safe(
             {
@@ -730,6 +754,8 @@ class PortfolioAnalytics:
                 "annualized_return_pct": round_ratio(
                     metrics.annualized_return(daily, trading_days)
                 ),
+                "money_weighted_return_pct": round_ratio(money_weighted),
+                "money_weighted_source": self.flow_source,
                 "volatility_annualized_pct": round_ratio(
                     metrics.annualized_volatility(daily, trading_days)
                 ),
