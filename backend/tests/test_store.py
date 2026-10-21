@@ -4,12 +4,15 @@ from __future__ import annotations
 
 import json
 from dataclasses import replace
+from datetime import datetime, timezone
 from pathlib import Path
 
+import pandas as pd
 import pytest
 
 from backend.app import store
 from backend.app.config import Settings
+from backend.app.data import Holding, Portfolio
 
 
 def row(ticker: str = "AAPL", **overrides: object) -> dict[str, object]:
@@ -151,3 +154,57 @@ def test_invalid_demo_rows_are_skipped(tmp_path: Path, temp_settings: Settings) 
     store.init_db(settings)
     assert store.seed_from_demo(settings) == 1
     assert [item["ticker"] for item in store.list_holdings(settings)] == ["GOOD"]
+
+
+def test_a_provider_outage_falls_back_to_the_last_known_prices(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """A dead provider must not take the dashboard down.
+
+    The last known prices are worth more than an error page: the analytics
+    are computed from them, and the payload says plainly how old they are.
+    """
+    from backend.app import data as data_module
+    from backend.app.config import SETTINGS
+
+    settings = replace(
+        SETTINGS,
+        cache_dir=tmp_path / "cache",
+        holdings_path=tmp_path / "holdings.json",
+        db_path=tmp_path / "portfolio.db",
+        seed_demo=False,
+    )
+    portfolio = Portfolio(
+        base_currency="EUR",
+        holdings=(Holding("AAA.AS", "Alpha", "ETF", "Europe", "EUR", 1.0, 100.0, "2025-01-02"),),
+    )
+
+    calls = {"n": 0}
+
+    def failing_download(symbols, start, end):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            # First call succeeds and populates the cache.
+            index = pd.bdate_range("2025-01-02", periods=40, name="date")
+            frame = pd.DataFrame(
+                {
+                    "AAA.AS": [100.0 + i for i in range(40)],
+                    settings.benchmark: [500.0 + i for i in range(40)],
+                },
+                index=index,
+            )
+            data_module._store_cache(
+                data_module._cache_file(
+                    settings.cache_dir, ["AAA.AS", settings.benchmark], settings.history_years
+                ),
+                frame,
+                datetime(2026, 1, 1, tzinfo=timezone.utc),
+            )
+        raise RuntimeError("Yahoo Finance is unreachable")
+
+    monkeypatch.setattr(data_module, "_download_closes", failing_download)
+
+    market = data_module.load_market_data(portfolio, settings)
+    assert market.stale is True
+    assert market.fetched_at == datetime(2026, 1, 1, tzinfo=timezone.utc)
+    assert len(market.prices_base) > 0

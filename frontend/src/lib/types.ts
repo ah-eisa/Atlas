@@ -26,6 +26,8 @@ export interface Health extends Envelope {
   history_start: string
   history_days: number
   prices_fetched_at: string
+  /** True when the prices are older than the cache allows (provider down). */
+  prices_stale: boolean
   observations: number
   warnings: string[]
 }

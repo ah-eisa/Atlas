@@ -119,7 +119,12 @@ export function DataPanel({
             </div>
             <div>
               <dt>Prices fetched</dt>
-              <dd className="num">{formatTimestamp(health?.prices_fetched_at)}</dd>
+              <dd className="num">
+                {formatTimestamp(health?.prices_fetched_at)}
+                {health?.prices_stale ? (
+                  <span className="metadata__sub">stale — the provider was unreachable</span>
+                ) : null}
+              </dd>
             </div>
             <div>
               <dt>Base currency</dt>

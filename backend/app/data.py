@@ -179,6 +179,10 @@ class MarketData:
     # trading-calendar forward fill. Used to surface stale quotes rather than
     # silently presenting a filled price as current.
     raw_last_dates: dict[str, date] = field(default_factory=dict)
+    # True when the prices are older than the cache allows because the
+    # provider could not be reached. The analytics are still computed, and
+    # the UI says plainly how old they are.
+    stale: bool = False
 
     @property
     def as_of(self) -> date:
@@ -338,18 +342,14 @@ def _download_batch(symbols: Sequence[str], start: date, end: date) -> pd.DataFr
     return closes.sort_index()
 
 
-def _load_cached(path: Path, ttl_hours: float) -> tuple[pd.DataFrame, datetime] | None:
-    """Return cached closes if the cache exists and is fresh, else ``None``.
+def _read_cache(path: Path) -> tuple[pd.DataFrame, datetime] | None:
+    """Read the cached closes, whatever their age.
 
     The cache is plain JSON rather than a pickle: it lives in a user-writable
     directory, and unpickling an attacker-controlled file executes arbitrary
     code. Nothing in a price cache justifies that risk.
     """
     if not path.exists():
-        return None
-    age_hours = (time.time() - path.stat().st_mtime) / 3600.0
-    if age_hours > ttl_hours:
-        logger.info("Price cache is %.1fh old (ttl %.1fh); refetching", age_hours, ttl_hours)
         return None
     try:
         payload = json.loads(path.read_text(encoding="utf-8"))
@@ -364,6 +364,17 @@ def _load_cached(path: Path, ttl_hours: float) -> tuple[pd.DataFrame, datetime] 
     except Exception as exc:  # noqa: BLE001 - a corrupt cache must never be fatal
         logger.warning("Ignoring unreadable price cache %s: %s", path, exc)
         return None
+
+
+def _load_cached(path: Path, ttl_hours: float) -> tuple[pd.DataFrame, datetime] | None:
+    """Return cached closes if the cache exists and is fresh, else ``None``."""
+    if not path.exists():
+        return None
+    age_hours = (time.time() - path.stat().st_mtime) / 3600.0
+    if age_hours > ttl_hours:
+        logger.info("Price cache is %.1fh old (ttl %.1fh); refetching", age_hours, ttl_hours)
+        return None
+    return _read_cache(path)
 
 
 def _store_cache(path: Path, closes: pd.DataFrame, fetched_at: datetime) -> None:
@@ -429,14 +440,30 @@ def load_market_data(
 
     cache_path = _cache_file(settings.cache_dir, symbols, settings.history_years)
     cached = _load_cached(cache_path, settings.cache_ttl_hours) if use_cache else None
+    stale = False
 
     if cached is not None:
         closes, fetched_at = cached
         logger.info("Using cached prices from %s", fetched_at.isoformat())
     else:
-        closes = _download_closes(symbols, start, end)
-        fetched_at = datetime.now(timezone.utc)
-        _store_cache(cache_path, closes, fetched_at)
+        try:
+            closes = _download_closes(symbols, start, end)
+            fetched_at = datetime.now(timezone.utc)
+            _store_cache(cache_path, closes, fetched_at)
+        except Exception as exc:  # noqa: BLE001 - the fallback is the point
+            # The provider is unreachable. The last known prices are still
+            # worth more than an error page: the analytics are computed from
+            # them and the UI is told how old they are.
+            fallback = _read_cache(cache_path)
+            if fallback is None:
+                raise
+            closes, fetched_at = fallback
+            stale = True
+            logger.warning(
+                "Yahoo Finance is unreachable (%s); falling back to prices from %s",
+                exc,
+                fetched_at.isoformat(),
+            )
 
     # Record the last genuine print per symbol before gaps are forward-filled,
     # so the UI can distinguish "market closed" from "this feed stopped".
@@ -469,6 +496,7 @@ def load_market_data(
         base_currency=base,
         fetched_at=fetched_at,
         raw_last_dates=raw_last_dates,
+        stale=stale,
     )
 
 

@@ -427,6 +427,12 @@ class PortfolioAnalytics:
     def _warnings(self) -> list[str]:
         warnings: list[str] = []
         observations = len(self.portfolio_returns)
+        if self.market.stale:
+            warnings.append(
+                "Yahoo Finance could not be reached, so these figures use the last "
+                "prices that were fetched successfully "
+                f"({self.market.fetched_at.isoformat(timespec='seconds')})."
+            )
         if observations < 30:
             warnings.append(
                 f"Only {observations} daily return observations are available; "
@@ -520,6 +526,7 @@ class PortfolioAnalytics:
                 "history_start": to_iso_dates(self.active_index[:1])[0],
                 "history_days": int(len(self.active_index)),
                 "prices_fetched_at": self.market.fetched_at.isoformat(timespec="seconds"),
+                "prices_stale": self.market.stale,
                 "observations": int(len(self.portfolio_returns)),
                 "warnings": self._warnings(),
             }
