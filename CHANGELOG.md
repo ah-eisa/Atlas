@@ -7,6 +7,35 @@ uses [semantic versioning](https://semver.org/spec/v2.0.0.html).
 The API version is exposed at runtime (`/api/v1/health` → `version`), and the
 frontend ships against it.
 
+## [Unreleased]
+
+### Added — observability
+
+- **`GET /api/v1/metrics`** reports process uptime, request totals by status
+  and method, 5xx errors, nearest-rank latency percentiles (p50/p95/p99/max
+  over the last 2,048 API requests) and analytics-cache hits, misses, builds
+  and invalidations. It is `Cache-Control: no-store`, protected by the API key
+  when one is configured, and deliberately stores no path, query, header or
+  portfolio identifier, so it cannot leak what it never records.
+- **The cache counters make rebuilds visible.** A miss/build rate that keeps
+  climbing is the signature of a cache key that changes too often or a price
+  refresh loop, which the latency percentiles alone would not explain.
+
+### Changed — frontend
+
+- **The six views are code-split.** Each view is a module loaded on demand
+  with `React.lazy`, so the application shell, the masthead and the KPI band
+  paint without waiting for a view's panels or the charting libraries. The
+  entry bundle fell from 346.6 kB to 206.8 kB (103.2 kB to 65.2 kB gzipped);
+  ECharts and Lightweight Charts are now separate demand chunks, and Data and
+  Holdings pull neither. Route changes run in `startTransition`, so the
+  current view stays on screen while the next chunk arrives instead of
+  flashing a placeholder.
+- **The view modules live in `frontend/src/views/`.** `App.tsx` keeps the
+  shell, the loading/empty/error states and the route switch; each view owns
+  its panels and its props. This is what makes the split possible without a
+  second routing layer.
+
 ## [2.2.0] — 2026-10-21
 
 Everything below was built on top of 2.1.0: the analytics were made

@@ -66,7 +66,9 @@ curl -H "X-API-Key: $PORTFOLIO_API_KEY" http://localhost:8000/api/v1/positions
 ```
 
 Public regardless of the key: `/api/v1/health`, `/openapi.json`, `/docs`,
-`/redoc`, and the static SPA assets (they contain no data).
+`/redoc`, and the static SPA assets (they contain no data). The metrics route
+is **not** public: it returns operational counters, and it is protected with
+the same key.
 
 ### CORS
 
@@ -103,6 +105,50 @@ answers in milliseconds.
   "api_key_required": false
 }
 ```
+
+### `GET /api/v1/metrics`
+
+Operational counters for the running process, as JSON. Nothing in this payload
+identifies a client, a route, a portfolio or a ticker: the registry stores
+counts and timings only.
+
+```json
+{
+  "version": "2.2.0",
+  "process": "669a3aeb",
+  "uptime_seconds": 1834.512,
+  "requests": {
+    "total": 241,
+    "errors_5xx": 0,
+    "by_status": { "200": 228, "201": 6, "204": 3, "304": 0, "401": 2, "404": 1, "422": 1 },
+    "by_method": { "DELETE": 3, "GET": 219, "POST": 9, "PUT": 10 }
+  },
+  "latency_ms": {
+    "samples": 241,
+    "mean": 18.42,
+    "p50": 4.11,
+    "p95": 92.73,
+    "p99": 214.8,
+    "max": 512.33
+  },
+  "analytics_cache": { "hits": 218, "misses": 4, "builds": 4, "invalidations": 3 },
+  "window": { "latency_samples": 2048 }
+}
+```
+
+| Field | Meaning |
+|---|---|
+| `requests.total` | API requests completed since process start |
+| `requests.by_status` / `by_method` | Counts grouped by HTTP status and method |
+| `requests.errors_5xx` | Subset of the total that failed server-side |
+| `latency_ms` | Nearest-rank percentiles over the most recent 2048 API requests; every reported value is a request that actually happened |
+| `analytics_cache` | Cache decisions around the expensive analytics build: a rising `misses`/`builds` count means the key is changing (or prices are being refreshed) |
+| `window.latency_samples` | Size of the rolling latency window |
+
+Only paths under `/api/` are counted; static assets are ignored. The route
+returns `Cache-Control: no-store` and requires the API key when one is
+configured. A scrape that arrives while a request is in flight will not include
+that request: the counters are updated after the response is produced.
 
 ### `GET /api/v1/bootstrap`
 

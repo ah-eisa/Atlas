@@ -20,6 +20,7 @@ import csv
 import hmac
 import io
 import logging
+import time
 import uuid
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
@@ -34,6 +35,7 @@ from fastapi.staticfiles import StaticFiles
 
 from . import instruments, store
 from .config import SETTINGS, Settings
+from .observability import METRICS
 from .portfolio import API_VERSION, AnalyticsUnavailable, PortfolioAnalytics, build_analytics
 from .schemas import (
     BaseCurrencyUpdate,
@@ -198,6 +200,32 @@ async def api_key_guard(request: Request, call_next):  # type: ignore[no-untyped
     return await call_next(request)
 
 
+@app.middleware("http")
+async def request_metrics(request: Request, call_next):  # type: ignore[no-untyped-def]
+    """Time every API request and count it by status and method.
+
+    Registered after the API-key guard, so rejected requests are counted too,
+    and before CORS, which handles preflights itself. The path is inspected to
+    decide whether to record, but is not stored: the registry has no per-route
+    labels and therefore no unbounded cardinality and no data to leak.
+    """
+    if not request.url.path.startswith("/api/"):
+        return await call_next(request)
+
+    started = time.perf_counter()
+    status = 500
+    try:
+        response = await call_next(request)
+        status = response.status_code
+        return response
+    finally:
+        METRICS.observe(
+            request.method,
+            status,
+            (time.perf_counter() - started) * 1000.0,
+        )
+
+
 # CORS is registered last so that it wraps the API-key guard: the browser must
 # be able to read the 401 body (and the 409/422 bodies raised further down)
 # instead of seeing an opaque "CORS error".
@@ -257,7 +285,9 @@ class AnalyticsService:
         key = self._current_key(portfolio_id)
         with self._lock:
             if not force and self._analytics is not None and self._key == key:
+                METRICS.cache_hit()
                 return self._analytics
+            METRICS.cache_miss()
             portfolio = store.build_portfolio(self.settings, portfolio_id)
             logger.info(
                 "Building analytics for %d positions in portfolio %d "
@@ -274,6 +304,7 @@ class AnalyticsService:
             )
             self._analytics = analytics
             self._key = key
+            METRICS.cache_build()
             logger.info("Analytics ready as of %s", analytics.as_of)
             return analytics
 
@@ -281,6 +312,7 @@ class AnalyticsService:
         with self._lock:
             self._analytics = None
             self._key = None
+            METRICS.cache_invalidation()
 
 
 _service = AnalyticsService(SETTINGS)
@@ -347,6 +379,20 @@ def health_live(portfolio_id: int = Depends(_portfolio_id)) -> dict[str, Any]:
         "positions": len(store.list_holdings(SETTINGS, portfolio_id)),
         "api_key_required": SETTINGS.requires_api_key,
     }
+
+
+@app.get("/api/v1/metrics", tags=["meta"])
+def metrics_snapshot() -> JSONResponse:
+    """Operational counters for this process, as JSON.
+
+    Request totals and latencies cover API traffic only; the analytics cache
+    counters explain why a request was fast or slow. Nothing here identifies a
+    client, a route or a portfolio — see ``observability.py`` for what is
+    deliberately not recorded. The endpoint sits behind the same API key as the
+    data routes when one is configured.
+    """
+    payload = {"version": API_VERSION, "process": STARTED_AT, **METRICS.snapshot()}
+    return JSONResponse(payload, headers={"Cache-Control": "no-store"})
 
 
 @app.get("/api/v1/bootstrap", tags=["meta"])

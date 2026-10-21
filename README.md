@@ -95,7 +95,7 @@ portfolio-dashboard/
 │   │   ├── schemas.py       # strict Pydantic v2 request/response models
 │   │   ├── serialize.py     # JSON-safe rounding, null handling
 │   │   └── config.py        # environment-driven settings
-│   ├── tests/               # 167 hermetic tests
+│   ├── tests/               # 174 hermetic tests
 │   ├── export_schema.py     # exports the committed payload JSON Schema
 │   ├── generate_snapshot.py # writes the committed snapshot.json
 │   └── setup_holdings.py    # interactive / CSV position import
@@ -103,6 +103,7 @@ portfolio-dashboard/
 │   ├── e2e/                 # Playwright smoke suite (desktop + phone)
 │   └── src/
 │       ├── App.tsx          # shell, routing, loading/empty/error states
+│       ├── views/           # the six views, each loaded on demand
 │       ├── components/      # panels, charts, tables, editors
 │       ├── lib/             # api client, types, formatting, routing, motion
 │       └── styles/          # design tokens and layout
@@ -120,7 +121,9 @@ version, so a stale cache is detected rather than misread.
 distribution/heatmap panels, Lightweight Charts for the time series, TanStack
 Table for the holdings grid. The design system is an institutional one —
 hairline grids, tabular figures, one accent colour, and no decoration that
-does not carry information — with complete dark and light palettes.
+does not carry information — with complete dark and light palettes. The six
+views are lazily loaded, so the shell and the KPI band paint before the
+charting libraries are fetched.
 
 ---
 
@@ -351,8 +354,13 @@ The service exposes a versioned JSON API under `/api/v1`. Full reference:
 curl http://localhost:8000/api/v1/health
 curl http://localhost:8000/api/v1/portfolio/summary
 curl http://localhost:8000/api/v1/portfolio/risk
+curl -H "X-API-Key: $KEY" http://localhost:8000/api/v1/metrics
 curl -H "X-API-Key: $KEY" http://localhost:8000/api/v1/positions
 ```
+
+`/api/v1/metrics` reports request counts, latency percentiles and
+analytics-cache decisions for the running process. It is behind the API key
+when one is configured and stores no request identifiers.
 
 ---
 
@@ -364,7 +372,7 @@ make test-frontend  # frontend: Vitest
 make test-e2e       # browser: Playwright, against the production build
 ```
 
-The backend suite (167 tests) is hermetic: it never reaches Yahoo Finance,
+The backend suite (174 tests) is hermetic: it never reaches Yahoo Finance,
 never touches your real database, and uses a synthetic market with a fixed
 seed, so results are reproducible. It covers the metric maths, the TWR and
 XIRR methodology, the FX decomposition, the SQLite store and its schema
@@ -420,7 +428,8 @@ variables.
 - **The API is unauthenticated by default**, which is the right default for a
   single-user tool bound to localhost. Set `PORTFOLIO_API_KEY` before exposing
   it to a network: every data route then requires the header, while the
-  liveness probe and the static SPA stay public.
+  liveness probe and the static SPA stay public. The metrics route is
+  protected even though it carries no portfolio data.
 - **CORS** is restricted to the known local origins plus a
   `localhost`/`127.0.0.1` regex; the CORS middleware wraps the API-key guard
   so a rejected key is still a readable `401` rather than an opaque browser

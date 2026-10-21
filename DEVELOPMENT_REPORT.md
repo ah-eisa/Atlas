@@ -204,6 +204,22 @@ The second half of 2.2 was spent making regressions expensive:
   missing `<main>` landmark on the Data view, and `Object is disposed` thrown
   by charts whose resize or animation callback landed after teardown.
 
+### 2.6 After 2.2 (unreleased)
+
+Two pieces of delivery work landed after the 2.2 release and are recorded here
+because they change how the product is operated:
+
+- **The six views are code-split.** Each view is a `React.lazy` module under
+  `src/views/`; route changes run in `startTransition`, so the current view
+  stays on screen while the next chunk loads. The entry bundle fell from
+  346.6 kB to 206.8 kB (103.2 kB to 65.2 kB gzipped), and ECharts and
+  Lightweight Charts became demand chunks. Data and Holdings fetch neither.
+- **The process is observable.** `GET /api/v1/metrics` reports request counts
+  by status and method, 5xx errors, nearest-rank latency percentiles over the
+  last 2,048 API requests, uptime and analytics-cache decisions. The registry
+  stores no path, query, header or portfolio identifier, so the endpoint
+  cannot leak request data even though it is protected by the API key.
+
 ---
 
 ## 3. Verification
@@ -211,7 +227,7 @@ The second half of 2.2 was spent making regressions expensive:
 ### 3.1 Backend
 
 ```
-167 passed, 1 warning   (Starlette's httpx deprecation notice)
+174 passed, 1 warning   (Starlette's httpx deprecation notice)
 ```
 
 The suite is hermetic: a synthetic market with a fixed seed, a temporary
@@ -228,6 +244,9 @@ SQLite database per test, and no network access. It covers:
   rejected keys, security headers, structured 404s, the requested
   portfolio's currency);
 - the scenario routes (replay windows, what-if trades, benchmark comparison);
+- the metrics registry (bounded window, nearest-rank percentiles, status and
+  cache counters) and the metrics endpoint's contract, including that it
+  requires the API key and returns no request identifiers;
 - the payload contract (`snapshot.json` against a generated JSON Schema).
 
 ### 3.2 Frontend
@@ -310,27 +329,25 @@ not an identity system.
 | Attribution | Single-index arithmetic: allocation and selection are not separated, and the residual is reported rather than eliminated | Medium |
 | Monte Carlo | Multivariate normal; no fat tails, no regime switching, no fees or taxes | Medium |
 | Currency | FX is a single spot rate per day; no hedging, no forward points, no intraday | Low |
-| Bundle size | The ECharts chunk is ~625 kB (211 kB gzipped); charts now mount before the shell is interactive | Medium |
+| Bundle size | The ECharts chunk is 625 kB (211 kB gzipped). It is fetched on demand and cached, but a chart-heavy first visit still pays for it | Medium |
 | Browser coverage | Playwright runs Chromium only (desktop and phone viewports); Safari and Firefox are not exercised | Low |
 | Auth | No users, no sessions, no audit log; the API key is a shared secret | Low for a personal tool |
-| Observability | Structured logs with request ids, but no metrics endpoint or latency histogram | Low |
+| Observability | Counters and latency percentiles live in process memory: they reset on restart and are not shipped anywhere | Low |
 
 ---
 
 ## 6. Next priorities
 
-1. **Code-splitting by view** (lazy-loaded routes), so the ECharts chunk is
-   not needed before the first meaningful paint.
-2. **Observability**: a metrics endpoint with request counts and latency, and
-   a request log that can be shipped rather than only read.
-3. **Trade-level history**, so a position's acquisition date becomes a
+1. **Trade-level history**, so a position's acquisition date becomes a
    sequence of buys and sells, and realised P&L and tax lots become possible.
-4. **A second browser engine in CI** (WebKit at minimum), now that the smoke
+2. **A second browser engine in CI** (WebKit at minimum), now that the smoke
    suite exists.
-5. **Reverse-proxy and TLS guidance**, plus a hardened example for a shared
+3. **Reverse-proxy and TLS guidance**, plus a hardened example for a shared
    host.
-6. **Benchmark sets**: compare against several benchmarks at once and show
+4. **Benchmark sets**: compare against several benchmarks at once and show
    the spread, instead of one configured benchmark plus one ad-hoc query.
+5. **Ship the metrics** to an external store if this ever runs as a service,
+   rather than reading them from one process's memory.
 
 ---
 
@@ -344,7 +361,7 @@ not an identity system.
 | API design | Ad hoc | Versioned, documented, structured errors, pinned payload contract |
 | Security | Localhost-only by accident | Deliberate, configurable, documented |
 | Frontend | One long page | Six views, designed states, responsive, two palettes |
-| Testing | 87 tests, no methodology coverage | 167 backend, 19 unit, 16 browser scenarios, contract and CI |
+| Testing | 87 tests, no methodology coverage | 174 backend, 19 unit, 16 browser scenarios, contract and CI |
 | Delivery | `make setup` | `make setup`, Docker, CI on four jobs |
 | Documentation | Outdated | README, API reference, changelog, this report |
 
