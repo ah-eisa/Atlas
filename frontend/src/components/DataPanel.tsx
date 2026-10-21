@@ -56,6 +56,8 @@ export function DataPanel({
   const analytics = state.analytics
   const health = analytics?.health
   const settings = state.settings
+  const benchmarkIncludesDividends =
+    analytics?.risk.benchmark.includes_dividends ?? settings?.benchmark_includes_dividends ?? true
 
   const applyBaseCurrency = async (event: React.FormEvent) => {
     event.preventDefault()
@@ -340,8 +342,12 @@ export function DataPanel({
               Alpha is Jensen&apos;s alpha from daily excess returns; tracking error is the
               annualised standard deviation of active returns. Up and down capture compare
               portfolio returns with benchmark returns on benchmark-positive and
-              benchmark-negative days. The benchmark is a price index and excludes
-              dividends.
+              benchmark-negative days. The portfolio&apos;s prices are dividend-adjusted, so
+              the benchmark is{' '}
+              <strong>{benchmarkIncludesDividends ? 'a total-return index' : 'a price index'}</strong>
+              {benchmarkIncludesDividends
+                ? ', which includes dividends on the same basis.'
+                : ', which excludes dividends. Comparing the two understates alpha by roughly the portfolio’s dividend yield.'}
             </p>
           </div>
           <div>

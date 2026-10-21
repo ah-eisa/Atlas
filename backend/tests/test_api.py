@@ -76,7 +76,11 @@ def test_bootstrap_on_an_empty_portfolio_is_usable(empty_client: Any) -> None:
     assert payload["analytics"] is None
     assert payload["positions"] == []
     assert payload["source"] == "api"
-    assert payload["settings"]["benchmark"] == "^GSPC"
+    assert payload["settings"]["benchmark"] == "^SP500TR"
+    # The portfolio's prices are dividend-adjusted, so the default benchmark
+    # must be a total-return series too; otherwise alpha is biased downwards
+    # by roughly the portfolio's dividend yield.
+    assert payload["settings"]["benchmark_includes_dividends"] is True
     assert_json_safe(payload)
 
 
@@ -345,7 +349,8 @@ def test_risk_exposes_every_metric_the_ui_renders(analytics: PortfolioAnalytics)
     payload = analytics.risk()
     assert payload["volatility_annualized_pct"] > 0
     assert payload["max_drawdown"]["pct"] <= 0.0
-    assert payload["beta"]["benchmark"] == "^GSPC"
+    assert payload["beta"]["benchmark"] == "^SP500TR"
+    assert payload["benchmark"]["includes_dividends"] is True
     assert payload["calmar_ratio"] is not None
     assert payload["benchmark"]["tracking_error_pct"] is not None
     assert payload["benchmark"]["information_ratio"] is not None

@@ -286,6 +286,7 @@ def _settings_payload() -> dict[str, Any]:
     return {
         "benchmark": SETTINGS.benchmark,
         "benchmark_name": SETTINGS.benchmark_name,
+        "benchmark_includes_dividends": SETTINGS.benchmark_includes_dividends,
         "risk_free_rate": SETTINGS.risk_free_rate,
         "history_years": SETTINGS.history_years,
         "trading_days_per_year": SETTINGS.trading_days_per_year,

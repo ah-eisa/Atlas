@@ -189,6 +189,7 @@ function snapshotToState(snapshot: Snapshot): PortfolioState {
     settings: {
       benchmark: analytics.health.benchmark,
       benchmark_name: analytics.risk.benchmark.name,
+      benchmark_includes_dividends: analytics.risk.benchmark.includes_dividends,
       risk_free_rate: analytics.risk.risk_free_rate,
       history_years: Math.max(1, Math.round(analytics.health.history_days / 252)),
       trading_days_per_year: analytics.risk.trading_days_per_year,

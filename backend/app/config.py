@@ -95,11 +95,16 @@ class Settings:
         db_path: SQLite database holding the user's positions.
         seed_demo: Import ``holdings.json`` on first boot when the store is
             empty. Never overwrites positions afterwards.
+        benchmark_includes_dividends: Whether the benchmark index is a total
+            return series. The portfolio's own prices are dividend-adjusted
+            (``auto_adjust``), so comparing them with a price-only index
+            biases alpha downwards by roughly the portfolio's dividend yield.
     """
 
     base_currency: str = "EUR"
-    benchmark: str = "^GSPC"
-    benchmark_name: str = "S&P 500"
+    benchmark: str = "^SP500TR"
+    benchmark_name: str = "S&P 500 (total return)"
+    benchmark_includes_dividends: bool = True
 
     history_years: int = 2
     trading_days_per_year: int = 252
@@ -165,8 +170,9 @@ def load_settings() -> Settings:
 
     return Settings(
         base_currency=_env_str("PORTFOLIO_BASE_CURRENCY", "EUR").upper(),
-        benchmark=_env_str("PORTFOLIO_BENCHMARK", "^GSPC"),
-        benchmark_name=_env_str("PORTFOLIO_BENCHMARK_NAME", "S&P 500"),
+        benchmark=_env_str("PORTFOLIO_BENCHMARK", "^SP500TR"),
+        benchmark_name=_env_str("PORTFOLIO_BENCHMARK_NAME", "S&P 500 (total return)"),
+        benchmark_includes_dividends=_env_bool("PORTFOLIO_BENCHMARK_INCLUDES_DIVIDENDS", True),
         history_years=years,
         risk_free_rate=risk_free,
         mc_paths=paths,

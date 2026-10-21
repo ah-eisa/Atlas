@@ -178,6 +178,8 @@ export interface ValueAtRisk {
 export interface BenchmarkStats {
   name: string
   symbol: string
+  /** True when the benchmark is a total-return series (dividends included). */
+  includes_dividends: boolean
   correlation: number | null
   alpha_annualized_pct: number | null
   tracking_error_pct: number | null
@@ -332,6 +334,8 @@ export interface InstrumentInfo {
 export interface SettingsInfo {
   benchmark: string
   benchmark_name: string
+  /** True when the benchmark is a total-return series (dividends included). */
+  benchmark_includes_dividends: boolean
   risk_free_rate: number
   history_years: number
   trading_days_per_year: number

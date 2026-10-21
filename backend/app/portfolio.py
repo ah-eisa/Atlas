@@ -390,6 +390,7 @@ class PortfolioAnalytics:
         return {
             "name": self.settings.benchmark_name,
             "symbol": self.settings.benchmark,
+            "includes_dividends": self.settings.benchmark_includes_dividends,
             "return_pct": round_ratio(float(benchmark.iloc[-1] / benchmark.iloc[0] - 1.0)),
             "annualized_return_pct": round_ratio(
                 metrics.annualized_return(returns, self.settings.trading_days_per_year)
