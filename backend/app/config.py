@@ -159,6 +159,10 @@ def load_settings() -> Settings:
     if not 100 <= paths <= 200_000:
         raise ValueError("PORTFOLIO_MC_PATHS must be between 100 and 200000")
 
+    horizon = _env_int("PORTFOLIO_MC_HORIZON_DAYS", 252)
+    if not 20 <= horizon <= 2_520:
+        raise ValueError("PORTFOLIO_MC_HORIZON_DAYS must be between 20 and 2520")
+
     return Settings(
         base_currency=_env_str("PORTFOLIO_BASE_CURRENCY", "EUR").upper(),
         benchmark=_env_str("PORTFOLIO_BENCHMARK", "^GSPC"),
@@ -166,6 +170,7 @@ def load_settings() -> Settings:
         history_years=years,
         risk_free_rate=risk_free,
         mc_paths=paths,
+        mc_horizon_days=horizon,
         cache_ttl_hours=ttl,
         cors_origins=_env_list("PORTFOLIO_CORS_ORIGINS", DEFAULT_CORS_ORIGINS),
         api_key=_env_str("PORTFOLIO_API_KEY", ""),
