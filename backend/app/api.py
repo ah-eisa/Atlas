@@ -35,7 +35,14 @@ from fastapi.staticfiles import StaticFiles
 from . import instruments, store
 from .config import SETTINGS, Settings
 from .portfolio import API_VERSION, AnalyticsUnavailable, PortfolioAnalytics, build_analytics
-from .schemas import BaseCurrencyUpdate, CashFlowIn, HoldingInput, HoldingOut, PortfolioIn
+from .schemas import (
+    BaseCurrencyUpdate,
+    CashFlowIn,
+    HoldingInput,
+    HoldingOut,
+    PortfolioIn,
+    WhatIfRequest,
+)
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 logger = logging.getLogger(__name__)
@@ -602,6 +609,64 @@ def delete_cash_flow(
     _service.invalidate()
     response.status_code = 204
     return response
+
+
+@app.post("/api/v1/portfolio/what-if", tags=["analytics"])
+def what_if(
+    body: WhatIfRequest,
+    portfolio_id: int = Depends(_portfolio_id),
+) -> dict[str, Any]:
+    """Rebuild the analytics with a proposed set of target weights.
+
+    The positions not mentioned keep their current weight. The result says
+    what the risk would look like if the trades were made; it is not a
+    forecast of what they would earn.
+    """
+    targets = {row.ticker: row.weight for row in body.targets}
+    try:
+        analytics = _service.get(portfolio_id=portfolio_id)
+        return analytics.what_if(targets)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=422,
+            detail={"code": "invalid_target", "message": str(exc)},
+        ) from exc
+    except (store.EmptyPortfolio, AnalyticsUnavailable):
+        raise
+    except Exception as exc:  # noqa: BLE001 - upstream failure boundary
+        logger.exception("Failed to build the what-if")
+        raise AnalyticsUnavailable(f"analytics unavailable: {exc}") from exc
+
+
+@app.get("/api/v1/portfolio/benchmark", tags=["analytics"])
+def compare_benchmark(
+    symbol: str,
+    portfolio_id: int = Depends(_portfolio_id),
+) -> dict[str, Any]:
+    """Compare the portfolio against a benchmark other than the configured one.
+
+    The comparison is computed on the portfolio's own sample, so the
+    statistics are directly comparable with the configured benchmark.
+    """
+    cleaned = symbol.strip().upper()
+    if not cleaned or len(cleaned) > 20:
+        raise HTTPException(
+            status_code=422,
+            detail={"code": "invalid_symbol", "message": "A benchmark symbol is required."},
+        )
+    try:
+        analytics = _service.get(portfolio_id=portfolio_id)
+        return analytics.compare_with(cleaned)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=400,
+            detail={"code": "invalid_symbol", "message": str(exc)},
+        ) from exc
+    except (store.EmptyPortfolio, AnalyticsUnavailable):
+        raise
+    except Exception as exc:  # noqa: BLE001 - upstream failure boundary
+        logger.exception("Failed to compare with %s", cleaned)
+        raise AnalyticsUnavailable(f"analytics unavailable: {exc}") from exc
 
 
 @app.get("/api/v1/portfolio/replay", tags=["analytics"])

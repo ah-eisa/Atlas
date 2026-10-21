@@ -10,6 +10,9 @@
  * rebalancing is worth doing at all.
  */
 
+import { useState } from 'react'
+
+import { fetchWhatIf, type DataConfig, type WhatIfResult } from '../lib/api'
 import { formatMoney, formatMoneySigned, formatPercent, formatPercentSigned, signClass } from '../lib/format'
 import type { SummaryPayload } from '../lib/types'
 import { Panel } from './Panel'
@@ -17,10 +20,31 @@ import { Panel } from './Panel'
 interface DriftPanelProps {
   summary: SummaryPayload
   currency: string
+  config: DataConfig
 }
 
-export function DriftPanel({ summary, currency }: DriftPanelProps) {
+export function DriftPanel({ summary, currency, config }: DriftPanelProps) {
   const drift = summary.drift
+  const [preview, setPreview] = useState<WhatIfResult | null>(null)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  const runPreview = async () => {
+    setBusy(true)
+    setError(null)
+    try {
+      const targets = drift.positions.map((row) => ({
+        ticker: row.ticker,
+        weight: row.target_weight,
+      }))
+      setPreview(await fetchWhatIf(config, targets))
+    } catch (cause) {
+      setPreview(null)
+      setError(cause instanceof Error ? cause.message : String(cause))
+    } finally {
+      setBusy(false)
+    }
+  }
 
   if (!drift.has_targets) {
     return (
@@ -98,10 +122,64 @@ export function DriftPanel({ summary, currency }: DriftPanelProps) {
           </tbody>
         </table>
 
+        <div className="drift__actions">
+          <button
+            type="button"
+            className="button"
+            onClick={() => void runPreview()}
+            disabled={busy}
+            title="Rebuild the analytics with these target weights"
+          >
+            {busy ? 'Rebuilding' : 'Preview this rebalance'}
+          </button>
+          {error ? <span className="field__error">{error}</span> : null}
+        </div>
+
+        {preview ? (
+          <table className="readout drift__readout">
+            <caption className="sr-only">
+              The risk before and after the proposed trades.
+            </caption>
+            <thead>
+              <tr>
+                <th scope="col">Measure</th>
+                <th scope="col" className="tabular-right">Now</th>
+                <th scope="col" className="tabular-right">Rebalanced</th>
+              </tr>
+            </thead>
+            <tbody>
+              {(
+                [
+                  ['Volatility', 'volatility_annualized_pct', formatPercent],
+                  ['Sharpe', 'sharpe_ratio', (v: number | null) => (v === null ? '—' : v.toFixed(2))],
+                  ['Beta', 'beta', (v: number | null) => (v === null ? '—' : v.toFixed(2))],
+                  ['Max drawdown', 'max_drawdown_pct', formatPercent],
+                  ['Effective holdings', 'effective_holdings', (v: number | null) => (v === null ? '—' : v.toFixed(2))],
+                  ['Top five weight', 'top_five_pct', formatPercent],
+                ] as [string, keyof WhatIfResult['current'], (value: number | null) => string][]
+              ).map(([label, key, format]) => {
+                const before = preview.current[key] as number | null
+                const after = preview.proposed[key] as number | null
+                return (
+                  <tr key={label}>
+                    <td className="readout__label">{label}</td>
+                    <td className="readout__value num">{format(before)}</td>
+                    <td className={`readout__value num ${signClass((after ?? 0) - (before ?? 0))}`}>
+                      {format(after)}
+                    </td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        ) : null}
+
         <p className="drift__note">
           A positive trade is a purchase and a negative one is a sale, at today&apos;s
           prices. Drift is measured against the target weights, which are the
-          owner&apos;s intention, not a recommendation.
+          owner&apos;s intention, not a recommendation. The preview rebuilds the
+          analytics with the proposed weights: the positions left out are scaled
+          proportionally, so the portfolio is still worth the same amount.
         </p>
       </div>
     </Panel>

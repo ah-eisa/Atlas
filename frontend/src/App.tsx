@@ -307,7 +307,7 @@ function AnalyticsViews({
           </div>
 
           <div className="row row--split">
-            <BenchmarkPanel risk={risk} />
+            <BenchmarkPanel risk={risk} config={config} />
             <RiskContributionPanel risk={risk} />
           </div>
 
@@ -345,7 +345,7 @@ function AnalyticsViews({
       return (
         <main className="app__main">
           <div className="row row--split">
-            <BenchmarkPanel risk={risk} />
+            <BenchmarkPanel risk={risk} config={config} />
             <RiskContributionPanel risk={risk} />
           </div>
           <div className="row row--risk">
@@ -355,7 +355,7 @@ function AnalyticsViews({
               lookbackDays={risk.lookback_days}
             />
           </div>
-          <DriftPanel summary={summary} currency={currency} />
+          <DriftPanel summary={summary} currency={currency} config={config} />
           <AttributionPanel summary={summary} />
           <ReplayPanel
             config={config}

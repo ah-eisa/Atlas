@@ -411,6 +411,39 @@ def _align_to_trading_calendar(closes: pd.DataFrame, benchmark_symbol: str) -> p
     return aligned.dropna(how="any")
 
 
+def load_symbol_series(
+    symbol: str,
+    start: date,
+    end: date,
+    settings: Settings = SETTINGS,
+) -> pd.Series:
+    """Download one symbol's daily closes, with its own cache.
+
+    Used for comparing the portfolio against a benchmark other than the
+    configured one. The cache is keyed on the symbol and the window, so
+    switching back and forth between benchmarks costs one download each.
+    """
+    cache_path = settings.cache_dir / (
+        f"series-v{CACHE_FORMAT_VERSION}-{symbol.replace('^', '').replace('=', '-')}"
+        f"-{start.isoformat()}-{end.isoformat()}.json"
+    )
+    cached = _load_cached(cache_path, settings.cache_ttl_hours)
+    if cached is not None:
+        frame, _ = cached
+    else:
+        frame = _download_batch([symbol], start, end)
+        _store_cache(cache_path, frame, datetime.now(timezone.utc))
+
+    if symbol not in frame.columns:
+        raise ValueError(f"no price data returned for {symbol}")
+    series = frame[symbol].dropna()
+    series.index = pd.to_datetime(series.index).tz_localize(None).normalize()
+    series.index.name = "date"
+    if series.empty:
+        raise ValueError(f"no price data returned for {symbol}")
+    return series.sort_index()
+
+
 def load_market_data(
     portfolio: Portfolio,
     settings: Settings = SETTINGS,

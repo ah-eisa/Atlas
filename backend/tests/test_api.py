@@ -629,3 +629,56 @@ def test_the_active_return_is_attributed_to_positions_and_buckets(analytics_clie
     assert by_region == pytest.approx(explained, abs=0.01)
     by_class = sum(float(row["contribution_pct"]) for row in attribution["by_asset_class"])
     assert by_class == pytest.approx(explained, abs=0.01)
+
+
+def test_a_what_if_rebalance_conserves_the_value(analytics_client: Any) -> None:
+    """A proposal moves money around; it must not create any."""
+    response = analytics_client.post(
+        "/api/v1/portfolio/what-if",
+        json={"targets": [{"ticker": "AAA.AS", "weight": 0.5}]},
+    )
+    assert response.status_code == 200
+    payload = response.json()
+
+    assert payload["current"]["total_value"] == pytest.approx(
+        payload["proposed"]["total_value"], abs=0.05
+    )
+    assert sum(float(trade["trade_value"]) for trade in payload["trades"]) == pytest.approx(
+        0.0, abs=0.05
+    )
+
+
+def test_a_what_if_reports_the_change_in_risk(analytics_client: Any) -> None:
+    """The point of the preview is to see the risk before committing."""
+    response = analytics_client.post(
+        "/api/v1/portfolio/what-if",
+        json={"targets": [{"ticker": "AAA.AS", "weight": 0.8}]},
+    )
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["proposed"]["volatility_annualized_pct"] is not None
+    assert payload["proposed"]["effective_holdings"] is not None
+
+
+def test_a_comparison_against_another_benchmark(analytics_client: Any, monkeypatch: pytest.MonkeyPatch) -> None:
+    """The same statistics, computed against a different index."""
+    from backend.app import portfolio as portfolio_module
+
+    def fake_series(symbol, start, end, settings):
+        import pandas as pd
+
+        index = pd.bdate_range(start, end, name="date")
+        return pd.Series([100.0 + i for i in range(len(index))], index=index)
+
+    monkeypatch.setattr(
+        "backend.app.data.load_symbol_series", fake_series, raising=True
+    )
+
+    response = analytics_client.get(
+        "/api/v1/portfolio/benchmark", params={"symbol": "^TEST"}
+    )
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["symbol"] == "^TEST"
+    assert payload["observations"] > 0
+    assert payload["active_return_pct"] is not None

@@ -713,6 +713,182 @@ class PortfolioAnalytics:
             }
         )
 
+    def what_if(self, targets: dict[str, float]) -> dict[str, Any]:
+        """Rebuild the analytics with a proposed set of target weights.
+
+        The positions named in the proposal are set to their target weight
+        of today's value; the positions left out are scaled proportionally
+        so that the portfolio is still worth the same amount. Money has to
+        come from somewhere, and a proposal that silently created it would
+        be a fantasy.
+
+        The acquisition dates stay as they are, so the candidate history
+        starts when the book started. The result is what the portfolio's
+        risk would look like if the trades had been made - not a forecast
+        of what they would earn.
+        """
+        from dataclasses import replace as dataclass_replace
+
+        prices = self.market.prices_base.iloc[-1]
+        total_value = float(self.total_value)
+        current_weights = {p.ticker: float(p.allocation_pct) for p in self.positions}
+
+        targeted_value = 0.0
+        targeted_quantities: dict[str, float] = {}
+        for holding in self.portfolio.holdings:
+            weight = targets.get(holding.ticker)
+            if weight is None:
+                continue
+            price = float(prices[holding.ticker])
+            if price <= 0:
+                continue
+            quantity = (weight * total_value) / price
+            targeted_quantities[holding.ticker] = quantity
+            targeted_value += quantity * price
+
+        # Everything not named keeps its relative weight, scaled to the
+        # value that is left over.
+        untargeted_value = sum(
+            float(p.value_base)
+            for p in self.positions
+            if p.ticker not in targeted_quantities
+        )
+        residual_value = total_value - targeted_value
+        scale = (
+            residual_value / untargeted_value
+            if untargeted_value > 0 and residual_value > 0
+            else 1.0
+        )
+
+        new_holdings = []
+        trades = []
+        for holding in self.portfolio.holdings:
+            if holding.ticker in targeted_quantities:
+                quantity = targeted_quantities[holding.ticker]
+                new_holdings.append(dataclass_replace(holding, quantity=quantity))
+                trades.append(
+                    {
+                        "ticker": holding.ticker,
+                        "from_weight": round_ratio(current_weights.get(holding.ticker, 0.0)),
+                        "to_weight": round_ratio(targets[holding.ticker]),
+                        "trade_value": round_money(
+                            (targets[holding.ticker] - current_weights.get(holding.ticker, 0.0))
+                            * total_value
+                        ),
+                    }
+                )
+                continue
+            new_holdings.append(dataclass_replace(holding, quantity=holding.quantity * scale))
+            trades.append(
+                {
+                    "ticker": holding.ticker,
+                    "from_weight": round_ratio(current_weights.get(holding.ticker, 0.0)),
+                    "to_weight": round_ratio(current_weights.get(holding.ticker, 0.0) * scale),
+                    "trade_value": round_money(
+                        (current_weights.get(holding.ticker, 0.0) * (scale - 1.0)) * total_value
+                    ),
+                }
+            )
+
+        candidate_portfolio = Portfolio(
+            base_currency=self.portfolio.base_currency,
+            holdings=tuple(new_holdings),
+            cash_flows=self.portfolio.cash_flows,
+        )
+        candidate = PortfolioAnalytics(candidate_portfolio, self.market, self.settings)
+        candidate_summary = candidate.summary()
+        candidate_risk = candidate.risk()
+        current_summary = self.summary()
+        current_risk = self.risk()
+
+        def headline(summary: dict[str, Any], risk: dict[str, Any]) -> dict[str, Any]:
+            concentration = risk.get("concentration") or {}
+            return {
+                "annualized_return_pct": risk.get("annualized_return_pct"),
+                "volatility_annualized_pct": risk.get("volatility_annualized_pct"),
+                "sharpe_ratio": risk.get("sharpe_ratio"),
+                "beta": (risk.get("beta") or {}).get("value"),
+                "max_drawdown_pct": (risk.get("max_drawdown") or {}).get("pct"),
+                "effective_holdings": concentration.get("effective_holdings"),
+                "top_five_pct": concentration.get("top_five_pct"),
+                "total_value": summary.get("total_value"),
+            }
+
+        return json_safe(
+            {
+                **self._envelope(),
+                "trades": trades,
+                "current": headline(current_summary, current_risk),
+                "proposed": headline(candidate_summary, candidate_risk),
+            }
+        )
+
+    def compare_with(self, symbol: str) -> dict[str, Any]:
+        """Compare the portfolio against a different benchmark.
+
+        The comparison is computed on the portfolio's own sample and returns
+        the same statistics as the configured benchmark, so two benchmarks
+        can be read side by side.
+        """
+        from .data import load_symbol_series
+
+        daily = self.portfolio_returns
+        if daily.empty:
+            raise ValueError("the portfolio has no return history yet")
+
+        start = self.active_index[0].date()
+        end = (self.active_index[-1] + pd.Timedelta(days=1)).date()
+        series = load_symbol_series(symbol, start, end, self.settings)
+        aligned = series.reindex(self.active_index).ffill()
+        benchmark_daily = metrics.daily_returns(aligned.reindex(daily.index))
+        benchmark_daily = benchmark_daily.dropna()
+        common = daily.reindex(benchmark_daily.index).dropna()
+        benchmark_daily = benchmark_daily.reindex(common.index)
+
+        alpha = metrics.jensen_alpha(
+            common,
+            benchmark_daily,
+            self.settings.daily_risk_free_rate,
+            self.settings.trading_days_per_year,
+        )
+        beta = metrics.beta(common, benchmark_daily)
+        tracking_error = metrics.tracking_error(
+            common, benchmark_daily, self.settings.trading_days_per_year
+        )
+        information_ratio = metrics.information_ratio(
+            common, benchmark_daily, self.settings.trading_days_per_year
+        )
+        up_capture, down_capture = metrics.up_down_capture(common, benchmark_daily)
+        drawdown = metrics.max_drawdown(aligned.reindex(common.index).dropna())
+        portfolio_total = float((1.0 + common).prod() - 1.0)
+        benchmark_total = float((1.0 + benchmark_daily).prod() - 1.0)
+
+        rebased = aligned.reindex(common.index).ffill()
+        rebased = rebased / float(rebased.iloc[0]) * float(self.total_value)
+
+        return json_safe(
+            {
+                **self._envelope(),
+                "symbol": symbol,
+                "name": symbol,
+                "correlation": round_ratio(metrics.correlation(common, benchmark_daily)),
+                "alpha_annualized_pct": round_ratio(alpha),
+                "beta": round_ratio(beta),
+                "tracking_error_pct": round_ratio(tracking_error),
+                "information_ratio": round_ratio(information_ratio),
+                "up_capture": round_ratio(up_capture),
+                "down_capture": round_ratio(down_capture),
+                "max_drawdown_pct": round_ratio(drawdown.max_drawdown),
+                "portfolio_return_pct": round_ratio(portfolio_total),
+                "benchmark_return_pct": round_ratio(benchmark_total),
+                "active_return_pct": round_ratio(portfolio_total - benchmark_total),
+                "observations": int(len(common)),
+                "dates": to_iso_dates(common.index),
+                "portfolio": money_series(self.equity.reindex(common.index).to_numpy()),
+                "benchmark": money_series(rebased.to_numpy()),
+            }
+        )
+
     def _attribution_payload(self) -> dict[str, Any]:
         """Attribute the active return to positions and to buckets.
 

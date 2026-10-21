@@ -271,6 +271,16 @@ def beta(portfolio_returns: pd.Series, benchmark_returns: pd.Series) -> float:
     return float(covariance / variance)
 
 
+def correlation(portfolio_returns: pd.Series, benchmark_returns: pd.Series) -> float:
+    """Pearson correlation of two return series."""
+    aligned = pd.concat(
+        [portfolio_returns.rename("portfolio"), benchmark_returns.rename("benchmark")], axis=1
+    ).dropna()
+    if len(aligned) < 2:
+        return float("nan")
+    return float(aligned["portfolio"].corr(aligned["benchmark"]))
+
+
 def correlation_matrix(returns: pd.DataFrame) -> pd.DataFrame:
     """Pearson correlation matrix of daily returns.
 

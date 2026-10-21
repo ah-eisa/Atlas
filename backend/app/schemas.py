@@ -137,6 +137,19 @@ class BaseCurrencyUpdate(BaseModel):
         return cleaned
 
 
+class WhatIfTarget(BaseModel):
+    """A proposed weight for one position."""
+
+    ticker: str = Field(min_length=1, max_length=20)
+    weight: float = Field(ge=0, le=1, allow_inf_nan=False)
+
+
+class WhatIfRequest(BaseModel):
+    """A proposed rebalance: the positions that should change, and to what."""
+
+    targets: list[WhatIfTarget] = Field(default_factory=list, max_length=100)
+
+
 class PortfolioIn(BaseModel):
     """A new portfolio."""
 

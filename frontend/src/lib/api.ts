@@ -320,6 +320,80 @@ export function createPortfolio(
   })
 }
 
+/** The risk before and after a proposed rebalance. */
+export interface WhatIfResult {
+  trades: {
+    ticker: string
+    from_weight: number
+    to_weight: number
+    trade_value: number
+  }[]
+  current: {
+    annualized_return_pct: number | null
+    volatility_annualized_pct: number | null
+    sharpe_ratio: number | null
+    beta: number | null
+    max_drawdown_pct: number | null
+    effective_holdings: number | null
+    top_five_pct: number | null
+    total_value: number | null
+  }
+  proposed: {
+    annualized_return_pct: number | null
+    volatility_annualized_pct: number | null
+    sharpe_ratio: number | null
+    beta: number | null
+    max_drawdown_pct: number | null
+    effective_holdings: number | null
+    top_five_pct: number | null
+    total_value: number | null
+  }
+}
+
+export function fetchWhatIf(
+  config: DataConfig,
+  targets: { ticker: string; weight: number }[],
+): Promise<WhatIfResult> {
+  return requestJson<WhatIfResult>(apiUrl(config, '/api/v1/portfolio/what-if'), config, {
+    method: 'POST',
+    body: JSON.stringify({ targets }),
+  })
+}
+
+/** A comparison against a benchmark other than the configured one. */
+export interface BenchmarkComparison {
+  symbol: string
+  name: string
+  correlation: number | null
+  alpha_annualized_pct: number | null
+  beta: number | null
+  tracking_error_pct: number | null
+  information_ratio: number | null
+  up_capture: number | null
+  down_capture: number | null
+  max_drawdown_pct: number | null
+  portfolio_return_pct: number | null
+  benchmark_return_pct: number | null
+  active_return_pct: number | null
+  observations: number
+  dates: string[]
+  portfolio: number[]
+  benchmark: number[]
+}
+
+export function fetchBenchmark(
+  config: DataConfig,
+  symbol: string,
+  signal?: AbortSignal,
+): Promise<BenchmarkComparison> {
+  return requestJson<BenchmarkComparison>(
+    `${apiUrl(config, '/api/v1/portfolio/benchmark')}?symbol=${encodeURIComponent(symbol)}`,
+    config,
+    {},
+    signal,
+  )
+}
+
 /** A stress test of the current positions over a past window. */
 export interface ReplayPayload {
   as_of: string
