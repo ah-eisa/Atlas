@@ -307,5 +307,50 @@ class BondCalculatorOutput(BaseModel):
     scenarios: list[RateShockScenario]
 
 
+# --------------------------------------------------------------------------
+# SEC EDGAR & Macroeconomic Models
+# --------------------------------------------------------------------------
+
+
+class SecFilingItem(BaseModel):
+    form: str
+    filing_date: str
+    report_date: str | None = None
+    accession_number: str
+    primary_document: str
+    description: str
+    url: str
+    is_xbrl: bool = False
+
+
+class SecFilingsResponse(BaseModel):
+    ticker: str
+    cik: str
+    company_name: str
+    filings: list[SecFilingItem]
+
+
+class MacroIndicator(BaseModel):
+    series_id: str
+    name: str
+    category: str
+    latest_value: float
+    unit: str
+    observation_date: str
+    previous_value: float
+    change: float
+    change_pct: float
+
+
+class MacroSummaryResponse(BaseModel):
+    indicators: list[MacroIndicator]
+    as_of: str
+
+
+class MacroHistoryPoint(BaseModel):
+    date: str
+    value: float
+
+
 def is_finite(value: float) -> bool:
     return math.isfinite(value)

@@ -13,6 +13,8 @@ backend/.cache/
 backend/data/*
 !backend/data/fixed_income/
 !backend/data/fixed_income/*
+!backend/data/macro/
+!backend/data/macro/*
 *.db
 *.db-wal
 *.db-shm

@@ -33,7 +33,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 
-from . import fixed_income, instruments, store
+from . import fixed_income, instruments, macro_sec, store
 from .config import SETTINGS, Settings
 from .observability import METRICS
 from .portfolio import API_VERSION, AnalyticsUnavailable, PortfolioAnalytics, build_analytics
@@ -45,9 +45,12 @@ from .schemas import (
     HistoricalYieldPoint,
     HoldingInput,
     HoldingOut,
+    MacroHistoryPoint,
+    MacroSummaryResponse,
     OrderInput,
     PortfolioIn,
     RealizedPnlSummaryOut,
+    SecFilingsResponse,
     TransactionOut,
     WhatIfRequest,
     YieldCurveSnapshot,
@@ -749,6 +752,34 @@ def get_historical_yields(range: str = "1Y") -> list[HistoricalYieldPoint]:
 def calculate_bond(params: BondCalculatorInput) -> BondCalculatorOutput:
     """Bond pricing, Macaulay/Modified duration, convexity, DV01, and interest rate shock scenarios."""
     return fixed_income.FixedIncomeService.calculate_bond_metrics(params)
+
+
+# ---------------------------------------------------------------------------
+# Macroeconomic Intelligence & SEC EDGAR Filings
+# ---------------------------------------------------------------------------
+
+
+@app.get("/api/v1/sec/filings", response_model=SecFilingsResponse, tags=["sec"])
+def get_sec_filings(
+    ticker: str, form: str | None = None, limit: int = 50
+) -> SecFilingsResponse:
+    """Audited regulatory filings (10-K, 10-Q, 8-K) directly from SEC EDGAR."""
+    service = macro_sec.get_macro_sec_service()
+    return service.get_sec_filings(ticker=ticker, form_filter=form, limit=limit)
+
+
+@app.get("/api/v1/macro/summary", response_model=MacroSummaryResponse, tags=["macro"])
+def get_macro_summary() -> MacroSummaryResponse:
+    """Federal Reserve, inflation, GDP, unemployment, and monetary macroeconomic indicators."""
+    service = macro_sec.get_macro_sec_service()
+    return service.get_macro_summary()
+
+
+@app.get("/api/v1/macro/history", response_model=list[MacroHistoryPoint], tags=["macro"])
+def get_macro_history(series: str = "CPIAUCSL", range: str = "5Y") -> list[MacroHistoryPoint]:
+    """Historical time series for macroeconomic indicators."""
+    service = macro_sec.get_macro_sec_service()
+    return service.get_macro_history(series_id=series, range_key=range)
 
 
 @app.post("/api/v1/portfolio/what-if", tags=["analytics"])

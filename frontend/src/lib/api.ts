@@ -24,12 +24,15 @@ import type {
   DataSource,
   HistoricalYieldPoint,
   InstrumentInfo,
+  MacroHistoryPoint,
+  MacroSummaryResponse,
   OrderInput,
   Portfolio,
   PortfolioState,
   Position,
   PositionInput,
   RealizedPnlSummary,
+  SecFilingsResponse,
   Snapshot,
   Transaction,
   YieldCurveSnapshot,
@@ -694,4 +697,171 @@ export async function calculateBond(
     method: 'POST',
     body: JSON.stringify(input),
   })
+}
+
+// --------------------------------------------------------------------------
+// Macroeconomic & SEC EDGAR API
+// --------------------------------------------------------------------------
+
+const SAMPLE_MACRO_SUMMARY: MacroSummaryResponse = {
+  as_of: '2026-10-21',
+  indicators: [
+    {
+      series_id: 'DFF',
+      name: 'Federal Funds Effective Rate',
+      category: 'Monetary Policy',
+      latest_value: 4.83,
+      unit: '%',
+      observation_date: '2026-10-21',
+      previous_value: 4.88,
+      change: -0.05,
+      change_pct: -1.02,
+    },
+    {
+      series_id: 'CPIAUCSL',
+      name: 'Headline CPI Inflation (YoY)',
+      category: 'Inflation',
+      latest_value: 2.7,
+      unit: '%',
+      observation_date: '2026-09-30',
+      previous_value: 2.6,
+      change: 0.1,
+      change_pct: 3.85,
+    },
+    {
+      series_id: 'CPILFESL',
+      name: 'Core CPI Inflation (YoY)',
+      category: 'Inflation',
+      latest_value: 3.2,
+      unit: '%',
+      observation_date: '2026-09-30',
+      previous_value: 3.3,
+      change: -0.1,
+      change_pct: -3.03,
+    },
+    {
+      series_id: 'UNRATE',
+      name: 'Unemployment Rate',
+      category: 'Labor Market',
+      latest_value: 4.1,
+      unit: '%',
+      observation_date: '2026-09-30',
+      previous_value: 4.1,
+      change: 0.0,
+      change_pct: 0.0,
+    },
+    {
+      series_id: 'GDPC1',
+      name: 'Real GDP Growth (Annualized)',
+      category: 'Growth',
+      latest_value: 2.8,
+      unit: '%',
+      observation_date: '2026-06-30',
+      previous_value: 2.5,
+      change: 0.3,
+      change_pct: 12.0,
+    },
+    {
+      series_id: 'M2SL',
+      name: 'M2 Money Supply',
+      category: 'Money & Liquidity',
+      latest_value: 21.45,
+      unit: '$T',
+      observation_date: '2026-09-30',
+      previous_value: 21.4,
+      change: 0.05,
+      change_pct: 0.23,
+    },
+  ],
+}
+
+export async function getMacroSummary(config: DataConfig): Promise<MacroSummaryResponse> {
+  if (config.source === 'snapshot') {
+    return SAMPLE_MACRO_SUMMARY
+  }
+  try {
+    return await requestJson<MacroSummaryResponse>(apiUrl(config, '/api/v1/macro/summary'), config)
+  } catch {
+    return SAMPLE_MACRO_SUMMARY
+  }
+}
+
+export async function getMacroHistory(
+  config: DataConfig,
+  series: string = 'CPIAUCSL',
+  range: string = '5Y',
+): Promise<MacroHistoryPoint[]> {
+  if (config.source === 'snapshot') {
+    return []
+  }
+  try {
+    return await requestJson<MacroHistoryPoint[]>(
+      apiUrl(config, `/api/v1/macro/history?series=${encodeURIComponent(series)}&range=${encodeURIComponent(range)}`),
+      config,
+    )
+  } catch {
+    return []
+  }
+}
+
+export async function getSecFilings(
+  config: DataConfig,
+  ticker: string,
+  form?: string,
+  limit: number = 30,
+): Promise<SecFilingsResponse> {
+  const clean = ticker.trim().toUpperCase()
+  const formParam = form ? `&form=${encodeURIComponent(form)}` : ''
+  const url = apiUrl(config, `/api/v1/sec/filings?ticker=${encodeURIComponent(clean)}&limit=${limit}${formParam}`)
+
+  if (config.source === 'snapshot') {
+    return {
+      ticker: clean,
+      cik: '0000320193',
+      company_name: `${clean} Inc.`,
+      filings: [
+        {
+          form: '10-K',
+          filing_date: '2025-11-01',
+          report_date: '2025-09-30',
+          accession_number: '0000320193-25-000079',
+          primary_document: 'annual_report.htm',
+          description: 'Annual Report for fiscal year ended Sep 30, 2025',
+          url: 'https://www.sec.gov/edgar/browse/?CIK=0000320193',
+          is_xbrl: true,
+        },
+        {
+          form: '10-Q',
+          filing_date: '2026-07-31',
+          report_date: '2026-06-27',
+          accession_number: '0000320193-26-000020',
+          primary_document: 'quarterly_report.htm',
+          description: 'Quarterly Report for period ended June 27, 2026',
+          url: 'https://www.sec.gov/edgar/browse/?CIK=0000320193',
+          is_xbrl: true,
+        },
+        {
+          form: '8-K',
+          filing_date: '2026-08-15',
+          report_date: '2026-08-15',
+          accession_number: '0000320193-26-000025',
+          primary_document: 'current_event.htm',
+          description: 'Item 2.02: Results of Operations and Financial Condition',
+          url: 'https://www.sec.gov/edgar/browse/?CIK=0000320193',
+          is_xbrl: false,
+        },
+      ],
+    }
+  }
+
+  try {
+    return await requestJson<SecFilingsResponse>(url, config)
+  } catch {
+    return {
+      ticker: clean,
+      cik: '0000320193',
+      company_name: clean,
+      filings: [],
+    }
+  }
 }

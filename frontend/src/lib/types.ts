@@ -558,3 +558,47 @@ export interface BondCalculatorOutput {
   current_yield: number
   scenarios: RateShockScenario[]
 }
+
+// --------------------------------------------------------------------------
+// Macroeconomic & SEC EDGAR Types
+// --------------------------------------------------------------------------
+
+export interface SecFilingItem {
+  form: string
+  filing_date: string
+  report_date?: string | null
+  accession_number: string
+  primary_document: string
+  description: string
+  url: string
+  is_xbrl: boolean
+}
+
+export interface SecFilingsResponse {
+  ticker: string
+  cik: string
+  company_name: string
+  filings: SecFilingItem[]
+}
+
+export interface MacroIndicator {
+  series_id: string
+  name: string
+  category: string
+  latest_value: number
+  unit: string
+  observation_date: string
+  previous_value: number
+  change: number
+  change_pct: number
+}
+
+export interface MacroSummaryResponse {
+  indicators: MacroIndicator[]
+  as_of: string
+}
+
+export interface MacroHistoryPoint {
+  date: string
+  value: number
+}
