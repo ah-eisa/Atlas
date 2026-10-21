@@ -53,18 +53,25 @@ Analytics that are actually implemented, not decorative:
 
 - **Time-weighted return** with acquisition-date activation and external
   cash-flow adjustment, so a position bought mid-period is not credited with
-  returns that predate it.
+  returns that predate it. The money-weighted return (XIRR) is reported
+  beside it, because the two answer different questions.
 - **Benchmark-relative analytics**: Jensen alpha, beta, tracking error,
   information ratio, up/down capture, and correlation, all estimated on the
-  common sample with the benchmark.
+  common sample with a total-return benchmark. Any other symbol can be
+  compared side by side without changing the stored portfolio.
 - **Risk decomposition**: Euler (marginal-contribution) risk contribution per
   position, Herfindahl concentration, effective holdings, top-five weight.
 - **Tail risk**: historical and parametric VaR at 95% and 99%, plus CVaR
   (expected shortfall) at both levels.
+- **Currency decomposition**: the unrealised P&L is split between the
+  instrument's own price move and the FX move, with the cost basis converted
+  at the FX rate of the acquisition date.
+- **Attribution**: active return per position, grouped into asset class and
+  region, with the residual stated rather than hidden.
+- **Scenario tools**: a historical replay of the current positions over a past
+  window, target weights with allocation drift, and a rebalance preview.
 - **Projection**: 10,000-path multivariate-normal Monte Carlo with percentile
   bands, a final-value histogram, and the assumptions stated on screen.
-- **Currency handling**: native prices, FX conversion into the reporting
-  currency, and a currency allocation breakdown.
 
 Every figure states its convention — annualised, geometric, over what window,
 against what risk-free rate — because a number without its convention is not
@@ -88,13 +95,15 @@ portfolio-dashboard/
 │   │   ├── schemas.py       # strict Pydantic v2 request/response models
 │   │   ├── serialize.py     # JSON-safe rounding, null handling
 │   │   └── config.py        # environment-driven settings
-│   ├── tests/               # 140 hermetic tests
+│   ├── tests/               # 167 hermetic tests
+│   ├── export_schema.py     # exports the committed payload JSON Schema
 │   ├── generate_snapshot.py # writes the committed snapshot.json
 │   └── setup_holdings.py    # interactive / CSV position import
 ├── frontend/
+│   ├── e2e/                 # Playwright smoke suite (desktop + phone)
 │   └── src/
 │       ├── App.tsx          # shell, routing, loading/empty/error states
-│       ├── components/      # panels, charts, tables, editor
+│       ├── components/      # panels, charts, tables, editors
 │       ├── lib/             # api client, types, formatting, routing, motion
 │       └── styles/          # design tokens and layout
 ├── snapshot.json            # committed demo payload (no backend needed)
@@ -109,9 +118,9 @@ version, so a stale cache is detected rather than misread.
 
 **Frontend.** React 19 + TypeScript, built with Vite. ECharts for the
 distribution/heatmap panels, Lightweight Charts for the time series, TanStack
-Table for the holdings grid. The design system is a dark institutional one:
+Table for the holdings grid. The design system is an institutional one —
 hairline grids, tabular figures, one accent colour, and no decoration that
-does not carry information.
+does not carry information — with complete dark and light palettes.
 
 ---
 
@@ -208,8 +217,8 @@ properties. Everything else - panels, tables, charts, heatmaps, the editor -
 reads those tokens, and the charting libraries read the same tokens at
 runtime, so a palette switch repaints the charts as well as the page. Every
 text role in both palettes clears the WCAG AA contrast ratio (4.5:1); the
-context lines under the headline figures are the tightest, at 4.85:1 in the
-light theme and 5.21:1 in the dark one.
+context lines under the headline figures are the tightest, at 4.56:1 in the
+light theme and 5.01:1 in the dark one.
 
 ---
 
@@ -247,8 +256,15 @@ it is activated on its acquisition date and does not dilute the earlier
 history with a price move that predates it.
 
 **External cash flows.** Contributions and withdrawals are excluded from
-returns. The Performance view states the net invested amount for each window
-so the absolute and percentage figures can be reconciled by hand.
+returns. They are recorded with a date and an amount instead of being
+estimated from value changes, and the Performance view states the net invested
+amount for each window so the absolute and percentage figures can be
+reconciled by hand.
+
+**Money-weighted return.** The time-weighted return measures the strategy; the
+money-weighted return (XIRR over the recorded flows plus the terminal value)
+measures the outcome for the money actually invested. Both are reported, and
+the app does not pretend they should agree.
 
 **Annualisation.** Volatility uses √252; return and beta use geometric
 annualisation over the actual sample length. Drawdown, VaR and CVaR are
@@ -258,12 +274,27 @@ reported on the observed sample.
 returns against the benchmark on the common sample; tracking error is the
 annualised standard deviation of active returns; the information ratio is
 active return over tracking error; capture ratios compare the portfolio's
-up-day and down-day returns to the benchmark's.
+up-day and down-day returns to the benchmark's. The default benchmark is the
+S&P 500 **total-return** index (`^SP500TR`), because the holdings' prices are
+dividend-adjusted; comparing them with a price-only index would bias alpha
+downwards by roughly the dividend yield. The setting is explicit, and a price
+index can be selected for comparison if wanted.
+
+**Currency decomposition.** Unrealised P&L is split into a price effect and an
+FX effect. The cost basis is converted at the FX rate of the acquisition date,
+so a euro investor holding a dollar asset sees how much of the gain came from
+the asset and how much from the currency.
 
 **Risk contribution.** Euler decomposition of the covariance matrix gives each
 position's share of portfolio variance, including the correlation effect. The
 ratio of risk share to capital weight is the number that finds the position
 that is quietly dominating the book.
+
+**Attribution and scenarios.** Active return is attributed to positions and
+grouped by asset class and region, with the residual shown rather than hidden.
+A replay runs the current positions over a chosen past window, target weights
+show allocation drift, and a what-if preview estimates the effect of a
+rebalance without changing the stored portfolio.
 
 **Monte Carlo.** Multivariate normal daily log returns, sampled from the
 historical covariance, with buy-and-hold weight drift and no rebalancing. The
@@ -283,8 +314,9 @@ sensible default; nothing needs to be set for a local run.
 | Variable | Default | Meaning |
 |---|---|---|
 | `PORTFOLIO_BASE_CURRENCY` | `EUR` | Fallback reporting currency |
-| `PORTFOLIO_BENCHMARK` | `^GSPC` | Benchmark symbol |
-| `PORTFOLIO_BENCHMARK_NAME` | `S&P 500` | Benchmark display name |
+| `PORTFOLIO_BENCHMARK` | `^SP500TR` | Benchmark symbol |
+| `PORTFOLIO_BENCHMARK_NAME` | `S&P 500 (total return)` | Benchmark display name |
+| `PORTFOLIO_BENCHMARK_INCLUDES_DIVIDENDS` | `true` | Whether the benchmark is a total-return series; reported next to the comparison |
 | `PORTFOLIO_HISTORY_YEARS` | `2` | Years of daily history to fetch |
 | `PORTFOLIO_RISK_FREE_RATE` | `0.02` | Annual risk-free rate (decimal) |
 | `PORTFOLIO_MC_PATHS` | `10000` | Monte Carlo path count |
@@ -327,14 +359,34 @@ curl -H "X-API-Key: $KEY" http://localhost:8000/api/v1/positions
 ## Testing
 
 ```bash
-make test          # or: python -m pytest
+make test           # backend: pytest
+make test-frontend  # frontend: Vitest
+make test-e2e       # browser: Playwright, against the production build
 ```
 
-The suite is hermetic: it never reaches Yahoo Finance, never touches your
-real database, and uses a synthetic market with a fixed seed, so results are
-reproducible. It covers the metric maths, the TWR methodology, the SQLite
-store, the HTTP contract (including validation, duplicate tickers, empty
-portfolios, export and API-key protection) and the error contract.
+The backend suite (167 tests) is hermetic: it never reaches Yahoo Finance,
+never touches your real database, and uses a synthetic market with a fixed
+seed, so results are reproducible. It covers the metric maths, the TWR and
+XIRR methodology, the FX decomposition, the SQLite store and its schema
+version, the HTTP contract (validation, duplicate tickers, empty portfolios,
+exports, cash flows, portfolios, API-key protection, CORS on rejected keys)
+and the error contract.
+
+The payload contract is pinned twice over: `backend/tests/test_contract.py`
+validates the committed `snapshot.json` against a JSON Schema generated from
+the Pydantic models, and CI regenerates that schema
+(`backend/export_schema.py`) and fails if it differs from the committed
+`frontend/src/lib/payload-schema.json`. A backend change that silently alters
+the payload therefore breaks the build instead of the dashboard.
+
+The frontend unit tests (19) cover the pure logic — formatting, the hash
+router and the snapshot normaliser. The Playwright smoke suite (8 scenarios,
+run on a desktop and a phone viewport) answers the questions only a browser
+can: the app mounts, every view renders panels, the charts fill their
+containers, the figures are not zeros, counters settle, the theme switch
+repaints and survives a reload, nothing overflows sideways, and the holdings
+grid scrolls instead of breaking the layout. It runs against the production
+bundle, which is also what the container ships.
 
 ```bash
 cd frontend && npm run lint && npm run build
@@ -389,7 +441,11 @@ variables.
   included.
 - Crypto trades on calendar days, equities on trading days; the aligned
   series uses the intersection of both calendars.
-- Dividends are not total-return adjusted; price history is used as fetched.
+- Holdings' prices are dividend-adjusted by the data provider, and the
+  default benchmark is a provider total-return series. Neither index
+  methodology is independently verified.
+- Attribution is the single-index arithmetic form: it attributes active
+  return to positions, not to allocation versus selection within sectors.
 - Position history is modelled as a single purchase at the acquisition date.
   It cannot reconstruct a sequence of buys and sells.
 - There is no multi-user support, no authentication, and no audit log. This

@@ -7,6 +7,86 @@ uses [semantic versioning](https://semver.org/spec/v2.0.0.html).
 The API version is exposed at runtime (`/api/v1/health` → `version`), and the
 frontend ships against it.
 
+## [2.2.0] — 2026-10-21
+
+Everything below was built on top of 2.1.0: the analytics were made
+defensible before more surface was added.
+
+### Added — methodology
+
+- **Total-return benchmark.** The portfolio's prices are dividend-adjusted,
+  but the default benchmark was the price-only `^GSPC`, which biased alpha,
+  tracking error and the information ratio downwards by roughly the dividend
+  yield. The default is now `^SP500TR`, and the benchmark's dividend treatment
+  is an explicit setting (`PORTFOLIO_BENCHMARK_INCLUDES_DIVIDENDS`) rather
+  than an assumption. A price index can still be selected, and the UI says
+  which one is in use.
+- **FX decomposition.** Unrealised P&L is split into the instrument's price
+  effect and the currency effect, with the cost basis converted at the FX rate
+  of the acquisition date. Positions that predate the price history are
+  reported as unattributed instead of being smeared across the rest.
+- **Recorded cash flows.** Contributions and withdrawals are now stored with a
+  date, an amount and a note instead of being inferred from value jumps. When
+  the ledger has entries they are authoritative; when it does not, the
+  estimated source is still published and labelled.
+- **Money-weighted return.** XIRR over the recorded flows and the terminal
+  value is reported beside the time-weighted return, plus the source of the
+  flows behind it. The two measures answer different questions and the UI does
+  not conflate them.
+- **Active-return attribution.** The active return is attributed to positions
+  and grouped by region and asset class, with the residual (compounding and
+  cash flows) shown rather than hidden.
+- **Historical replay.** The current weights are applied to a chosen past
+  window, with return, volatility, drawdown and best/worst day, so the
+  portfolio can be stress-tested against a period it did not live through.
+- **Target weights and drift.** Positions carry an optional target weight;
+  the summary reports current weight, drift, the trade that would close it,
+  turnover, and the residual when targets do not sum to one.
+- **Benchmark comparison and rebalance preview.** Any symbol can be compared
+  with the portfolio on its own sample (alpha, beta, tracking error,
+  information ratio, capture, correlation), and a proposed set of weights can
+  be previewed without changing the stored portfolio.
+
+### Added — data and storage
+
+- **Schema versioning and multiple portfolios.** The SQLite schema carries a
+  `user_version` and migrates forward; portfolios have names and their own
+  reporting currency, selected per request with `X-Portfolio-Id`. The default
+  portfolio cannot be deleted.
+- **Last-known-price fallback.** When the provider fails, the analytics are
+  built from the newest cached prices and the payload says the prices are
+  stale, instead of failing the whole request.
+
+### Added — platform
+
+- **API.** `GET/POST /api/v1/portfolios`, `DELETE /api/v1/portfolios/{id}`,
+  `GET/POST/DELETE /api/v1/cash-flows`, `GET /api/v1/portfolio/benchmark`,
+  `GET /api/v1/portfolio/replay`, `POST /api/v1/portfolio/what-if`. Export now
+  carries cash flows as well as positions.
+- **The payload contract is pinned.** `backend/export_schema.py` generates a
+  JSON Schema from the Pydantic models; `backend/tests/test_contract.py`
+  validates the committed `snapshot.json` against it, and CI regenerates the
+  schema and fails if the committed copy differs.
+- **Test harnesses.** Vitest covers the formatters, the hash router and the
+  snapshot normaliser. Playwright runs a seven-scenario smoke suite on a
+  desktop and a phone viewport, against the production bundle: every view
+  renders, the figures are real, counters settle, the theme switch repaints
+  and persists, nothing overflows sideways, and the holdings grid scrolls.
+- **CI** gained a browser job that uploads the Playwright report on failure.
+
+### Fixed
+
+- **Charts no longer throw on unmount.** Navigating between views could
+  surface `Object is disposed` from a chart instance whose resize or
+  animation callback landed after teardown. The wrappers now own their
+  observers, mark the instance disposed before removing it, and stop the
+  ECharts animation loop before disposal.
+- **The counters no longer announce twice.** The animated copy is hidden from
+  assistive technology and the reserved final figure — announced once, at its
+  true value — is the accessible one.
+- **The Data view is wrapped in the shared `<main>` landmark**, so every view
+  has the same document structure.
+
 ## [2.1.0] — 2026-10-21
 
 ### Added — frontend

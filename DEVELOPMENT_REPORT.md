@@ -1,8 +1,13 @@
-# Development Report — ATLAS 2.0
+# Development Report — ATLAS 2.2
 
 An engineering record of the work that turned the original portfolio-dashboard
 template into a standalone investment analytics application: what was wrong,
 what changed, how it was verified, and what is still missing.
+
+This edition covers the 2.2 work, which was spent making the analytics
+defensible — total-return benchmarking, currency attribution, recorded cash
+flows, money-weighted return, scenario tools — and then pinning the result
+with contract, unit and browser tests.
 
 ---
 
@@ -159,6 +164,46 @@ Design decisions:
 - `README.md` and `API.md` rewritten against the code that actually exists.
 - `CHANGELOG.md` documents the breaking change in the data contract.
 
+### 2.5 Version 2.2: from plausible to defensible
+
+The 2.0 build answered the obvious questions. Reviewing it against the
+original audit found four places where an answer was plausible but not
+defensible, and each one was fixed before any new surface was added.
+
+| # | Problem | Why it mattered | What changed |
+|---|---|---|---|
+| 1 | The benchmark was `^GSPC`, a price-only index, while holdings were fetched with `auto_adjust=True` | Alpha, tracking error, information ratio and capture were all biased downwards by roughly the dividend yield (1.3–1.8%/yr for the S&P 500) | Default is `^SP500TR`; dividend treatment is an explicit setting published in the payload and shown in the UI |
+| 2 | Cash flows were *inferred* from value jumps | An inferred flow is indistinguishable from a real one, and the money-weighted return would inherit the guess | Contributions and withdrawals are recorded with a date, amount and note; the payload says whether the flows are `ledger` or `estimated` |
+| 3 | Currency and asset returns were reported as one P&L number | With 54.5% USD exposure, a euro investor could not tell whether the gain was the asset or the dollar | P&L is decomposed into price and FX effects, with the cost basis converted at the FX rate of the acquisition date, and an explicit `unattributed` remainder |
+| 4 | There was no way to ask "what if" | The only view of risk was the book as it happened to be | Replay, target weights with drift, active-return attribution, benchmark comparison and a rebalance preview, all read-only |
+
+Three further decisions followed from those:
+
+- **The residual is reported, not plugged.** Attribution is an arithmetic
+  decomposition of daily active returns; compounding means the parts do not
+  sum exactly to the compounded active return. The difference is a named
+  field, not a hidden adjustment.
+- **Scenarios say what they are.** A replay applies *today's* weights to a
+  past window; it is not a reconstruction of holdings. The panel and the API
+  reference both state this, because a stress test presented as history is a
+  fabricated fact.
+- **The default portfolio is special.** It can be renamed but not deleted:
+  the service always needs somewhere to put a position. Multi-portfolio
+  support therefore did not become multi-tenant support.
+
+The second half of 2.2 was spent making regressions expensive:
+
+- the backend payload is generated as a JSON Schema and the committed
+  `snapshot.json` is validated against it;
+- CI regenerates the schema and fails on drift, so a payload change cannot
+  silently desynchronise the frontend;
+- Vitest covers the pure frontend logic (formatting, the hash router, the
+  snapshot normaliser);
+- Playwright runs the built product in Chromium at desktop and phone widths,
+  and the suite found three real defects: a double-announced counter, a
+  missing `<main>` landmark on the Data view, and `Object is disposed` thrown
+  by charts whose resize or animation callback landed after teardown.
+
 ---
 
 ## 3. Verification
@@ -166,25 +211,36 @@ Design decisions:
 ### 3.1 Backend
 
 ```
-140 passed
+167 passed, 1 warning   (Starlette's httpx deprecation notice)
 ```
 
 The suite is hermetic: a synthetic market with a fixed seed, a temporary
 SQLite database per test, and no network access. It covers:
 
-- metric correctness (drawdown, VaR/CVaR, concentration, capture ratios);
-- the methodology (TWR chaining, activation dates, cash-flow exclusion);
-- the store (CRUD, revision counter, base currency, demo seeding);
+- metric correctness (drawdown, VaR/CVaR, concentration, capture ratios,
+  XIRR and bisection failure modes, FX decomposition);
+- the methodology (TWR chaining, activation dates, recorded and estimated
+  cash flows, money-weighted return);
+- the store (CRUD, revision counter, base currency, demo seeding, schema
+  version, portfolio isolation);
 - the HTTP contract (bootstrap, CRUD, validation, duplicate tickers, empty
-  portfolios, export, API-key protection, CORS on rejected keys, security
-  headers, structured 404s);
-- the snapshot contract (the payload shape the frontend depends on).
+  portfolios, cash flows, portfolios, exports, API-key protection, CORS on
+  rejected keys, security headers, structured 404s, the requested
+  portfolio's currency);
+- the scenario routes (replay windows, what-if trades, benchmark comparison);
+- the payload contract (`snapshot.json` against a generated JSON Schema).
 
 ### 3.2 Frontend
 
 - `npm run lint` (oxlint) — clean.
+- `npm run test` (Vitest) — 19 tests across the formatters, the hash router
+  and the snapshot normaliser.
 - `npm run build` (`tsc -b` + Vite) — clean; the build reads the committed
   `snapshot.json`, so a malformed snapshot fails the build.
+- `npm run test:e2e` (Playwright) — 8 scenarios × 2 viewports, against the
+  production bundle: mount, every view, chart sizing, real figures, counter
+  settling, theme repaint and persistence, no horizontal overflow, grid
+  scrolling.
 - `npm audit --omit=dev` — no vulnerabilities in production dependencies.
 
 ### 3.3 Manual verification against a running stack
@@ -211,6 +267,12 @@ SQLite database per test, and no network access. It covers:
 | Light and dark palettes, all six views | Pass — the light palette is a second complete design, not an inversion |
 | Theme persistence across a reload | Pass — applied before the first paint, no flash |
 | Text contrast in both palettes | Pass — every role clears WCAG AA (4.56:1 light, 5.01:1 dark) |
+
+The 2.2 analytics — FX attribution, money-weighted return, recorded flows,
+replay, drift, attribution and benchmark comparison — are covered by the
+backend and contract suites, and the browser suite loads every view that
+hosts them. The manual pass above was not repeated for each new panel; when a
+check is automated it is listed in 3.1/3.2 instead of here.
 
 ---
 
@@ -242,32 +304,33 @@ not an identity system.
 
 | Area | Debt | Severity |
 |---|---|---|
-| Market data | Yahoo Finance is unauthenticated, rate-limited, and occasionally changes shape | High — the app depends on it for everything |
-| Position model | A position is one purchase at one date; no trade history, no partial sells | Medium |
-| Dividends | Prices are not total-return adjusted | Medium |
-| Monte Carlo | Multivariate normal; no fat tails, no regime switching, no fees | Medium |
-| Currency | FX is a single spot rate, not a hedged position | Low |
-| Frontend tests | No unit-test harness for the frontend; verification is lint + typecheck + build + manual | Medium |
-| Bundle size | The ECharts chunk is ~626 kB (211 kB gzipped) | Low |
-| Auth | No users, no sessions, no audit log | Low for a personal tool |
-| Observability | Structured logs only; no metrics endpoint | Low |
+| Market data | Yahoo Finance is unauthenticated, rate-limited, and occasionally changes shape; the total-return benchmark's methodology is the provider's, not independently verified | High — the app depends on it for everything |
+| Position model | A position is one purchase at one date; no trade history, no partial sells, so lot-level tax and realised P&L are out of reach | Medium |
+| Scenario framing | Replay applies today's weights to a past window; it is a stress test, not a reconstruction, and the UI has to keep saying so | Medium |
+| Attribution | Single-index arithmetic: allocation and selection are not separated, and the residual is reported rather than eliminated | Medium |
+| Monte Carlo | Multivariate normal; no fat tails, no regime switching, no fees or taxes | Medium |
+| Currency | FX is a single spot rate per day; no hedging, no forward points, no intraday | Low |
+| Bundle size | The ECharts chunk is ~625 kB (211 kB gzipped); charts now mount before the shell is interactive | Medium |
+| Browser coverage | Playwright runs Chromium only (desktop and phone viewports); Safari and Firefox are not exercised | Low |
+| Auth | No users, no sessions, no audit log; the API key is a shared secret | Low for a personal tool |
+| Observability | Structured logs with request ids, but no metrics endpoint or latency histogram | Low |
 
 ---
 
 ## 6. Next priorities
 
-1. **Total-return prices** and a corporate-action-aware history, so the
-   benchmark comparison is not distorted by dividend gaps.
-2. **A frontend test harness** (Vitest + Testing Library) around the pure
-   logic — formatting, the hash router, and the snapshot normaliser — which
-   is where a regression would be cheapest to catch.
+1. **Code-splitting by view** (lazy-loaded routes), so the ECharts chunk is
+   not needed before the first meaningful paint.
+2. **Observability**: a metrics endpoint with request counts and latency, and
+   a request log that can be shipped rather than only read.
 3. **Trade-level history**, so a position's acquisition date becomes a
-   sequence of buys and sells, and the time series reflects it.
-4. **Code-splitting by view** (lazy-loaded routes), which removes the ECharts
-   chunk from the first paint.
+   sequence of buys and sells, and realised P&L and tax lots become possible.
+4. **A second browser engine in CI** (WebKit at minimum), now that the smoke
+   suite exists.
 5. **Reverse-proxy and TLS guidance**, plus a hardened example for a shared
    host.
-6. **Multiple benchmarks** and a benchmark-relative "what if" view.
+6. **Benchmark sets**: compare against several benchmarks at once and show
+   the spread, instead of one configured benchmark plus one ad-hoc query.
 
 ---
 
@@ -275,18 +338,17 @@ not an identity system.
 
 | Dimension | Before | After |
 |---|---|---|
-| Correctness of the analytics | Not defensible | Defensible, documented, and tested |
+| Correctness of the analytics | Not defensible | Defensible, documented, and tested; benchmark and currency effects are decomposed |
 | Architecture | Flat scripts | Layered package with a clear seam |
-| Persistence | JSON file | SQLite with validation and revisions |
-| API design | Ad hoc | Versioned, documented, structured errors |
+| Persistence | JSON file | SQLite with validation, revisions, schema version and multiple portfolios |
+| API design | Ad hoc | Versioned, documented, structured errors, pinned payload contract |
 | Security | Localhost-only by accident | Deliberate, configurable, documented |
-| Frontend | One long page | Six views, designed states, responsive |
-| Testing | 87 tests, no methodology coverage | 141 tests, methodology included |
-| Delivery | `make setup` | `make setup`, Docker, CI on three jobs |
+| Frontend | One long page | Six views, designed states, responsive, two palettes |
+| Testing | 87 tests, no methodology coverage | 167 backend, 19 unit, 16 browser scenarios, contract and CI |
+| Delivery | `make setup` | `make setup`, Docker, CI on four jobs |
 | Documentation | Outdated | README, API reference, changelog, this report |
 
 **Overall: a credible personal investment analytics tool.** The numbers can be
 audited, the failure modes are designed rather than accidental, and the
 deployment path is one command. It is not an institutional platform: it has
-one user, one benchmark, one data source, and no authentication beyond a
-shared secret.
+one user, one data source, and no authentication beyond a shared secret.
