@@ -26,7 +26,7 @@ export function RiskContributionPanel({ risk }: RiskContributionPanelProps) {
     <Panel
       title="Risk contribution"
       subtitle="Euler decomposition · share of variance"
-      className="panel--fill risk-contribution"
+      className="risk-contribution"
     >
       <div className="concentration">
         <div className="concentration__stat">

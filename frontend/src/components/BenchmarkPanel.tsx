@@ -131,7 +131,7 @@ export function BenchmarkPanel({ risk, config }: BenchmarkPanelProps) {
     <Panel
       title="Benchmark"
       subtitle={`${benchmark.name} (${benchmark.symbol}) · ${benchmark.observations} observations`}
-      className="panel--fill benchmark"
+      className="benchmark"
     >
       <div className="benchmark__cells">
         {cells.map((cell) => (

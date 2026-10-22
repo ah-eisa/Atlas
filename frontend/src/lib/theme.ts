@@ -16,7 +16,7 @@ import { useSyncExternalStore } from 'react'
 
 export type Theme = 'dark' | 'light'
 
-const STORAGE_KEY = 'atlas.theme'
+const STORAGE_KEY = 'atlas.theme.v2'
 
 /** Notified on every change; the version counter drives chart re-colouring. */
 const listeners = new Set<() => void>()

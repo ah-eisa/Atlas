@@ -307,8 +307,15 @@ body {
  * the chart absorb that slack so the charts in a row end on one baseline.
  * `min-height` keeps the plot readable if the row is short.
  */
-.panel--fill .panel__body,
-.panel--fill .panel__body > * {
+.panel--fill .panel__body {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+.panel--fill .panel__body > .chart,
+.panel--fill .panel__body > .chart--fill {
   display: flex;
   flex-direction: column;
   flex: 1;

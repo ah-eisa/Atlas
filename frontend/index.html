@@ -16,7 +16,8 @@
       // and, on a bright screen, genuinely uncomfortable.
       ;(function () {
         try {
-          var stored = window.localStorage.getItem('atlas.theme')
+          window.localStorage.removeItem('atlas.theme')
+          var stored = window.localStorage.getItem('atlas.theme.v2')
           var theme =
             stored === 'light' || stored === 'dark'
               ? stored
