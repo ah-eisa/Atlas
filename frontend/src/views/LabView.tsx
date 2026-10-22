@@ -7,6 +7,7 @@ import {
   getStressReport,
   runCustomStress,
 } from '../lib/api'
+import { consumePendingIntent, subscribeCommandIntent } from '../lib/commandBus'
 import {
   formatMoney,
   formatPercent,
@@ -90,6 +91,26 @@ export function LabView({ config, portfolioId, baseCurrency }: LabViewProps) {
       setAttrLoading(false)
     }
   }, [config, portfolioId, attrPeriod, attrGroupBy])
+
+  useEffect(() => {
+    const initial = consumePendingIntent('xray')
+    if (initial) {
+      if (initial.tab === 'xray' || initial.tab === 'stress' || initial.tab === 'attribution') {
+        setActiveTab(initial.tab)
+      }
+      if (initial.scenarioKey) {
+        setSelectedScenarioKey(initial.scenarioKey)
+      }
+    }
+    return subscribeCommandIntent('xray', (intent) => {
+      if (intent.tab === 'xray' || intent.tab === 'stress' || intent.tab === 'attribution') {
+        setActiveTab(intent.tab)
+      }
+      if (intent.scenarioKey) {
+        setSelectedScenarioKey(intent.scenarioKey)
+      }
+    })
+  }, [])
 
   useEffect(() => {
     void loadXray()

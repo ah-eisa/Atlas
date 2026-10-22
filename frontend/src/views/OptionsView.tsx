@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Panel, Segmented } from '../components/Panel'
 import type { DataConfig } from '../lib/api'
 import { calculateOption, getOptionChain } from '../lib/api'
+import { consumePendingIntent, subscribeCommandIntent } from '../lib/commandBus'
 import type {
   BlackScholesInput,
   BlackScholesOutput,
@@ -61,6 +62,30 @@ export default function OptionsView({ state, config }: OptionsViewProps) {
     },
     [config, selectedExpiry],
   )
+
+  useEffect(() => {
+    const initial = consumePendingIntent('options')
+    if (initial) {
+      if (initial.tab === 'chain' || initial.tab === 'calculator') {
+        setActiveTab(initial.tab)
+      }
+      if (initial.ticker) {
+        setSelectedTicker(initial.ticker.toUpperCase())
+        setSelectedExpiry(undefined)
+        setActiveTab('chain')
+      }
+    }
+    return subscribeCommandIntent('options', (intent) => {
+      if (intent.tab === 'chain' || intent.tab === 'calculator') {
+        setActiveTab(intent.tab)
+      }
+      if (intent.ticker) {
+        setSelectedTicker(intent.ticker.toUpperCase())
+        setSelectedExpiry(undefined)
+        setActiveTab('chain')
+      }
+    })
+  }, [])
 
   useEffect(() => {
     loadChain(selectedTicker, selectedExpiry)

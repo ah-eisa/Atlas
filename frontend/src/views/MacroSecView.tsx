@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Panel, Segmented } from '../components/Panel'
 import type { DataConfig } from '../lib/api'
 import { getMacroHistory, getMacroSummary, getSecFilings } from '../lib/api'
+import { consumePendingIntent, subscribeCommandIntent } from '../lib/commandBus'
 import type {
   MacroHistoryPoint,
   MacroSummaryResponse,
@@ -76,6 +77,42 @@ export default function MacroSecView({ state, config }: MacroSecViewProps) {
       setSecLoading(false)
     }
   }, [config])
+
+  useEffect(() => {
+    const initial = consumePendingIntent('macro')
+    if (initial) {
+      if (initial.tab === 'macro' || initial.tab === 'sec') {
+        setActiveTab(initial.tab)
+      }
+      if (initial.ticker) {
+        setSelectedTicker(initial.ticker.toUpperCase())
+        setActiveTab('sec')
+      }
+      if (initial.form) {
+        setFormFilter(initial.form)
+      }
+      if (initial.series) {
+        setSelectedSeries(initial.series)
+        setActiveTab('macro')
+      }
+    }
+    return subscribeCommandIntent('macro', (intent) => {
+      if (intent.tab === 'macro' || intent.tab === 'sec') {
+        setActiveTab(intent.tab)
+      }
+      if (intent.ticker) {
+        setSelectedTicker(intent.ticker.toUpperCase())
+        setActiveTab('sec')
+      }
+      if (intent.form) {
+        setFormFilter(intent.form)
+      }
+      if (intent.series) {
+        setSelectedSeries(intent.series)
+        setActiveTab('macro')
+      }
+    })
+  }, [])
 
   useEffect(() => {
     loadMacroSummary()

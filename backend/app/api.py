@@ -1028,6 +1028,80 @@ def get_xray(portfolio_id: int = Depends(_portfolio_id)) -> dict[str, Any]:
         raise AnalyticsUnavailable(f"analytics unavailable: {exc}") from exc
 
 
+@app.get("/api/v1/search", tags=["search"])
+def unified_search(
+    q: str = "",
+    portfolio_id: int = Depends(_portfolio_id),
+) -> dict[str, Any]:
+    """Unified Command Palette search across positions, portfolios, trades, scenarios, macro, and SEC."""
+    query = q.strip().lower()
+    positions = store.list_holdings(SETTINGS, portfolio_id)
+    portfolios = store.list_portfolios(SETTINGS)
+    transactions = store.list_transactions(SETTINGS, portfolio_id)
+    scenarios = lab.scenario_catalogue()
+    macro_items = macro_sec.get_macro_sec_service().get_macro_summary().indicators
+
+    matched_positions = [
+        p
+        for p in positions
+        if not query
+        or query in p["ticker"].lower()
+        or query in p["name"].lower()
+        or query in (p.get("asset_class") or "").lower()
+    ][:8]
+
+    matched_portfolios = [
+        p
+        for p in portfolios
+        if not query or query in p["name"].lower() or query in p["base_currency"].lower()
+    ][:5]
+
+    matched_trades = [
+        t
+        for t in transactions
+        if not query
+        or query in t["ticker"].lower()
+        or query in t["order_type"].lower()
+        or query in (t.get("notes") or "").lower()
+    ][:5]
+
+    matched_scenarios = [
+        s
+        for s in scenarios
+        if not query
+        or query in s["key"].lower()
+        or query in s["name"].lower()
+        or query in s["description"].lower()
+    ][:5]
+
+    matched_macro = [
+        m.model_dump()
+        for m in macro_items
+        if not query
+        or query in m.series_id.lower()
+        or query in m.name.lower()
+        or query in m.category.lower()
+    ][:6]
+
+    # Parse ticker-specific intent such as "NVDA 10-K", "AAPL options", or bare ticker "TSLA"
+    tokens = [tok.upper() for tok in q.strip().split() if tok]
+    candidate_ticker: str | None = None
+    if tokens:
+        first = tokens[0]
+        if first in macro_sec.KNOWN_CIKS or (1 <= len(first) <= 6 and first.isalpha()):
+            candidate_ticker = first
+
+    return {
+        "query": q,
+        "candidate_ticker": candidate_ticker,
+        "positions": matched_positions,
+        "portfolios": matched_portfolios,
+        "transactions": matched_trades,
+        "scenarios": matched_scenarios,
+        "macro": matched_macro,
+    }
+
+
 @app.get("/api/v1/portfolio/export", tags=["positions"])
 def export_portfolio(
     format: str = "json", portfolio_id: int = Depends(_portfolio_id)

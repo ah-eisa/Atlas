@@ -134,3 +134,9 @@ def test_lab_api_endpoints(analytics_client) -> None:
     assert r_xray.status_code == 200
     assert "headline" in r_xray.json()
     assert "risk_vs_capital" in r_xray.json()
+
+    r_search = analytics_client.get("/api/v1/search?q=NVDA+10-K")
+    assert r_search.status_code == 200
+    assert r_search.json()["candidate_ticker"] == "NVDA"
+    assert "scenarios" in r_search.json()
+

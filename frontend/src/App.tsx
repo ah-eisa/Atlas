@@ -8,8 +8,9 @@
  * views is instantaneous.
  */
 
-import { lazy, Suspense, useState } from 'react'
+import { lazy, Suspense, useEffect, useState } from 'react'
 
+import { CommandPalette } from './components/CommandPalette'
 import { NewPortfolioModal } from './components/NewPortfolioModal'
 import { OrderModal } from './components/OrderModal'
 import { PositionModal } from './components/PositionModal'
@@ -47,6 +48,7 @@ function Shell({
   onCreatePortfolio,
   onAddPosition,
   onOpenTradeModal,
+  onOpenCommandPalette,
   onSwitchSource,
   children,
 }: {
@@ -59,6 +61,7 @@ function Shell({
   onCreatePortfolio?: () => void
   onAddPosition?: () => void
   onOpenTradeModal?: () => void
+  onOpenCommandPalette?: () => void
   onSwitchSource?: (source: DataSource) => void
   children: React.ReactNode
 }) {
@@ -88,6 +91,7 @@ function Shell({
         onCreatePortfolio={onCreatePortfolio}
         onAddPosition={onAddPosition}
         onOpenTradeModal={onOpenTradeModal}
+        onOpenCommandPalette={onOpenCommandPalette}
         onSwitchSource={onSwitchSource}
         editable={state?.editable ?? false}
       />
@@ -411,7 +415,7 @@ function ViewContent({
 }
 
 export default function App() {
-  const [view] = useHashRoute()
+  const [view, navigate] = useHashRoute()
   const {
     data,
     error,
@@ -427,7 +431,19 @@ export default function App() {
     clearError,
   } = usePortfolio()
 
+  const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false)
   const [isNewPortfolioOpen, setIsNewPortfolioOpen] = useState(false)
+
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault()
+        setIsCommandPaletteOpen((prev) => !prev)
+      }
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [])
   const [positionModal, setPositionModal] = useState<{
     isOpen: boolean
     position: Position | null
@@ -542,10 +558,25 @@ export default function App() {
       onCreatePortfolio={() => setIsNewPortfolioOpen(true)}
       onAddPosition={handleOpenAddPosition}
       onOpenTradeModal={() => handleOpenTradeModal()}
+      onOpenCommandPalette={() => setIsCommandPaletteOpen(true)}
       onSwitchSource={setSource}
     >
       <WarningStrip state={data} error={error} onClearError={clearError} />
       {content}
+
+      <CommandPalette
+        isOpen={isCommandPaletteOpen}
+        onClose={() => setIsCommandPaletteOpen(false)}
+        state={data}
+        config={config}
+        onNavigate={navigate}
+        onOpenTradeModal={handleOpenTradeModal}
+        onAddPosition={handleOpenAddPosition}
+        onCreatePortfolio={() => setIsNewPortfolioOpen(true)}
+        onSelectPortfolio={setPortfolio}
+        onSwitchSource={setSource}
+        onRefresh={() => void refresh()}
+      />
 
       <NewPortfolioModal
         isOpen={isNewPortfolioOpen}

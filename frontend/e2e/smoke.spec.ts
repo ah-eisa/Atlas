@@ -153,3 +153,18 @@ test('the holdings grid scrolls rather than breaking the layout', async ({ page 
   const overflowX = await grid.evaluate((element) => getComputedStyle(element).overflowX)
   expect(['auto', 'scroll']).toContain(overflowX)
 })
+
+test('command palette opens on Ctrl+K and executes deep-link search', async ({ page }) => {
+  await page.goto('/?source=snapshot#/overview')
+  await page.getByRole('button', { name: 'Open Command Palette' }).click()
+
+  const dialog = page.getByRole('dialog', { name: 'Command Palette' })
+  await expect(dialog).toBeVisible()
+
+  const searchInput = page.getByLabel('Command palette search')
+  await searchInput.fill('NVDA 10-K')
+  await expect(dialog.getByRole('option').first()).toContainText('NVDA')
+  await searchInput.press('Enter')
+
+  await expect(page).toHaveURL(/#\/macro/)
+})

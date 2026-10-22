@@ -63,6 +63,7 @@ interface TopBarProps {
   onCreatePortfolio?: () => void
   onAddPosition?: () => void
   onOpenTradeModal?: () => void
+  onOpenCommandPalette?: () => void
   onSwitchSource?: (source: DataSource) => void
   editable?: boolean
 }
@@ -140,6 +141,7 @@ export function TopBar({
   onCreatePortfolio,
   onAddPosition,
   onOpenTradeModal,
+  onOpenCommandPalette,
   onSwitchSource,
   editable = false,
 }: TopBarProps) {
@@ -221,6 +223,21 @@ export function TopBar({
         </nav>
 
         <div className="topbar__actions">
+          {onOpenCommandPalette && (
+            <button
+              type="button"
+              className="button button--quiet button--sm"
+              onClick={onOpenCommandPalette}
+              title="Open Command Palette & Unified Search (Ctrl+K)"
+              aria-label="Open Command Palette"
+            >
+              <span>Search</span>
+              <span className="num" style={{ opacity: 0.7, marginLeft: '0.35rem', fontSize: '0.72rem' }}>
+                Ctrl+K
+              </span>
+            </button>
+          )}
+
           {editable && onOpenTradeModal && (
             <button
               type="button"
