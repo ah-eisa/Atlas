@@ -219,6 +219,7 @@ export function WatchlistModal({
               className="button button--quiet button--mini"
               onClick={onClose}
               aria-label="Close modal"
+              style={{ flexShrink: 0, position: 'relative', zIndex: 10 }}
             >
               ✕
             </button>

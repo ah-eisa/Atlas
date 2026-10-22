@@ -137,11 +137,11 @@ export function CsvImportModal({
             background: 'var(--surface-header)',
           }}
         >
-          <div>
+          <div style={{ flex: '1 1 auto', minWidth: 0, paddingRight: '0.5rem' }}>
             <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 600 }}>
               Broker Statement & CSV Import Wizard
             </h3>
-            <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
+            <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
               Auto-detects Interactive Brokers (IBKR), ATLAS standard, or custom broker statements (Base: {baseCurrency})
             </div>
           </div>
@@ -150,6 +150,7 @@ export function CsvImportModal({
             className="button button--quiet button--mini"
             onClick={onClose}
             aria-label="Close modal"
+            style={{ flexShrink: 0, position: 'relative', zIndex: 10 }}
           >
             ✕
           </button>

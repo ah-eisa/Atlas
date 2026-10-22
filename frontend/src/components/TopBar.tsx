@@ -2,11 +2,10 @@
  * Application chrome: wordmark, primary navigation, data controls, and the
  * headline portfolio readout.
  *
- * Enhanced with:
- *   - Direct Portfolio Switcher & "+ New Portfolio" action
- *   - 1-click Live API / Demo Snapshot toggle
- *   - Quick "+ Add Position" button accessible from any view
- *   - Real-time Market Ticker banner (S&P 500, NASDAQ, BTC, Gold, 10Y Yield)
+ * Professional Two-Tier Architecture:
+ *   - Tier 1: Global Chrome Bar (Logo, Book Switcher, Command Search, Global Actions)
+ *   - Tier 2: Dedicated Navigation Tabs Bar (Full-width, all 11 views spacious and visible)
+ *   - Masthead: Crisp typography with clean inline deltas and sparkline
  */
 
 import {
@@ -56,7 +55,6 @@ interface TopBarProps {
   holdingsCount: number
   refreshing: boolean
   onRefresh: () => void
-  /** Name of the active portfolio, in live mode. */
   portfolioName?: string
   portfolios?: Portfolio[]
   activePortfolioId?: number
@@ -84,22 +82,23 @@ function Delta({ label, absolute, percent, delay }: DeltaProps) {
   return (
     <div className="topbar__delta">
       <span className="topbar__delta-label">{label}</span>
-      <AnimatedNumber
-        value={absolute}
-        format={formatMoneySigned}
-        delay={delay}
-        className={`num ${tone}`}
-      />
-      <span className={`num topbar__delta-pct ${tone}`}>
-        (<AnimatedNumber value={percent} format={formatPercentSigned} delay={delay} />)
+      <span className={`num ${tone}`}>
+        <AnimatedNumber
+          value={absolute}
+          format={formatMoneySigned}
+          delay={delay}
+          className={`num ${tone}`}
+        />
+        {' '}
+        <span className="topbar__delta-pct">
+          (<AnimatedNumber value={percent} format={formatPercentSigned} delay={delay} />)
+        </span>
       </span>
     </div>
   )
 }
 
-/**
- * Sun / moon glyph for the theme switch.
- */
+/** Sun / moon glyph for the theme switch. */
 function ThemeIcon({ theme }: { theme: 'dark' | 'light' }) {
   if (theme === 'dark') {
     return (
@@ -139,7 +138,7 @@ export function TopBar({
   onRefresh,
   portfolioName,
   portfolios = [],
-  activePortfolioId,
+  activePortfolioId = 1,
   onSelectPortfolio,
   onCreatePortfolio,
   onAddPosition,
@@ -156,8 +155,10 @@ export function TopBar({
 
   return (
     <header className={analyticsReady ? 'topbar' : 'topbar topbar--compact'}>
+      {/* Tier 0: Real-time Global Market Ticker Banner */}
       <MarketTickerBar config={config} />
 
+      {/* Tier 1: Main Global Chrome Header */}
       <div className="topbar__chrome">
         <div className="topbar__brand-group">
           <a className="topbar__brand" href="#/overview" aria-label="Atlas portfolio analytics home">
@@ -197,48 +198,38 @@ export function TopBar({
           )}
         </div>
 
-        <nav className="nav" aria-label="Primary">
-          {VIEWS.map((item) => {
-            const disabled = item.needsAnalytics && !analyticsReady
-            const active = item.key === view
-            if (disabled) {
-              return (
-                <span
-                  key={item.key}
-                  className="nav__link nav__link--disabled"
-                  aria-disabled="true"
-                  title="Add a position to unlock analytics"
-                >
-                  {item.label}
-                </span>
-              )
-            }
-            return (
-              <a
-                key={item.key}
-                className={active ? 'nav__link nav__link--active' : 'nav__link'}
-                href={`#/${item.key}`}
-                aria-current={active ? 'page' : undefined}
-              >
-                {item.label}
-                {item.key === 'holdings' ? (
-                  <span className="nav__count num">{holdingsCount}</span>
-                ) : null}
-              </a>
-            )
-          })}
-        </nav>
-
-        <div className="topbar__actions">
-          {onOpenCsvImport && (
+        {/* Center: Expansive Command Search Bar */}
+        {onOpenCommandPalette && (
+          <div className="topbar__search-wrap">
             <button
               type="button"
-              className="button button--quiet button--sm topbar__btn--desktop-only"
-              onClick={onOpenCsvImport}
-              title="Import CSV or Broker Statement (IBKR)"
-              aria-label="Import Statement"
+              className="topbar__search-trigger"
+              onClick={onOpenCommandPalette}
+              title="Open Command Palette & Unified Search (Ctrl+K)"
+              aria-label="Open Command Palette"
             >
-              <span>Import</span>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ opacity: 0.7 }}>
+                <circle cx="11" cy="11" r="8" />
+                <line x1="21" y1="21" x2="16.65" y2="16.65" />
+              </svg>
+              <span className="topbar__search-placeholder">
+                Search symbols, filings, macro, risk lab...
+              </span>
+              <kbd className="topbar__search-kbd">Ctrl+K</kbd>
+            </button>
+          </div>
+        )}
+
+        {/* Right: Primary & Utility Action Controls */}
+        <div className="topbar__actions">
+          {editable && onOpenTradeModal && (
+            <button
+              type="button"
+              className="button button--primary button--sm"
+              onClick={onOpenTradeModal}
+              title="Execute a Buy or Sell trade order"
+            >
+              + Trade
             </button>
           )}
 
@@ -254,36 +245,22 @@ export function TopBar({
             </button>
           )}
 
-          {onOpenCommandPalette && (
+          {onOpenCsvImport && (
             <button
               type="button"
-              className="button button--quiet button--sm"
-              onClick={onOpenCommandPalette}
-              title="Open Command Palette & Unified Search (Ctrl+K)"
-              aria-label="Open Command Palette"
+              className="button button--quiet button--sm topbar__btn--desktop-only"
+              onClick={onOpenCsvImport}
+              title="Import CSV or Broker Statement (IBKR)"
+              aria-label="Import CSV / Statement"
             >
-              <span>Search</span>
-              <span className="num" style={{ opacity: 0.7, marginLeft: '0.35rem', fontSize: '0.72rem' }}>
-                Ctrl+K
-              </span>
-            </button>
-          )}
-
-          {editable && onOpenTradeModal && (
-            <button
-              type="button"
-              className="button button--primary button--sm"
-              onClick={onOpenTradeModal}
-              title="Execute a Buy or Sell trade order"
-            >
-              + Trade
+              <span>Import</span>
             </button>
           )}
 
           {editable && onAddPosition && (
             <button
               type="button"
-              className="button button--quiet button--sm"
+              className="button button--quiet button--sm topbar__btn--desktop-only"
               onClick={onAddPosition}
               title="Add a position to current portfolio"
             >
@@ -337,6 +314,42 @@ export function TopBar({
         </div>
       </div>
 
+      {/* Tier 2: Dedicated Navigation Tabs Bar */}
+      <div className="topbar__nav-bar">
+        <nav className="nav" aria-label="Primary">
+          {VIEWS.map((item) => {
+            const disabled = item.needsAnalytics && !analyticsReady
+            const active = item.key === view
+            if (disabled) {
+              return (
+                <span
+                  key={item.key}
+                  className="nav__link nav__link--disabled"
+                  aria-disabled="true"
+                  title="Add a position to unlock analytics"
+                >
+                  {item.label}
+                </span>
+              )
+            }
+            return (
+              <a
+                key={item.key}
+                className={active ? 'nav__link nav__link--active' : 'nav__link'}
+                href={`#/${item.key}`}
+                aria-current={active ? 'page' : undefined}
+              >
+                {item.label}
+                {item.key === 'holdings' ? (
+                  <span className="nav__count num">{holdingsCount}</span>
+                ) : null}
+              </a>
+            )
+          })}
+        </nav>
+      </div>
+
+      {/* Masthead: Headline Readout */}
       {summary ? (
         <div className="topbar__masthead">
           <div className="topbar__identity">

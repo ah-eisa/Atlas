@@ -35,8 +35,7 @@ function readStoredTheme(): Theme | null {
 }
 
 function systemTheme(): Theme {
-  if (typeof window === 'undefined' || !window.matchMedia) return 'dark'
-  return window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark'
+  return 'dark'
 }
 
 let current: Theme = readStoredTheme() ?? systemTheme()
