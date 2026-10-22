@@ -146,11 +146,12 @@
 
 .grid__row {
   border-bottom: 1px solid var(--line-faint);
-  transition: background-color var(--duration-fast) var(--easing);
+  transition: all var(--duration-fast) var(--easing);
 }
 
 .grid__row:hover {
   background: var(--surface-hover);
+  box-shadow: inset 2px 0 0 var(--accent);
 }
 
 .grid__td {
@@ -166,8 +167,9 @@
 
 .grid__ticker {
   font-size: var(--size-caption);
-  font-weight: var(--weight-medium);
+  font-weight: 600;
   color: var(--text-primary);
+  letter-spacing: 0.03em;
 }
 
 .grid__name {
@@ -175,7 +177,12 @@
 }
 
 .grid__tag {
-  font-size: var(--size-label);
+  display: inline-block;
+  padding: 1px 6px;
+  border-radius: var(--radius-xs);
+  background: var(--surface-raised);
+  border: 1px solid var(--line);
+  font-size: 10px;
   letter-spacing: var(--tracking-wide);
   color: var(--text-tertiary);
   text-transform: uppercase;
@@ -183,6 +190,7 @@
 
 .grid__strong {
   color: var(--text-primary);
+  font-weight: 600;
 }
 
 /* Weight cell: figure with a proportional rule beneath it. */
@@ -196,8 +204,10 @@
   position: absolute;
   right: 0;
   bottom: 0;
-  height: 1px;
-  background: var(--accent-dim);
+  height: 2px;
+  border-radius: 1px;
+  background: linear-gradient(90deg, var(--accent-dim), var(--accent));
+  box-shadow: 0 0 6px rgba(0, 210, 255, 0.4);
 }
 
 .grid__total {

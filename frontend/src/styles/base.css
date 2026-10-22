@@ -28,6 +28,22 @@ body {
   text-rendering: optimizeLegibility;
 }
 
+/* Custom Sleek Cyberpunk Scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: var(--surface-panel);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--line-strong);
+  border-radius: var(--radius-full);
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--accent);
+}
+
 /* Every numeral in the product is monospaced and column-aligned. */
 .num {
   font-family: var(--font-mono);
@@ -38,14 +54,57 @@ body {
 
 .pos {
   color: var(--positive);
+  text-shadow: var(--positive-glow);
 }
 
 .neg {
   color: var(--negative);
+  text-shadow: var(--negative-glow);
 }
 
 .flat {
   color: var(--text-secondary);
+}
+
+/* Pill badge utility primitives */
+.pill-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: var(--radius-full);
+  font-size: var(--size-micro);
+  font-weight: var(--weight-medium);
+  letter-spacing: var(--tracking-wide);
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.pill-badge--pos {
+  background: var(--positive-bg);
+  color: var(--positive);
+  border: 1px solid rgba(0, 240, 118, 0.35);
+  box-shadow: 0 0 8px rgba(0, 240, 118, 0.2);
+}
+
+.pill-badge--neg {
+  background: var(--negative-bg);
+  color: var(--negative);
+  border: 1px solid rgba(255, 51, 102, 0.35);
+  box-shadow: 0 0 8px rgba(255, 51, 102, 0.2);
+}
+
+.pill-badge--accent {
+  background: var(--accent-faint);
+  color: var(--accent);
+  border: 1px solid rgba(0, 210, 255, 0.35);
+  box-shadow: 0 0 8px rgba(0, 210, 255, 0.2);
+}
+
+.pill-badge--warning {
+  background: var(--warning-bg);
+  color: var(--warning);
+  border: 1px solid rgba(255, 183, 3, 0.35);
 }
 
 /* Uppercase micro-label used for panel titles and column headers. */
@@ -355,7 +414,8 @@ body {
   min-height: 26px;
   padding: var(--space-1) var(--space-3);
   border: 1px solid var(--line-strong);
-  background: transparent;
+  border-radius: var(--radius-sm);
+  background: var(--surface-raised);
   color: var(--text-secondary);
   font-family: var(--font-sans);
   font-size: var(--size-micro);
@@ -366,44 +426,55 @@ body {
   text-transform: uppercase;
   white-space: nowrap;
   cursor: pointer;
+  box-shadow: var(--shadow-sm);
   transition:
     color var(--duration-fast) var(--easing),
     background-color var(--duration-fast) var(--easing),
-    border-color var(--duration-fast) var(--easing);
+    border-color var(--duration-fast) var(--easing),
+    box-shadow var(--duration-fast) var(--easing),
+    transform var(--duration-fast) var(--easing);
 }
 
 .button:hover:not(:disabled) {
   color: var(--text-primary);
   background: var(--surface-hover);
-  border-color: var(--text-tertiary);
+  border-color: var(--accent);
+  box-shadow: 0 0 10px rgba(0, 210, 255, 0.25);
+  transform: translateY(-1px);
 }
 
 .button:focus-visible {
-  outline: 1px solid var(--accent);
-  outline-offset: 2px;
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
 }
 
 .button:disabled {
   color: var(--text-disabled);
   border-color: var(--line);
   cursor: not-allowed;
+  opacity: 0.55;
 }
 
 .button--quiet {
   border-color: var(--line);
   color: var(--text-tertiary);
+  background: transparent;
 }
 
 .button--primary {
-  border-color: var(--accent);
-  background: var(--accent);
-  color: var(--text-inverse);
+  border: 1px solid rgba(0, 210, 255, 0.6);
+  background: var(--accent-gradient);
+  color: #06090f;
+  font-weight: var(--weight-semibold);
+  box-shadow: 0 2px 10px rgba(0, 210, 255, 0.35);
 }
 
 .button--primary:hover:not(:disabled) {
   border-color: var(--accent);
-  background: var(--text-primary);
-  color: var(--text-inverse);
+  background: linear-gradient(135deg, #38d9ff 0%, #4f8cf5 100%);
+  color: #06090f;
+  box-shadow: 0 4px 18px rgba(0, 210, 255, 0.55);
+  transform: translateY(-1px);
 }
 
 .text-button {
@@ -507,15 +578,16 @@ body {
 
 .input {
   width: 100%;
-  min-height: 28px;
+  min-height: 30px;
   padding: var(--space-1) var(--space-3);
   border: 1px solid var(--line-strong);
-  border-radius: 0;
+  border-radius: var(--radius-sm);
   background: var(--surface-raised);
   color: var(--text-primary);
   font-family: var(--font-sans);
   font-size: var(--size-caption);
-  transition: border-color var(--duration-fast) var(--easing);
+  transition: all var(--duration-fast) var(--easing);
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.2);
 }
 
 .input--mono,
@@ -527,6 +599,7 @@ body {
 .input:focus {
   outline: none;
   border-color: var(--accent);
+  box-shadow: 0 0 0 2px rgba(0, 210, 255, 0.2), inset 0 1px 2px rgba(0, 0, 0, 0.2);
 }
 
 .input[aria-invalid='true'] {

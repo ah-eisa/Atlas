@@ -621,10 +621,11 @@ export function CommandPalette({
       <div
         onKeyDown={handleKeyDown}
         style={{
-          width: 'min(680px, 94vw)',
-          background: 'var(--bg-surface)',
-          border: '1px solid var(--border-strong, var(--border-subtle))',
-          boxShadow: '0 20px 50px rgba(0, 0, 0, 0.5)',
+          width: 'min(720px, 94vw)',
+          background: 'var(--surface-panel)',
+          border: '1px solid rgba(0, 210, 255, 0.4)',
+          borderRadius: 'var(--radius-lg)',
+          boxShadow: '0 30px 80px rgba(0, 0, 0, 0.85), 0 0 35px rgba(0, 210, 255, 0.2)',
           display: 'flex',
           flexDirection: 'column',
           maxHeight: '76vh',
@@ -636,9 +637,9 @@ export function CommandPalette({
             display: 'flex',
             alignItems: 'center',
             gap: '0.75rem',
-            padding: '0.85rem 1rem',
-            borderBottom: '1px solid var(--border-subtle)',
-            background: 'var(--bg-elevated)',
+            padding: '1rem 1.25rem',
+            borderBottom: '1px solid var(--line)',
+            background: 'var(--surface-header)',
           }}
         >
           <span
@@ -724,12 +725,14 @@ export function CommandPalette({
                       alignItems: 'center',
                       justifyContent: 'space-between',
                       gap: '1rem',
-                      padding: '0.55rem 1rem',
+                      padding: '0.65rem 1.25rem',
                       cursor: 'pointer',
-                      background: active ? 'var(--bg-elevated)' : 'transparent',
+                      background: active ? 'var(--accent-faint)' : 'transparent',
                       borderLeft: active
-                        ? '3px solid var(--accent, #3b82f6)'
+                        ? '3px solid var(--accent)'
                         : '3px solid transparent',
+                      boxShadow: active ? 'inset 0 0 12px rgba(0, 210, 255, 0.08)' : 'none',
+                      transition: 'all 120ms ease',
                     }}
                   >
                     <div style={{ minWidth: 0 }}>

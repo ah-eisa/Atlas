@@ -1,131 +1,126 @@
 /**
- * Design tokens - the single source of truth for the visual system.
+ * Design tokens - Cyberpunk Trading Terminal Edition
  *
- * Rules this file encodes (see README "Design decisions"):
- *   - Flat, solid colours only. No gradients, no shadows, no elevation.
- *   - Separation comes from 1px hairline rules, never from floating cards.
- *   - Semantic green/red are reserved for numeric sign; they are never used as
- *     decorative fills.
- *   - Every number in the UI is set in IBM Plex Mono with tabular figures.
- *
- * The spacing and type scales follow the IBM Carbon Design System, so the
- * density and rhythm match a real enterprise analytics tool rather than an
- * arbitrary set of magic numbers.
+ * Infused with:
+ *   - Midnight Obsidian & Cyber Slate surfaces
+ *   - Electric Cyan, Lime, and Ruby performance signals with soft glows
+ *   - Sleek micro-radii and modern elevation shadows
+ *   - High-contrast tabular figures in IBM Plex Mono
  */
 
 :root {
-  /* The default palette is the dark one: a true black page with panels
-     barely lifted off it. The light palette lives in the
-     `[data-theme='light']` block at the end of this file, which overrides
-     exactly the same token names. */
   color-scheme: dark;
 
   /* ---------------------------------------------------------------- *
-   * Surfaces - a true black page with panels barely lifted off it.    *
-   *                                                                   *
-   * The page is #000: on a trading floor the display is the only      *
-   * light source, and pure black maximises the contrast ratio of the  *
-   * figures sitting on it. Panels are lifted by only 3-4 points of    *
-   * luminance, so the grid reads as one continuous surface divided by *
-   * rules rather than as a set of stacked slabs.                      *
+   * Surfaces - Cyberpunk Trading Terminal (Deep Midnight Obsidian)   *
    * ---------------------------------------------------------------- */
-  --surface-page: #000000;
-  --surface-panel: #08090b;
-  --surface-header: #0e0f12;
-  --surface-raised: #131519;
-  --surface-hover: #16181c;
-  --surface-active: #1d2025;
+  --surface-page: #080b11;
+  --surface-panel: #0d121d;
+  --surface-header: #121826;
+  --surface-raised: #182032;
+  --surface-hover: #1e283d;
+  --surface-active: #26324d;
 
-  /* Hairlines. --line is the default 1px rule that separates every region. */
-  --line: #1a1c20;
-  --line-strong: #292c32;
-  --line-faint: #121317;
+  /* Hairlines & Neon edges */
+  --line: #1c2538;
+  --line-strong: #2c3b59;
+  --line-faint: #131a27;
+  --line-neon: rgba(0, 210, 255, 0.4);
 
   /* ---------------------------------------------------------------- *
-   * Text - high-contrast primary, progressively muted supporting text *
+   * Text - crisp high contrast, vibrant supporting hierarchy          *
    * ---------------------------------------------------------------- */
-  --text-primary: #e9ebee;
-  --text-secondary: #9ba3ae;
-  --text-tertiary: #7b8390;
-  --text-disabled: #4a505a;
-  --text-inverse: #0a0b0d;
+  --text-primary: #f0f4fc;
+  --text-secondary: #94a3b8;
+  --text-tertiary: #64748b;
+  --text-disabled: #475569;
+  --text-inverse: #080b11;
 
   /* ---------------------------------------------------------------- *
-   * Accent - exactly one, used for interaction and the primary series *
+   * Cyberpunk Accents & Neon Gradients                               *
    * ---------------------------------------------------------------- */
-  --accent: #4589ff;
-  --accent-dim: #2f5fb0;
-  --accent-faint: #16233a;
+  --accent: #00d2ff;
+  --accent-dim: #0284c7;
+  --accent-faint: rgba(0, 210, 255, 0.08);
+  --accent-glow: 0 0 16px rgba(0, 210, 255, 0.4);
+  --accent-gradient: linear-gradient(135deg, #00d2ff 0%, #3a7bd5 50%, #8a3ffc 100%);
+  --accent-gradient-subtle: linear-gradient(135deg, rgba(0, 210, 255, 0.15) 0%, rgba(58, 123, 213, 0.15) 100%);
 
   /* ---------------------------------------------------------------- *
-   * Semantic - sign of a number only (gain / loss / neutral)          *
+   * Semantic - Electric Terminal Performance Signals                 *
    * ---------------------------------------------------------------- */
-  --positive: #42be65;
-  --positive-dim: #1f6b38;
-  --negative: #fa4d56;
-  --negative-dim: #8a2c31;
+  --positive: #00f076;
+  --positive-dim: #00a852;
+  --positive-bg: rgba(0, 240, 118, 0.09);
+  --positive-glow: 0 0 12px rgba(0, 240, 118, 0.35);
+  --negative: #ff3366;
+  --negative-dim: #b8143d;
+  --negative-bg: rgba(255, 51, 102, 0.09);
+  --negative-glow: 0 0 12px rgba(255, 51, 102, 0.35);
   --neutral: var(--text-secondary);
-  --warning: #d9a441;
+  --warning: #ffb703;
+  --warning-bg: rgba(255, 183, 3, 0.1);
+  --warning-glow: 0 0 12px rgba(255, 183, 3, 0.3);
+  --info: #38bdf8;
+  --purple: #b388ff;
 
   /* ---------------------------------------------------------------- *
    * Data visualisation                                                *
    * ---------------------------------------------------------------- */
 
-  /* Categorical: a restrained steel ramp for allocation breakdowns.
-     Ordered light-to-dark so the largest slice reads strongest. */
-  --viz-cat-1: #7aa5e8;
-  --viz-cat-2: #5b83bd;
-  --viz-cat-3: #446596;
-  --viz-cat-4: #344d72;
-  --viz-cat-5: #2a3c56;
-  --viz-cat-6: #232f42;
+  /* Categorical: vivid neon cyber ramp for allocation breakdowns. */
+  --viz-cat-1: #00d2ff;
+  --viz-cat-2: #3a7bd5;
+  --viz-cat-3: #8a3ffc;
+  --viz-cat-4: #00f076;
+  --viz-cat-5: #ffb703;
+  --viz-cat-6: #ff3366;
 
-  /* Sequential: single hue, dark to light, for the correlation heatmap.
-     Deliberately not a rainbow - luminance alone encodes magnitude. */
-  --viz-seq-1: #0e1116;
-  --viz-seq-2: #172433;
-  --viz-seq-3: #234057;
-  --viz-seq-4: #2c5a7c;
-  --viz-seq-5: #3b7ba8;
-  --viz-seq-6: #59a0d0;
-  --viz-seq-7: #8cc3e8;
+  /* Sequential: electric deep blue to cyber cyan. */
+  --viz-seq-1: #0d121d;
+  --viz-seq-2: #142033;
+  --viz-seq-3: #1a3254;
+  --viz-seq-4: #204778;
+  --viz-seq-5: #2864a6;
+  --viz-seq-6: #328ad8;
+  --viz-seq-7: #00d2ff;
 
-  /* Negative correlation is rare here but must not be silently clipped. */
-  --viz-negative: #7a4a52;
+  /* Negative correlation */
+  --viz-negative: #8a2539;
 
-  /* Monthly return heat scale: hue carries sign, luminance carries magnitude. */
-  --heat-pos-1-bg: #0c1c12;
-  --heat-pos-1-fg: #71a984;
-  --heat-pos-2-bg: #10281a;
-  --heat-pos-2-fg: #82c295;
-  --heat-pos-3-bg: #153923;
-  --heat-pos-3-fg: #9ad9ab;
-  --heat-pos-4-bg: #1c5030;
-  --heat-pos-4-fg: #c0ebca;
-  --heat-neg-1-bg: #1d0d0f;
-  --heat-neg-1-fg: #a87478;
-  --heat-neg-2-bg: #2d1114;
-  --heat-neg-2-fg: #c9858a;
-  --heat-neg-3-bg: #40161a;
-  --heat-neg-3-fg: #e19b9f;
-  --heat-neg-4-bg: #591d23;
-  --heat-neg-4-fg: #f4b8bb;
+  /* Monthly return heat scale: vivid signals */
+  --heat-pos-1-bg: #092015;
+  --heat-pos-1-fg: #45d688;
+  --heat-pos-2-bg: #0c3020;
+  --heat-pos-2-fg: #00f076;
+  --heat-pos-3-bg: #10422c;
+  --heat-pos-3-fg: #66ffaa;
+  --heat-pos-4-bg: #14593b;
+  --heat-pos-4-fg: #b3ffcc;
+  --heat-neg-1-bg: #240c12;
+  --heat-neg-1-fg: #ff6b8b;
+  --heat-neg-2-bg: #38101a;
+  --heat-neg-2-fg: #ff3366;
+  --heat-neg-3-bg: #521526;
+  --heat-neg-3-fg: #ff809f;
+  --heat-neg-4-bg: #701c34;
+  --heat-neg-4-fg: #ffb3c6;
 
   /* Chart furniture */
-  --viz-grid: #131519;
-  --viz-axis: #24272d;
-  --viz-band: #15243a;
-  --viz-band-inner: #21406b;
-  --viz-crosshair: #5d6673;
-  --viz-benchmark: #6a7280;
+  --viz-grid: #131a26;
+  --viz-axis: #26334a;
+  --viz-band: #162a45;
+  --viz-band-inner: #244977;
+  --viz-crosshair: #64748b;
+  --viz-benchmark: #8291a5;
 
   /* ---------------------------------------------------------------- *
    * Typography                                                        *
    * ---------------------------------------------------------------- */
-  --font-sans: 'IBM Plex Sans', Arial, sans-serif;
-  --font-mono: 'IBM Plex Mono', 'Courier New', monospace;
+  --font-sans: 'IBM Plex Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: 'IBM Plex Mono', 'JetBrains Mono', 'Fira Code', monospace;
 
-  /* Carbon type scale, trimmed to what this dashboard actually uses. */
+  /* Type scale */
   --size-micro: 10px;
   --size-label: 11px;
   --size-caption: 12px;
@@ -148,7 +143,7 @@
   --tracking-wide: 0.04em;
 
   /* ---------------------------------------------------------------- *
-   * Spacing - Carbon's 2/4/8 based scale                              *
+   * Spacing                                                          *
    * ---------------------------------------------------------------- */
   --space-1: 2px;
   --space-2: 4px;
@@ -165,27 +160,40 @@
   --row-height: 30px;
   --row-height-compact: 26px;
   --header-height: 30px;
-  --panel-header-height: 34px;
+  --panel-header-height: 36px;
 
   /* ---------------------------------------------------------------- *
-   * Motion - subtle only; nothing bounces, nothing slides             *
+   * Motion & Physics                                                 *
    * ---------------------------------------------------------------- */
-  --duration-fast: 90ms;
-  --duration-base: 140ms;
-  --easing: cubic-bezier(0.2, 0, 0.38, 0.9);
+  --duration-fast: 120ms;
+  --duration-base: 180ms;
+  --easing: cubic-bezier(0.16, 1, 0.3, 1);
 
   /* Layout */
   --max-width: 1800px;
   --sidebar-width: 300px;
 
-  /* Deliberately square. Rounded corners read as "card"; this is a terminal. */
-  --radius: 0px;
+  /* Sleek modern micro-radii */
+  --radius-xs: 3px;
+  --radius-sm: 5px;
+  --radius: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+  --radius-full: 9999px;
+
+  /* Depth Elevation & Glows */
+  --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.35);
+  --shadow-md: 0 6px 20px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.05);
+  --shadow-lg: 0 18px 48px rgba(0, 0, 0, 0.75), 0 0 0 1px rgba(0, 210, 255, 0.25);
+  --shadow-glow: 0 0 20px rgba(0, 210, 255, 0.25);
+  --shadow-positive: 0 0 15px rgba(0, 240, 118, 0.25);
+  --shadow-negative: 0 0 15px rgba(255, 51, 102, 0.25);
+
+  --backdrop-blur: blur(14px);
+  --glass-bg: rgba(13, 18, 29, 0.85);
+  --glass-border: rgba(255, 255, 255, 0.08);
 }
 
-/**
- * Respect a reduced-motion preference: transitions are decorative here, so
- * removing them costs nothing.
- */
 @media (prefers-reduced-motion: reduce) {
   :root {
     --duration-fast: 0ms;
@@ -194,61 +202,58 @@
 }
 
 /* -------------------------------------------------------------------- *
- * Light palette                                                          *
- *                                                                        *
- * Not an inversion. A terminal is read against its own background, so    *
- * the light palette is a paper-white instrument panel: white panels on   *
- * a cool light-grey page, hairline rules instead of floating cards, and  *
- * a categorical ramp that runs dark-to-light so the largest slice still  *
- * reads strongest against the light surface.                             *
- *                                                                        *
- * Only colour tokens are overridden here. Spacing, type and motion stay  *
- * in `:root`, so both themes share one rhythm.                           *
+ * Light palette - Clean TradingView / Bloomberg Pro Light Mode         *
  * -------------------------------------------------------------------- */
 [data-theme='light'] {
   color-scheme: light;
 
-  --surface-page: #eef0f4;
+  --surface-page: #f0f3f8;
   --surface-panel: #ffffff;
-  --surface-header: #f7f8fa;
+  --surface-header: #f8fafc;
   --surface-raised: #ffffff;
-  --surface-hover: #edf0f6;
-  --surface-active: #e2e7ef;
+  --surface-hover: #f1f5f9;
+  --surface-active: #e2e8f0;
 
-  --line: #dce0e7;
-  --line-strong: #c2c9d4;
-  --line-faint: #e9ecf1;
+  --line: #e2e8f0;
+  --line-strong: #cbd5e1;
+  --line-faint: #f1f5f9;
+  --line-neon: rgba(2, 132, 199, 0.4);
 
-  --text-primary: #10131a;
-  --text-secondary: #4a5361;
-  --text-tertiary: #6a7280;
-  --text-disabled: #a6adba;
+  --text-primary: #0f172a;
+  --text-secondary: #475569;
+  --text-tertiary: #64748b;
+  --text-disabled: #94a3b8;
   --text-inverse: #ffffff;
 
-  --accent: #1a6fe0;
-  --accent-dim: #14569f;
-  --accent-faint: #e6eefb;
+  --accent: #0284c7;
+  --accent-dim: #0369a1;
+  --accent-faint: rgba(2, 132, 199, 0.08);
+  --accent-glow: 0 0 12px rgba(2, 132, 199, 0.25);
+  --accent-gradient: linear-gradient(135deg, #0284c7 0%, #2563eb 50%, #7c3aed 100%);
+  --accent-gradient-subtle: linear-gradient(135deg, rgba(2, 132, 199, 0.1) 0%, rgba(37, 99, 235, 0.1) 100%);
 
-  --positive: #17803d;
-  --positive-dim: #0f5c2c;
-  --negative: #c62828;
-  --negative-dim: #8f1d1d;
+  --positive: #16a34a;
+  --positive-dim: #15803d;
+  --positive-bg: rgba(22, 163, 74, 0.1);
+  --positive-glow: 0 0 10px rgba(22, 163, 74, 0.2);
+  --negative: #dc2626;
+  --negative-dim: #b91c1c;
+  --negative-bg: rgba(220, 38, 38, 0.1);
+  --negative-glow: 0 0 10px rgba(220, 38, 38, 0.2);
   --neutral: var(--text-secondary);
-  --warning: #8a5a00;
+  --warning: #d97706;
+  --warning-bg: rgba(217, 119, 6, 0.1);
+  --warning-glow: 0 0 10px rgba(217, 119, 6, 0.2);
+  --info: #0284c7;
+  --purple: #7c3aed;
 
-  /* Categorical ramp, strongest first: the largest slice is the darkest,
-     which is the strongest reading against a white surface. */
-  --viz-cat-1: #1f5fa8;
-  --viz-cat-2: #2e7cc4;
-  --viz-cat-3: #4b98d6;
-  --viz-cat-4: #79b3e2;
-  --viz-cat-5: #a7cdec;
-  --viz-cat-6: #cfe4f6;
+  --viz-cat-1: #0284c7;
+  --viz-cat-2: #2563eb;
+  --viz-cat-3: #7c3aed;
+  --viz-cat-4: #16a34a;
+  --viz-cat-5: #d97706;
+  --viz-cat-6: #dc2626;
 
-  /* Sequential ramp for the correlation heatmap: near-white for no
-     correlation, deep blue for the strongest. The sign of the ramp is
-     inverted relative to the dark palette, because "more" must always mean
-     "more contrast against the surface it is drawn on". */
   --viz-seq-1: #f4f7fb;
   --viz-seq-2: #e2ebf5;
   --viz-seq-3: #c9dbee;
@@ -283,4 +288,11 @@
   --viz-band-inner: #b3d0f2;
   --viz-crosshair: #8a93a2;
   --viz-benchmark: #6f7887;
+
+  --shadow-sm: 0 2px 6px rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 4px 14px rgba(0, 0, 0, 0.08), 0 0 0 1px rgba(0, 0, 0, 0.04);
+  --shadow-lg: 0 12px 30px rgba(0, 0, 0, 0.12), 0 0 0 1px rgba(2, 132, 199, 0.2);
+  --shadow-glow: 0 0 15px rgba(2, 132, 199, 0.15);
+  --glass-bg: rgba(255, 255, 255, 0.9);
+  --glass-border: rgba(0, 0, 0, 0.06);
 }

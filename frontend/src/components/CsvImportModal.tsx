@@ -116,10 +116,11 @@ export function CsvImportModal({
     >
       <div
         style={{
-          width: 'min(780px, 96vw)',
-          background: 'var(--bg-surface)',
-          border: '1px solid var(--border-strong, var(--border-subtle))',
-          boxShadow: '0 20px 50px rgba(0, 0, 0, 0.5)',
+          width: 'min(820px, 96vw)',
+          background: 'var(--surface-panel)',
+          border: '1px solid rgba(0, 210, 255, 0.35)',
+          borderRadius: 'var(--radius-lg)',
+          boxShadow: '0 24px 60px rgba(0, 0, 0, 0.8), 0 0 30px rgba(0, 210, 255, 0.15)',
           maxHeight: '88vh',
           display: 'flex',
           flexDirection: 'column',
@@ -131,9 +132,9 @@ export function CsvImportModal({
             display: 'flex',
             justifyContent: 'space-between',
             alignItems: 'center',
-            padding: '0.85rem 1.25rem',
-            borderBottom: '1px solid var(--border-subtle)',
-            background: 'var(--bg-elevated)',
+            padding: '1rem 1.4rem',
+            borderBottom: '1px solid var(--line)',
+            background: 'var(--surface-header)',
           }}
         >
           <div>

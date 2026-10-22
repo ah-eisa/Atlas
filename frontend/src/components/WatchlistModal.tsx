@@ -154,10 +154,11 @@ export function WatchlistModal({
     >
       <div
         style={{
-          width: 'min(820px, 96vw)',
-          background: 'var(--bg-surface)',
-          border: '1px solid var(--border-strong, var(--border-subtle))',
-          boxShadow: '0 20px 50px rgba(0, 0, 0, 0.5)',
+          width: 'min(860px, 96vw)',
+          background: 'var(--surface-panel)',
+          border: '1px solid rgba(0, 210, 255, 0.35)',
+          borderRadius: 'var(--radius-lg)',
+          boxShadow: '0 24px 60px rgba(0, 0, 0, 0.8), 0 0 30px rgba(0, 210, 255, 0.15)',
           maxHeight: '88vh',
           display: 'flex',
           flexDirection: 'column',
@@ -170,9 +171,9 @@ export function WatchlistModal({
             display: 'flex',
             justifyContent: 'space-between',
             alignItems: 'center',
-            padding: '0.85rem 1.25rem',
-            borderBottom: '1px solid var(--border-subtle)',
-            background: 'var(--bg-elevated)',
+            padding: '1rem 1.4rem',
+            borderBottom: '1px solid var(--line)',
+            background: 'var(--surface-header)',
           }}
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
@@ -332,24 +333,36 @@ export function WatchlistModal({
                         </td>
                         <td>
                           <span
-                            className="num"
+                            className="num pill-badge"
                             style={{
-                              fontSize: '0.7rem',
-                              padding: '0.15rem 0.45rem',
+                              fontSize: '0.68rem',
+                              padding: '2px 8px',
                               fontWeight: 600,
+                              borderRadius: 'var(--radius-full)',
                               background:
                                 item.status === 'BUY_ZONE'
-                                  ? 'rgba(36, 161, 72, 0.15)'
+                                  ? 'var(--positive-bg)'
                                   : item.status === 'TAKE_PROFIT'
-                                    ? 'rgba(210, 153, 34, 0.15)'
-                                    : 'var(--bg-elevated)',
+                                    ? 'var(--warning-bg)'
+                                    : 'var(--surface-raised)',
                               color:
                                 item.status === 'BUY_ZONE'
                                   ? 'var(--positive)'
                                   : item.status === 'TAKE_PROFIT'
-                                    ? '#d29922'
+                                    ? 'var(--warning)'
                                     : 'var(--text-secondary)',
-                              border: '1px solid var(--border-subtle)',
+                              border:
+                                item.status === 'BUY_ZONE'
+                                  ? '1px solid rgba(0, 240, 118, 0.4)'
+                                  : item.status === 'TAKE_PROFIT'
+                                    ? '1px solid rgba(255, 183, 3, 0.4)'
+                                    : '1px solid var(--line)',
+                              boxShadow:
+                                item.status === 'BUY_ZONE'
+                                  ? '0 0 8px rgba(0, 240, 118, 0.25)'
+                                  : item.status === 'TAKE_PROFIT'
+                                    ? '0 0 8px rgba(255, 183, 3, 0.25)'
+                                    : 'none',
                             }}
                           >
                             {item.status}
@@ -410,32 +423,36 @@ export function WatchlistModal({
                       <div
                         key={al.id}
                         style={{
-                          padding: '0.75rem 0.9rem',
-                          background: 'var(--bg-elevated)',
-                          border: '1px solid var(--border-subtle)',
+                          padding: '0.8rem 1rem',
+                          background: 'var(--surface-raised)',
+                          border: '1px solid var(--line)',
+                          borderRadius: 'var(--radius-sm)',
+                          boxShadow: 'var(--shadow-sm)',
                           borderLeft: `3px solid ${
-                            al.severity === 'high' ? 'var(--negative)' : '#d29922'
+                            al.severity === 'high' ? 'var(--negative)' : 'var(--warning)'
                           }`,
                         }}
                       >
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.2rem' }}>
-                          <span style={{ fontWeight: 600, fontSize: '0.88rem' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.25rem' }}>
+                          <span style={{ fontWeight: 600, fontSize: '0.88rem', color: 'var(--text-primary)' }}>
                             {al.title}
                           </span>
                           <span
-                            className="num"
+                            className="num pill-badge"
                             style={{
-                              fontSize: '0.7rem',
+                              fontSize: '0.68rem',
                               textTransform: 'uppercase',
-                              padding: '0.1rem 0.4rem',
-                              background: 'var(--bg-surface)',
-                              border: '1px solid var(--border-subtle)',
+                              padding: '2px 8px',
+                              borderRadius: 'var(--radius-full)',
+                              background: 'var(--surface-panel)',
+                              border: '1px solid var(--line)',
+                              color: 'var(--text-tertiary)',
                             }}
                           >
                             {al.category}
                           </span>
                         </div>
-                        <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+                        <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', lineHeight: 1.4 }}>
                           {al.message}
                         </div>
                       </div>

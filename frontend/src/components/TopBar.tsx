@@ -160,6 +160,7 @@ export function TopBar({
       <div className="topbar__chrome">
         <div className="topbar__brand-group">
           <a className="topbar__brand" href="#/overview" aria-label="Atlas portfolio analytics home">
+            <span className="topbar__logo-dot" aria-hidden="true" />
             <span className="topbar__wordmark">ATLAS</span>
             <span className="topbar__product">Terminal</span>
           </a>
