@@ -888,4 +888,100 @@ export interface FactsheetReport {
   markdown_memo: string
 }
 
+// --------------------------------------------------------------------------
+// CSV Import Wizard & Watchlist + Smart Alerts Types
+// --------------------------------------------------------------------------
+
+export interface CsvImportPreview {
+  detected_format: string
+  delimiter: string
+  headers: string[]
+  mapping: Record<string, string>
+  positions: Array<{
+    ticker: string
+    name: string
+    asset_class: string
+    region: string
+    currency: string
+    quantity: number
+    cost_basis_per_unit: number
+    acquired: string
+  }>
+  trades: Array<{
+    ticker: string
+    order_type: 'BUY' | 'SELL'
+    quantity: number
+    price: number
+    executed_at: string
+    notes: string
+  }>
+  cash_flows: Array<{
+    occurred_on: string
+    amount: number
+    note: string
+  }>
+  warnings: string[]
+  errors: string[]
+  summary: {
+    positions_count: number
+    trades_count: number
+    cash_flows_count: number
+  }
+}
+
+export interface CsvImportCommitResult {
+  detected_format: string
+  mode: 'merge' | 'replace'
+  imported_positions: number
+  imported_trades: number
+  imported_cash_flows: number
+  warnings: string[]
+}
+
+export interface WatchlistItem {
+  id: number
+  portfolio_id: number
+  ticker: string
+  name: string
+  target_buy_price: number | null
+  target_sell_price: number | null
+  notes: string
+  created_at: string
+  last_price: number
+  currency: string
+  asset_class: string
+  in_portfolio: boolean
+  portfolio_weight: number
+  status: 'BUY_ZONE' | 'TAKE_PROFIT' | 'WATCHING'
+  distance_to_buy_pct: number | null
+  distance_to_sell_pct: number | null
+}
+
+export interface AlertRule {
+  id: number
+  portfolio_id: number
+  metric: string
+  ticker: string | null
+  threshold: number
+  label: string
+  enabled: boolean
+  created_at: string
+}
+
+export interface SmartAlert {
+  id: string
+  severity: 'high' | 'medium' | 'low'
+  category: string
+  ticker: string | null
+  title: string
+  message: string
+}
+
+export interface WatchlistResponse {
+  watchlist: WatchlistItem[]
+  rules: AlertRule[]
+  triggered_alerts: SmartAlert[]
+}
+
+
 

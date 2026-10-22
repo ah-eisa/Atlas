@@ -14,6 +14,8 @@ interface CommandPaletteProps {
   onNavigate: (view: ViewKey) => void
   onOpenTradeModal?: (ticker?: string, type?: OrderType) => void
   onAddPosition?: () => void
+  onOpenCsvImport?: () => void
+  onOpenWatchlist?: () => void
   onCreatePortfolio?: () => void
   onSelectPortfolio?: (id: number) => void
   onSwitchSource?: (source: DataSource) => void
@@ -63,6 +65,8 @@ export function CommandPalette({
   onNavigate,
   onOpenTradeModal,
   onAddPosition,
+  onOpenCsvImport,
+  onOpenWatchlist,
   onCreatePortfolio,
   onSelectPortfolio,
   onSwitchSource,
@@ -426,6 +430,36 @@ export function CommandPalette({
         action: () => {
           onClose()
           onAddPosition()
+        },
+      })
+    }
+
+    if (onOpenWatchlist) {
+      list.push({
+        id: 'act-watchlist',
+        category: 'Actions',
+        title: 'Open Watchlists & Smart Alerts',
+        subtitle: 'Target buy/sell price alerts, macro guardrails, and risk thresholds',
+        badge: 'WATCHLIST',
+        keywords: 'watchlist alerts targets buy sell prices guardrails',
+        action: () => {
+          onClose()
+          onOpenWatchlist()
+        },
+      })
+    }
+
+    if (onOpenCsvImport) {
+      list.push({
+        id: 'act-csv-import',
+        category: 'Actions',
+        title: 'Broker Statement & CSV Import Wizard',
+        subtitle: 'Import holdings, trades, and cash flows from CSV or IBKR statements',
+        badge: 'IMPORT',
+        keywords: 'import csv broker statement ibkr positions trades',
+        action: () => {
+          onClose()
+          onOpenCsvImport()
         },
       })
     }

@@ -615,6 +615,10 @@
     display: none;
   }
 
+  .topbar__btn--desktop-only {
+    display: none;
+  }
+
   .topbar__masthead {
     padding: var(--space-5);
   }

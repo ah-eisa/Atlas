@@ -459,5 +459,51 @@ class AttributionRequest(BaseModel):
     benchmark: list[BenchmarkSegmentIn] | None = None
 
 
+# --------------------------------------------------------------------------
+# CSV / Broker Importer & Watchlist / Smart Alerts Schemas
+# --------------------------------------------------------------------------
+
+
+class CsvImportPreviewRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    csv_text: str = Field(min_length=1, max_length=2_000_000)
+    mapping_overrides: dict[str, str] | None = None
+
+
+class CsvImportCommitRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    csv_text: str = Field(min_length=1, max_length=2_000_000)
+    mode: Literal["merge", "replace"] = "merge"
+    mapping_overrides: dict[str, str] | None = None
+
+
+class WatchlistItemIn(BaseModel):
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
+
+    ticker: str = Field(min_length=1, max_length=20)
+    name: str = Field(default="", max_length=120)
+    target_buy_price: float | None = Field(default=None, ge=0, le=1e12, allow_inf_nan=False)
+    target_sell_price: float | None = Field(default=None, ge=0, le=1e12, allow_inf_nan=False)
+    notes: str = Field(default="", max_length=200)
+
+
+class AlertRuleIn(BaseModel):
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
+
+    metric: Literal[
+        "price_above",
+        "price_below",
+        "drawdown_pct",
+        "var_95_pct",
+        "position_weight_pct",
+        "yield_10y_above",
+    ]
+    ticker: str | None = Field(default=None, max_length=20)
+    threshold: float = Field(ge=-1e12, le=1e12, allow_inf_nan=False)
+    label: str = Field(default="", max_length=160)
+
+
 def is_finite(value: float) -> bool:
     return math.isfinite(value)

@@ -34,11 +34,12 @@ from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 
 from . import data as market_data
-from . import fixed_income, instruments, lab, macro_sec, options, store
+from . import fixed_income, importer, instruments, lab, macro_sec, options, store
 from .config import SETTINGS, Settings
 from .observability import METRICS
 from .portfolio import API_VERSION, AnalyticsUnavailable, PortfolioAnalytics, build_analytics
 from .schemas import (
+    AlertRuleIn,
     AttributionRequest,
     BaseCurrencyUpdate,
     BlackScholesInput,
@@ -46,6 +47,8 @@ from .schemas import (
     BondCalculatorInput,
     BondCalculatorOutput,
     CashFlowIn,
+    CsvImportCommitRequest,
+    CsvImportPreviewRequest,
     HistoricalYieldPoint,
     HoldingInput,
     HoldingOut,
@@ -58,6 +61,7 @@ from .schemas import (
     SecFilingsResponse,
     StressRequest,
     TransactionOut,
+    WatchlistItemIn,
     WhatIfRequest,
     YieldCurveSnapshot,
 )
@@ -1116,6 +1120,128 @@ def unified_search(
         "scenarios": matched_scenarios,
         "macro": matched_macro,
     }
+
+
+# ---------------------------------------------------------------------------
+# CSV / Broker Statement Importer & Watchlists + Smart Alerts
+# ---------------------------------------------------------------------------
+
+
+@app.post("/api/v1/portfolio/import/preview", tags=["positions"])
+def preview_import(
+    body: CsvImportPreviewRequest,
+    portfolio_id: int = Depends(_portfolio_id),
+) -> dict[str, Any]:
+    """Parse CSV text, auto-detect broker/ATLAS schema, and preview positions, trades & cash flows."""
+    try:
+        base_ccy = store.get_base_currency(SETTINGS, portfolio_id)
+        return importer.preview_csv_import(
+            body.csv_text,
+            mapping_overrides=body.mapping_overrides,
+            default_currency=base_ccy,
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=422,
+            detail={"code": "invalid_csv", "message": str(exc)},
+        ) from exc
+
+
+@app.post("/api/v1/portfolio/import/commit", tags=["positions"])
+def commit_import(
+    body: CsvImportCommitRequest,
+    portfolio_id: int = Depends(_portfolio_id),
+) -> dict[str, Any]:
+    """Commit parsed CSV positions, trades, and cash flows into the active portfolio."""
+    try:
+        result = importer.commit_csv_import(
+            body.csv_text,
+            mode=body.mode,
+            mapping_overrides=body.mapping_overrides,
+            settings=SETTINGS,
+            portfolio_id=portfolio_id,
+        )
+        _service.invalidate()
+        return result
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=422,
+            detail={"code": "invalid_csv", "message": str(exc)},
+        ) from exc
+
+
+@app.get("/api/v1/watchlist", tags=["watchlist"])
+def get_watchlist(portfolio_id: int = Depends(_portfolio_id)) -> dict[str, Any]:
+    """Return enriched watchlist items, custom alert rules, and live triggered smart alerts."""
+    try:
+        analytics = _service.get(portfolio_id=portfolio_id)
+    except Exception:  # noqa: BLE001
+        analytics = None
+    return importer.get_watchlist_and_alerts(
+        settings=SETTINGS,
+        portfolio_id=portfolio_id,
+        analytics=analytics,
+    )
+
+
+@app.post("/api/v1/watchlist", status_code=201, tags=["watchlist"])
+def add_watchlist_item(
+    body: WatchlistItemIn,
+    portfolio_id: int = Depends(_portfolio_id),
+) -> dict[str, Any]:
+    """Add or update an instrument on the portfolio watchlist with target buy/sell prices."""
+    try:
+        return store.upsert_watchlist_item(
+            body.model_dump(),
+            settings=SETTINGS,
+            portfolio_id=portfolio_id,
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=422,
+            detail={"code": "invalid_watchlist_item", "message": str(exc)},
+        ) from exc
+
+
+@app.delete("/api/v1/watchlist/{item_id}", status_code=204, tags=["watchlist"])
+def remove_watchlist_item(
+    item_id: int,
+    response: Response,
+    portfolio_id: int = Depends(_portfolio_id),
+) -> Response:
+    store.delete_watchlist_item(item_id, settings=SETTINGS, portfolio_id=portfolio_id)
+    response.status_code = 204
+    return response
+
+
+@app.post("/api/v1/alerts/rules", status_code=201, tags=["watchlist"])
+def add_alert_rule(
+    body: AlertRuleIn,
+    portfolio_id: int = Depends(_portfolio_id),
+) -> dict[str, Any]:
+    """Create a custom price, drawdown, or risk alert rule."""
+    try:
+        return store.create_alert_rule(
+            body.model_dump(),
+            settings=SETTINGS,
+            portfolio_id=portfolio_id,
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=422,
+            detail={"code": "invalid_alert_rule", "message": str(exc)},
+        ) from exc
+
+
+@app.delete("/api/v1/alerts/rules/{rule_id}", status_code=204, tags=["watchlist"])
+def remove_alert_rule(
+    rule_id: int,
+    response: Response,
+    portfolio_id: int = Depends(_portfolio_id),
+) -> Response:
+    store.delete_alert_rule(rule_id, settings=SETTINGS, portfolio_id=portfolio_id)
+    response.status_code = 204
+    return response
 
 
 @app.get("/api/v1/portfolio/export", tags=["positions"])

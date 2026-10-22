@@ -16,6 +16,7 @@ interface DataViewProps {
   onReload: () => void
   onApiKey: (key: string) => void
   onPortfolio: (id: number) => void
+  onOpenCsvImport?: () => void
 }
 
 export default function DataView(props: DataViewProps) {

@@ -26,6 +26,8 @@ import type {
   BondCalculatorOutput,
   BootstrapResponse,
   CashFlow,
+  CsvImportCommitResult,
+  CsvImportPreview,
   DataSource,
   FactsheetReport,
   HistoricalYieldPoint,
@@ -44,6 +46,8 @@ import type {
   StressReport,
   StressShock,
   Transaction,
+  WatchlistItem,
+  WatchlistResponse,
   XRayReport,
   YieldCurveSnapshot,
 } from './types'
@@ -1587,5 +1591,282 @@ export async function getPortfolioReport(
     return SAMPLE_FACTSHEET_REPORT
   }
 }
+
+// --------------------------------------------------------------------------
+// CSV Import Wizard & Watchlist + Smart Alerts API
+// --------------------------------------------------------------------------
+
+export async function previewCsvImport(
+  config: DataConfig,
+  csvText: string,
+  mappingOverrides?: Record<string, string>,
+): Promise<CsvImportPreview> {
+  if (config.source === 'snapshot') {
+    return {
+      detected_format: 'generic_positions',
+      delimiter: ',',
+      headers: ['ticker', 'name', 'asset_class', 'quantity', 'cost_basis_per_unit'],
+      mapping: {
+        ticker: 'ticker',
+        name: 'name',
+        asset_class: 'asset_class',
+        quantity: 'quantity',
+        cost_basis_per_unit: 'cost_basis_per_unit',
+      },
+      positions: [
+        {
+          ticker: 'MSFT',
+          name: 'Microsoft Corp',
+          asset_class: 'Stock',
+          region: 'US',
+          currency: 'USD',
+          quantity: 20,
+          cost_basis_per_unit: 420.0,
+          acquired: '2025-01-15',
+        },
+      ],
+      trades: [],
+      cash_flows: [],
+      warnings: [],
+      errors: [],
+      summary: { positions_count: 1, trades_count: 0, cash_flows_count: 0 },
+    }
+  }
+
+  return requestJson<CsvImportPreview>(apiUrl(config, '/api/v1/portfolio/import/preview'), config, {
+    method: 'POST',
+    body: JSON.stringify({
+      csv_text: csvText,
+      mapping_overrides: mappingOverrides,
+    }),
+  })
+}
+
+export async function commitCsvImport(
+  config: DataConfig,
+  csvText: string,
+  mode: 'merge' | 'replace' = 'merge',
+  mappingOverrides?: Record<string, string>,
+): Promise<CsvImportCommitResult> {
+  if (config.source === 'snapshot') {
+    return {
+      detected_format: 'generic_positions',
+      mode,
+      imported_positions: 1,
+      imported_trades: 0,
+      imported_cash_flows: 0,
+      warnings: ['Snapshot demo mode: database not modified.'],
+    }
+  }
+
+  return requestJson<CsvImportCommitResult>(apiUrl(config, '/api/v1/portfolio/import/commit'), config, {
+    method: 'POST',
+    body: JSON.stringify({
+      csv_text: csvText,
+      mode,
+      mapping_overrides: mappingOverrides,
+    }),
+  })
+}
+
+const SAMPLE_WATCHLIST: WatchlistResponse = {
+  watchlist: [
+    {
+      id: 1,
+      portfolio_id: 1,
+      ticker: 'NVDA',
+      name: 'NVIDIA Corp.',
+      target_buy_price: 130.0,
+      target_sell_price: 165.0,
+      notes: 'AI datacenter GPU leader — watch Q3 10-Q margins',
+      created_at: '2026-01-10T10:00:00Z',
+      last_price: 138.4,
+      currency: 'USD',
+      asset_class: 'Stock',
+      in_portfolio: true,
+      portfolio_weight: 0.14,
+      status: 'WATCHING',
+      distance_to_buy_pct: 0.0646,
+      distance_to_sell_pct: 0.1922,
+    },
+    {
+      id: 2,
+      portfolio_id: 1,
+      ticker: 'MSFT',
+      name: 'Microsoft Corp.',
+      target_buy_price: 450.0,
+      target_sell_price: 520.0,
+      notes: 'Core enterprise cloud & software compounder',
+      created_at: '2026-01-10T10:00:00Z',
+      last_price: 445.2,
+      currency: 'USD',
+      asset_class: 'Stock',
+      in_portfolio: true,
+      portfolio_weight: 0.14,
+      status: 'BUY_ZONE',
+      distance_to_buy_pct: -0.0107,
+      distance_to_sell_pct: 0.168,
+    },
+    {
+      id: 3,
+      portfolio_id: 1,
+      ticker: 'TSLA',
+      name: 'Tesla Inc.',
+      target_buy_price: 220.0,
+      target_sell_price: 280.0,
+      notes: 'Autonomous tech & energy storage catalysts',
+      created_at: '2026-02-15T12:00:00Z',
+      last_price: 258.3,
+      currency: 'USD',
+      asset_class: 'Stock',
+      in_portfolio: false,
+      portfolio_weight: 0.0,
+      status: 'WATCHING',
+      distance_to_buy_pct: 0.1741,
+      distance_to_sell_pct: 0.084,
+    },
+  ],
+  rules: [
+    {
+      id: 1,
+      portfolio_id: 1,
+      metric: 'drawdown_pct',
+      ticker: null,
+      threshold: -10.0,
+      label: 'Portfolio Drawdown <= -10%',
+      enabled: true,
+      created_at: '2026-01-02T00:00:00Z',
+    },
+    {
+      id: 2,
+      portfolio_id: 1,
+      metric: 'price_below',
+      ticker: 'MSFT',
+      threshold: 450.0,
+      label: 'MSFT <= $450 Buy Alert',
+      enabled: true,
+      created_at: '2026-01-02T00:00:00Z',
+    },
+  ],
+  triggered_alerts: [
+    {
+      id: 'wl-buy-MSFT',
+      severity: 'high',
+      category: 'Watchlist Target',
+      ticker: 'MSFT',
+      title: 'MSFT reached Target Buy Zone ($445.20 <= $450.00)',
+      message: 'MSFT is trading at 445.20 USD, breaking below your target buy price of 450.00 USD.',
+    },
+    {
+      id: 'macro-yc-inv',
+      severity: 'high',
+      category: 'Macro & Rates',
+      ticker: 'US10Y-2Y',
+      title: 'US Treasury 10Y-2Y Inversion In Effect',
+      message: '10Y Treasury yield trades below 2Y yield, signaling institutional macro warning.',
+    },
+  ],
+}
+
+export async function getWatchlistAndAlerts(
+  config: DataConfig,
+  portfolioId: number = getStoredPortfolioId(),
+): Promise<WatchlistResponse> {
+  if (config.source === 'snapshot') {
+    return SAMPLE_WATCHLIST
+  }
+  try {
+    return await requestJson<WatchlistResponse>(
+      apiUrl(config, `/api/v1/watchlist?portfolio_id=${portfolioId}`),
+      config,
+    )
+  } catch {
+    return SAMPLE_WATCHLIST
+  }
+}
+
+export async function addWatchlistItem(
+  config: DataConfig,
+  item: {
+    ticker: string
+    name?: string
+    target_buy_price?: number | null
+    target_sell_price?: number | null
+    notes?: string
+  },
+  portfolioId: number = getStoredPortfolioId(),
+): Promise<WatchlistItem> {
+  if (config.source === 'snapshot') {
+    return {
+      id: Date.now(),
+      portfolio_id: portfolioId,
+      ticker: item.ticker.toUpperCase(),
+      name: item.name || item.ticker.toUpperCase(),
+      target_buy_price: item.target_buy_price ?? null,
+      target_sell_price: item.target_sell_price ?? null,
+      notes: item.notes || '',
+      created_at: new Date().toISOString(),
+      last_price: 150.0,
+      currency: 'USD',
+      asset_class: 'Stock',
+      in_portfolio: false,
+      portfolio_weight: 0.0,
+      status: 'WATCHING',
+      distance_to_buy_pct: null,
+      distance_to_sell_pct: null,
+    }
+  }
+
+  return requestJson<WatchlistItem>(
+    apiUrl(config, `/api/v1/watchlist?portfolio_id=${portfolioId}`),
+    config,
+    {
+      method: 'POST',
+      body: JSON.stringify(item),
+    },
+  )
+}
+
+export async function deleteWatchlistItem(
+  config: DataConfig,
+  itemId: number,
+  portfolioId: number = getStoredPortfolioId(),
+): Promise<void> {
+  if (config.source === 'snapshot') return
+  await fetch(apiUrl(config, `/api/v1/watchlist/${itemId}?portfolio_id=${portfolioId}`), {
+    method: 'DELETE',
+    headers: config.apiKey ? { 'X-API-Key': config.apiKey } : undefined,
+  })
+}
+
+export async function addAlertRule(
+  config: DataConfig,
+  rule: {
+    metric: string
+    ticker?: string | null
+    threshold: number
+    label?: string
+  },
+  portfolioId: number = getStoredPortfolioId(),
+): Promise<void> {
+  if (config.source === 'snapshot') return
+  await requestJson(apiUrl(config, `/api/v1/alerts/rules?portfolio_id=${portfolioId}`), config, {
+    method: 'POST',
+    body: JSON.stringify(rule),
+  })
+}
+
+export async function deleteAlertRule(
+  config: DataConfig,
+  ruleId: number,
+  portfolioId: number = getStoredPortfolioId(),
+): Promise<void> {
+  if (config.source === 'snapshot') return
+  await fetch(apiUrl(config, `/api/v1/alerts/rules/${ruleId}?portfolio_id=${portfolioId}`), {
+    method: 'DELETE',
+    headers: config.apiKey ? { 'X-API-Key': config.apiKey } : undefined,
+  })
+}
+
 
 

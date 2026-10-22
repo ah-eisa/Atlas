@@ -78,6 +78,29 @@ CREATE TABLE IF NOT EXISTS transactions (
 
 CREATE INDEX IF NOT EXISTS ix_transactions_portfolio ON transactions (portfolio_id);
 CREATE INDEX IF NOT EXISTS ix_transactions_date ON transactions (executed_at);
+
+CREATE TABLE IF NOT EXISTS watchlist_items (
+    id                INTEGER PRIMARY KEY AUTOINCREMENT,
+    portfolio_id      INTEGER NOT NULL DEFAULT 1,
+    ticker            TEXT NOT NULL COLLATE NOCASE,
+    name              TEXT NOT NULL DEFAULT '',
+    target_buy_price  REAL,
+    target_sell_price REAL,
+    notes             TEXT NOT NULL DEFAULT '',
+    created_at        TEXT NOT NULL,
+    UNIQUE(portfolio_id, ticker)
+);
+
+CREATE TABLE IF NOT EXISTS alert_rules (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    portfolio_id INTEGER NOT NULL DEFAULT 1,
+    metric       TEXT NOT NULL,
+    ticker       TEXT,
+    threshold    REAL NOT NULL,
+    label        TEXT NOT NULL DEFAULT '',
+    enabled      INTEGER NOT NULL DEFAULT 1,
+    created_at   TEXT NOT NULL
+);
 """
 
 
@@ -109,7 +132,45 @@ MIGRATIONS: list[tuple[int, str, Any]] = [
         "transactions",
         lambda connection: _add_transactions_table(connection),
     ),
+    (
+        5,
+        "watchlist_and_alerts",
+        lambda connection: _add_watchlist_and_alerts_tables(connection),
+    ),
 ]
+
+
+def _add_watchlist_and_alerts_tables(connection: sqlite3.Connection) -> None:
+    """Create watchlist_items and alert_rules tables."""
+    connection.execute(
+        """
+        CREATE TABLE IF NOT EXISTS watchlist_items (
+            id                INTEGER PRIMARY KEY AUTOINCREMENT,
+            portfolio_id      INTEGER NOT NULL DEFAULT 1,
+            ticker            TEXT NOT NULL COLLATE NOCASE,
+            name              TEXT NOT NULL DEFAULT '',
+            target_buy_price  REAL,
+            target_sell_price REAL,
+            notes             TEXT NOT NULL DEFAULT '',
+            created_at        TEXT NOT NULL,
+            UNIQUE(portfolio_id, ticker)
+        )
+        """
+    )
+    connection.execute(
+        """
+        CREATE TABLE IF NOT EXISTS alert_rules (
+            id           INTEGER PRIMARY KEY AUTOINCREMENT,
+            portfolio_id INTEGER NOT NULL DEFAULT 1,
+            metric       TEXT NOT NULL,
+            ticker       TEXT,
+            threshold    REAL NOT NULL,
+            label        TEXT NOT NULL DEFAULT '',
+            enabled      INTEGER NOT NULL DEFAULT 1,
+            created_at   TEXT NOT NULL
+        )
+        """
+    )
 
 
 def _add_transactions_table(connection: sqlite3.Connection) -> None:
@@ -1099,6 +1160,151 @@ def is_empty(
             "SELECT COUNT(*) AS n FROM holdings WHERE portfolio_id = ?", (portfolio_id,)
         ).fetchone()
     return int(row["n"]) == 0
+
+
+# ---------------------------------------------------------------------------
+# Watchlist & Smart Alerts Persistence
+# ---------------------------------------------------------------------------
+
+
+def list_watchlist(
+    settings: Settings = SETTINGS, portfolio_id: int = DEFAULT_PORTFOLIO_ID
+) -> list[dict[str, Any]]:
+    with connect(settings) as connection:
+        rows = connection.execute(
+            """
+            SELECT id, portfolio_id, ticker, name, target_buy_price, target_sell_price, notes, created_at
+            FROM watchlist_items
+            WHERE portfolio_id = ?
+            ORDER BY ticker ASC
+            """,
+            (portfolio_id,),
+        ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def upsert_watchlist_item(
+    payload: dict[str, Any],
+    settings: Settings = SETTINGS,
+    portfolio_id: int = DEFAULT_PORTFOLIO_ID,
+) -> dict[str, Any]:
+    ticker = str(payload.get("ticker", "")).strip().upper()
+    if not ticker or len(ticker) > 20:
+        raise ValueError("Invalid ticker symbol")
+    name = str(payload.get("name") or ticker).strip()
+    target_buy = payload.get("target_buy_price")
+    target_sell = payload.get("target_sell_price")
+    notes = str(payload.get("notes") or "").strip()
+    now = _now()
+
+    with connect(settings) as connection:
+        connection.execute(
+            """
+            INSERT INTO watchlist_items
+                (portfolio_id, ticker, name, target_buy_price, target_sell_price, notes, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(portfolio_id, ticker) DO UPDATE SET
+                name = excluded.name,
+                target_buy_price = excluded.target_buy_price,
+                target_sell_price = excluded.target_sell_price,
+                notes = excluded.notes
+            """,
+            (
+                portfolio_id,
+                ticker,
+                name,
+                float(target_buy) if target_buy is not None else None,
+                float(target_sell) if target_sell is not None else None,
+                notes,
+                now,
+            ),
+        )
+        row = connection.execute(
+            """
+            SELECT id, portfolio_id, ticker, name, target_buy_price, target_sell_price, notes, created_at
+            FROM watchlist_items
+            WHERE portfolio_id = ? AND ticker = ?
+            """,
+            (portfolio_id, ticker),
+        ).fetchone()
+    return dict(row)
+
+
+def delete_watchlist_item(
+    item_id: int,
+    settings: Settings = SETTINGS,
+    portfolio_id: int = DEFAULT_PORTFOLIO_ID,
+) -> None:
+    with connect(settings) as connection:
+        connection.execute(
+            "DELETE FROM watchlist_items WHERE id = ? AND portfolio_id = ?",
+            (item_id, portfolio_id),
+        )
+
+
+def list_alert_rules(
+    settings: Settings = SETTINGS, portfolio_id: int = DEFAULT_PORTFOLIO_ID
+) -> list[dict[str, Any]]:
+    with connect(settings) as connection:
+        rows = connection.execute(
+            """
+            SELECT id, portfolio_id, metric, ticker, threshold, label, enabled, created_at
+            FROM alert_rules
+            WHERE portfolio_id = ?
+            ORDER BY id DESC
+            """,
+            (portfolio_id,),
+        ).fetchall()
+    return [{**dict(r), "enabled": bool(r["enabled"])} for r in rows]
+
+
+def create_alert_rule(
+    payload: dict[str, Any],
+    settings: Settings = SETTINGS,
+    portfolio_id: int = DEFAULT_PORTFOLIO_ID,
+) -> dict[str, Any]:
+    metric = str(payload.get("metric", "")).strip()
+    allowed_metrics = {
+        "price_above",
+        "price_below",
+        "drawdown_pct",
+        "var_95_pct",
+        "position_weight_pct",
+        "yield_10y_above",
+    }
+    if metric not in allowed_metrics:
+        raise ValueError(f"metric must be one of {sorted(allowed_metrics)}")
+    ticker = str(payload.get("ticker") or "").strip().upper() or None
+    threshold = float(payload["threshold"])
+    label = str(payload.get("label") or f"{metric} ({threshold})").strip()
+    now = _now()
+
+    with connect(settings) as connection:
+        cursor = connection.execute(
+            """
+            INSERT INTO alert_rules
+                (portfolio_id, metric, ticker, threshold, label, enabled, created_at)
+            VALUES (?, ?, ?, ?, ?, 1, ?)
+            """,
+            (portfolio_id, metric, ticker, threshold, label, now),
+        )
+        row = connection.execute(
+            "SELECT id, portfolio_id, metric, ticker, threshold, label, enabled, created_at FROM alert_rules WHERE id = ?",
+            (cursor.lastrowid,),
+        ).fetchone()
+    return {**dict(row), "enabled": bool(row["enabled"])}
+
+
+def delete_alert_rule(
+    rule_id: int,
+    settings: Settings = SETTINGS,
+    portfolio_id: int = DEFAULT_PORTFOLIO_ID,
+) -> None:
+    with connect(settings) as connection:
+        connection.execute(
+            "DELETE FROM alert_rules WHERE id = ? AND portfolio_id = ?",
+            (rule_id, portfolio_id),
+        )
 
 
 __all__ = [

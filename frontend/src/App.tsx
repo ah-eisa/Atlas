@@ -11,10 +11,12 @@
 import { lazy, Suspense, useEffect, useState } from 'react'
 
 import { CommandPalette } from './components/CommandPalette'
+import { CsvImportModal } from './components/CsvImportModal'
 import { NewPortfolioModal } from './components/NewPortfolioModal'
 import { OrderModal } from './components/OrderModal'
 import { PositionModal } from './components/PositionModal'
 import { TopBar } from './components/TopBar'
+import { WatchlistModal } from './components/WatchlistModal'
 import { ApiError, deletePosition, type DataConfig } from './lib/api'
 import { formatDate, formatTimestamp } from './lib/format'
 import { useTheme } from './lib/theme'
@@ -49,6 +51,8 @@ function Shell({
   onAddPosition,
   onOpenTradeModal,
   onOpenCommandPalette,
+  onOpenWatchlist,
+  onOpenCsvImport,
   onSwitchSource,
   children,
 }: {
@@ -62,6 +66,8 @@ function Shell({
   onAddPosition?: () => void
   onOpenTradeModal?: () => void
   onOpenCommandPalette?: () => void
+  onOpenWatchlist?: () => void
+  onOpenCsvImport?: () => void
   onSwitchSource?: (source: DataSource) => void
   children: React.ReactNode
 }) {
@@ -92,6 +98,8 @@ function Shell({
         onAddPosition={onAddPosition}
         onOpenTradeModal={onOpenTradeModal}
         onOpenCommandPalette={onOpenCommandPalette}
+        onOpenWatchlist={onOpenWatchlist}
+        onOpenCsvImport={onOpenCsvImport}
         onSwitchSource={onSwitchSource}
         editable={state?.editable ?? false}
       />
@@ -305,6 +313,7 @@ function ViewContent({
   onEditPosition,
   onDeletePosition,
   onOpenTradeModal,
+  onOpenCsvImport,
   onSwitchSource,
 }: {
   state: PortfolioState
@@ -319,6 +328,7 @@ function ViewContent({
   onEditPosition?: (position: Position) => void
   onDeletePosition?: (id: number) => Promise<void>
   onOpenTradeModal?: (ticker?: string, type?: OrderType) => void
+  onOpenCsvImport?: () => void
   onSwitchSource?: (source: DataSource) => void
 }) {
   if (view === 'data') {
@@ -331,6 +341,7 @@ function ViewContent({
         onReload={onReload}
         onApiKey={onApiKey}
         onPortfolio={onPortfolio}
+        onOpenCsvImport={onOpenCsvImport}
       />
     )
   }
@@ -433,6 +444,8 @@ export default function App() {
 
   const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false)
   const [isNewPortfolioOpen, setIsNewPortfolioOpen] = useState(false)
+  const [isCsvImportOpen, setIsCsvImportOpen] = useState(false)
+  const [isWatchlistOpen, setIsWatchlistOpen] = useState(false)
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
@@ -542,6 +555,7 @@ export default function App() {
         onEditPosition={handleOpenEditPosition}
         onDeletePosition={handleDeletePosition}
         onOpenTradeModal={handleOpenTradeModal}
+        onOpenCsvImport={() => setIsCsvImportOpen(true)}
         onSwitchSource={setSource}
       />
     </Suspense>
@@ -559,6 +573,8 @@ export default function App() {
       onAddPosition={handleOpenAddPosition}
       onOpenTradeModal={() => handleOpenTradeModal()}
       onOpenCommandPalette={() => setIsCommandPaletteOpen(true)}
+      onOpenWatchlist={() => setIsWatchlistOpen(true)}
+      onOpenCsvImport={() => setIsCsvImportOpen(true)}
       onSwitchSource={setSource}
     >
       <WarningStrip state={data} error={error} onClearError={clearError} />
@@ -572,10 +588,32 @@ export default function App() {
         onNavigate={navigate}
         onOpenTradeModal={handleOpenTradeModal}
         onAddPosition={handleOpenAddPosition}
+        onOpenCsvImport={() => setIsCsvImportOpen(true)}
+        onOpenWatchlist={() => setIsWatchlistOpen(true)}
         onCreatePortfolio={() => setIsNewPortfolioOpen(true)}
         onSelectPortfolio={setPortfolio}
         onSwitchSource={setSource}
         onRefresh={() => void refresh()}
+      />
+
+      <CsvImportModal
+        isOpen={isCsvImportOpen}
+        onClose={() => setIsCsvImportOpen(false)}
+        config={config}
+        baseCurrency={data.baseCurrency || 'USD'}
+        onImportSuccess={() => {
+          reload()
+          void refresh()
+        }}
+      />
+
+      <WatchlistModal
+        isOpen={isWatchlistOpen}
+        onClose={() => setIsWatchlistOpen(false)}
+        config={config}
+        portfolioId={data.portfolioId}
+        baseCurrency={data.baseCurrency || 'USD'}
+        onOpenTradeModal={handleOpenTradeModal}
       />
 
       <NewPortfolioModal

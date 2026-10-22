@@ -28,6 +28,7 @@ interface DataPanelProps {
   onReload: () => void
   onApiKey: (key: string) => void
   onPortfolio: (id: number) => void
+  onOpenCsvImport?: () => void
 }
 
 function sourceHref(source: 'snapshot' | 'api'): string {
@@ -45,6 +46,7 @@ export function DataPanel({
   onReload,
   onApiKey,
   onPortfolio,
+  onOpenCsvImport,
 }: DataPanelProps) {
   const [baseCurrency, setBaseCurrency] = useState(state.baseCurrency)
   const [baseSaving, setBaseSaving] = useState(false)
@@ -240,6 +242,16 @@ export function DataPanel({
             >
               {exporting === 'csv' ? 'Exporting' : 'Export CSV'}
             </button>
+            {onOpenCsvImport && (
+              <button
+                type="button"
+                className="button button--primary"
+                onClick={onOpenCsvImport}
+                title="Import positions, trades, or cash flows from CSV / Broker Statement"
+              >
+                Import CSV / Statement
+              </button>
+            )}
           </div>
           {exportError ? <p className="field__error">{exportError}</p> : null}
 

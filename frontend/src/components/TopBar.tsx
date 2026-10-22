@@ -64,6 +64,8 @@ interface TopBarProps {
   onAddPosition?: () => void
   onOpenTradeModal?: () => void
   onOpenCommandPalette?: () => void
+  onOpenWatchlist?: () => void
+  onOpenCsvImport?: () => void
   onSwitchSource?: (source: DataSource) => void
   editable?: boolean
 }
@@ -142,6 +144,8 @@ export function TopBar({
   onAddPosition,
   onOpenTradeModal,
   onOpenCommandPalette,
+  onOpenWatchlist,
+  onOpenCsvImport,
   onSwitchSource,
   editable = false,
 }: TopBarProps) {
@@ -223,6 +227,30 @@ export function TopBar({
         </nav>
 
         <div className="topbar__actions">
+          {onOpenCsvImport && (
+            <button
+              type="button"
+              className="button button--quiet button--sm topbar__btn--desktop-only"
+              onClick={onOpenCsvImport}
+              title="Import CSV or Broker Statement (IBKR)"
+              aria-label="Import Statement"
+            >
+              <span>Import</span>
+            </button>
+          )}
+
+          {onOpenWatchlist && (
+            <button
+              type="button"
+              className="button button--quiet button--sm topbar__btn--desktop-only"
+              onClick={onOpenWatchlist}
+              title="Open Watchlists & Smart Alerts"
+              aria-label="Open Watchlists"
+            >
+              <span>Watchlist</span>
+            </button>
+          )}
+
           {onOpenCommandPalette && (
             <button
               type="button"

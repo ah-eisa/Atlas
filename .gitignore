@@ -54,3 +54,5 @@ backend/holdings.backup-*.json
 
 # OS
 .DS_Store
+
+*.bundle

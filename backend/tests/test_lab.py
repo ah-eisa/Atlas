@@ -148,4 +148,60 @@ def test_lab_api_endpoints(analytics_client) -> None:
     assert "markdown_memo" in payload
     assert "# INVESTMENT COMMITTEE MEMO" in payload["markdown_memo"]
 
+    # Test CSV Import Preview & Commit
+    csv_sample = (
+        "ticker,name,asset_class,region,currency,quantity,cost_basis_per_unit,acquired\n"
+        "MSFT,Microsoft Corp,Stock,US,USD,15,400.0,2025-01-15\n"
+        "BTC-USD,Bitcoin,Crypto,Global,USD,0.5,80000.0,2025-02-01\n"
+    )
+    r_preview = analytics_client.post(
+        "/api/v1/portfolio/import/preview",
+        json={"csv_text": csv_sample},
+    )
+    assert r_preview.status_code == 200
+    prev_data = r_preview.json()
+    assert prev_data["summary"]["positions_count"] == 2
+    assert prev_data["detected_format"] in {"atlas_combined", "generic_positions"}
+
+    r_commit = analytics_client.post(
+        "/api/v1/portfolio/import/commit",
+        json={"csv_text": csv_sample, "mode": "merge"},
+    )
+    assert r_commit.status_code == 200
+    assert r_commit.json()["imported_positions"] == 2
+
+    # Test Watchlist & Smart Alerts
+    r_wl = analytics_client.get("/api/v1/watchlist")
+    assert r_wl.status_code == 200
+    wl_data = r_wl.json()
+    assert "watchlist" in wl_data
+    assert "triggered_alerts" in wl_data
+    assert len(wl_data["watchlist"]) >= 1
+
+    r_add_wl = analytics_client.post(
+        "/api/v1/watchlist",
+        json={
+            "ticker": "TSLA",
+            "name": "Tesla Inc.",
+            "target_buy_price": 200.0,
+            "target_sell_price": 300.0,
+            "notes": "EV compounder",
+        },
+    )
+    assert r_add_wl.status_code == 201
+    assert r_add_wl.json()["ticker"] == "TSLA"
+
+    r_add_rule = analytics_client.post(
+        "/api/v1/alerts/rules",
+        json={
+            "metric": "price_above",
+            "ticker": "TSLA",
+            "threshold": 250.0,
+            "label": "TSLA break 250",
+        },
+    )
+    assert r_add_rule.status_code == 201
+    assert r_add_rule.json()["metric"] == "price_above"
+
+
 

@@ -168,3 +168,34 @@ test('command palette opens on Ctrl+K and executes deep-link search', async ({ p
 
   await expect(page).toHaveURL(/#\/macro/)
 })
+
+test('watchlist modal opens and shows watchlist items', async ({ page, isMobile }) => {
+  await page.goto('/?source=snapshot#/overview')
+  if (isMobile) {
+    await page.getByRole('button', { name: 'Open Command Palette' }).click()
+    const cp = page.getByRole('dialog', { name: 'Command Palette' })
+    await expect(cp).toBeVisible()
+    await page.getByLabel('Command palette search').fill('Watchlist')
+    await cp.getByRole('option', { name: /Open Watchlists/i }).click()
+  } else {
+    await page.getByRole('button', { name: 'Open Watchlists' }).click()
+  }
+
+  const dialog = page.getByRole('dialog', { name: 'Watchlists and Smart Alerts' })
+  await expect(dialog).toBeVisible()
+  await expect(dialog.getByText('NVDA')).toBeVisible()
+  await dialog.getByRole('button', { name: 'Close modal' }).click()
+  await expect(dialog).not.toBeVisible()
+})
+
+test('csv import modal opens and previews sample statement', async ({ page }) => {
+  await page.goto('/?source=snapshot#/data')
+  await page.getByRole('button', { name: 'Import CSV / Statement' }).click()
+
+  const dialog = page.getByRole('dialog', { name: 'CSV and Broker Statement Import Wizard' })
+  await expect(dialog).toBeVisible()
+  await dialog.getByRole('button', { name: 'Load Sample ATLAS CSV' }).click()
+  await expect(dialog.getByText('AAPL')).toBeVisible()
+  await dialog.getByRole('button', { name: 'Close modal' }).click()
+  await expect(dialog).not.toBeVisible()
+})
