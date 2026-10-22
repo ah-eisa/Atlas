@@ -13,6 +13,7 @@ export const VIEW_KEYS = [
   'overview',
   'performance',
   'risk',
+  'xray',
   'holdings',
   'trades',
   'bonds',

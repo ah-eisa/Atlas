@@ -17,6 +17,9 @@
 
 import type {
   Analytics,
+  AttributionGroupBy,
+  AttributionPeriod,
+  AttributionReport,
   BlackScholesInput,
   BlackScholesOutput,
   BondCalculatorInput,
@@ -37,7 +40,10 @@ import type {
   RealizedPnlSummary,
   SecFilingsResponse,
   Snapshot,
+  StressReport,
+  StressShock,
   Transaction,
+  XRayReport,
   YieldCurveSnapshot,
 } from './types'
 
@@ -1016,3 +1022,422 @@ export async function calculateOption(
     body: JSON.stringify(input),
   })
 }
+
+// --------------------------------------------------------------------------
+// Portfolio Lab: X-Ray, Stress Lab & Brinson Attribution API
+// --------------------------------------------------------------------------
+
+const SAMPLE_XRAY_REPORT: XRayReport = {
+  as_of: '2026-04-06',
+  total_value: 254180.5,
+  positions: 8,
+  headline: {
+    effective_holdings: 5.82,
+    herfindahl: 0.1718,
+    largest_pct: 0.245,
+    top_five_pct: 0.784,
+    diversification_ratio: 1.42,
+  },
+  findings: [
+    {
+      severity: 'medium',
+      code: 'single_position',
+      message: 'VWCE.DE is 25% of the portfolio.',
+    },
+    {
+      severity: 'medium',
+      code: 'risk_hog',
+      message: 'BTC-USD is 12% of capital but 34% of portfolio volatility.',
+    },
+    {
+      severity: 'medium',
+      code: 'overlap',
+      message: 'VWCE.DE, AAPL, MSFT move together (correlation >= 0.80) and are 52% of the portfolio combined.',
+    },
+  ],
+  exposure: {
+    asset_class: [
+      { key: 'ETF', weight: 0.48 },
+      { key: 'Stock', weight: 0.32 },
+      { key: 'Crypto', weight: 0.12 },
+      { key: 'Bond', weight: 0.08 },
+    ],
+    region: [
+      { key: 'US', weight: 0.54 },
+      { key: 'Global', weight: 0.25 },
+      { key: 'Europe', weight: 0.21 },
+    ],
+    currency: [
+      { key: 'USD', weight: 0.56 },
+      { key: 'EUR', weight: 0.44 },
+    ],
+  },
+  risk_vs_capital: [
+    { ticker: 'BTC-USD', weight: 0.12, risk_share: 0.34, risk_to_weight: 2.8333 },
+    { ticker: 'VWCE.DE', weight: 0.245, risk_share: 0.22, risk_to_weight: 0.898 },
+    { ticker: 'NVDA', weight: 0.14, risk_share: 0.19, risk_to_weight: 1.3571 },
+    { ticker: 'AAPL', weight: 0.135, risk_share: 0.12, risk_to_weight: 0.8889 },
+    { ticker: 'MSFT', weight: 0.14, risk_share: 0.09, risk_to_weight: 0.6429 },
+    { ticker: 'AGGH.AS', weight: 0.08, risk_share: 0.02, risk_to_weight: 0.25 },
+  ],
+  overlap: {
+    pairs: [
+      { a: 'AAPL', b: 'MSFT', correlation: 0.84 },
+      { a: 'VWCE.DE', b: 'AAPL', correlation: 0.81 },
+    ],
+    clusters: [{ tickers: ['VWCE.DE', 'AAPL', 'MSFT'], combined_weight: 0.52 }],
+    threshold: 0.8,
+  },
+  methodology:
+    'Overlap is statistical, inferred from daily return correlation. It does not look through ETF or fund holdings.',
+}
+
+const SAMPLE_STRESS_REPORT: StressReport = {
+  as_of: '2026-04-06',
+  base_currency: 'EUR',
+  total_value: 254180.5,
+  benchmark: 'S&P 500',
+  betas: {
+    'VWCE.DE': 0.94,
+    AAPL: 1.15,
+    MSFT: 1.08,
+    NVDA: 1.65,
+    'BTC-USD': 1.85,
+    'AGGH.AS': 0.12,
+  },
+  methodology:
+    'First-order factor model. Each position has one primary factor (equity beta, bond duration, gold, crypto) plus a currency effect.',
+  results: [
+    {
+      key: 'gfc_2008',
+      name: '2008 financial crisis',
+      description: 'Global equities halve, flight to quality cuts Treasury yields and lifts the dollar and gold.',
+      window: 'Sep 2008 - Mar 2009',
+      kind: 'historical',
+      shock: { equity_pct: -0.5, rates_bps: -200, usd_pct: 0.12, gold_pct: 0.1, crypto_pct: -0.6 },
+      value_before: 254180.5,
+      value_after: 158420.1,
+      pnl: -95760.4,
+      pnl_pct: -0.3767,
+      fx_pnl: 8420.0,
+      by_factor: [
+        { key: 'equity', pnl: -82100.4, pct_of_portfolio: -0.323 },
+        { key: 'crypto', pnl: -16400.0, pct_of_portfolio: -0.0645 },
+        { key: 'rates', pnl: 2740.0, pct_of_portfolio: 0.0108 },
+      ],
+      by_asset_class: [
+        { key: 'ETF', pnl: -46200.0, pct_of_portfolio: -0.1818 },
+        { key: 'Stock', pnl: -35900.4, pct_of_portfolio: -0.1412 },
+        { key: 'Crypto', pnl: -16400.0, pct_of_portfolio: -0.0645 },
+        { key: 'Bond', pnl: 2740.0, pct_of_portfolio: 0.0108 },
+      ],
+      positions: [
+        {
+          ticker: 'VWCE.DE',
+          name: 'Vanguard FTSE All-World',
+          asset_class: 'ETF',
+          factor: 'equity',
+          weight: 0.245,
+          sensitivity: 0.94,
+          price_move_pct: -0.47,
+          fx_move_pct: 0,
+          total_move_pct: -0.47,
+          pnl: -29268.0,
+        },
+        {
+          ticker: 'NVDA',
+          name: 'NVIDIA Corp',
+          asset_class: 'Stock',
+          factor: 'equity',
+          weight: 0.14,
+          sensitivity: 1.65,
+          price_move_pct: -0.825,
+          fx_move_pct: 0.12,
+          total_move_pct: -0.804,
+          pnl: -28610.5,
+        },
+        {
+          ticker: 'BTC-USD',
+          name: 'Bitcoin',
+          asset_class: 'Crypto',
+          factor: 'crypto',
+          weight: 0.12,
+          sensitivity: 1.0,
+          price_move_pct: -0.6,
+          fx_move_pct: 0.12,
+          total_move_pct: -0.552,
+          pnl: -16400.0,
+        },
+      ],
+    },
+    {
+      key: 'covid_2020',
+      name: '2020 COVID-19 crash',
+      description: 'Five-week dash for cash in February and March 2020.',
+      window: 'Feb - Mar 2020',
+      kind: 'historical',
+      shock: { equity_pct: -0.34, rates_bps: -120, usd_pct: 0.06, gold_pct: 0.03, crypto_pct: -0.5 },
+      value_before: 254180.5,
+      value_after: 185920.0,
+      pnl: -68260.5,
+      pnl_pct: -0.2685,
+      fx_pnl: 4910.0,
+      by_factor: [
+        { key: 'equity', pnl: -55820.5, pct_of_portfolio: -0.2196 },
+        { key: 'crypto', pnl: -14100.0, pct_of_portfolio: -0.0555 },
+        { key: 'rates', pnl: 1660.0, pct_of_portfolio: 0.0065 },
+      ],
+      by_asset_class: [
+        { key: 'ETF', pnl: -31200.0, pct_of_portfolio: -0.1227 },
+        { key: 'Stock', pnl: -24620.5, pct_of_portfolio: -0.0969 },
+        { key: 'Crypto', pnl: -14100.0, pct_of_portfolio: -0.0555 },
+        { key: 'Bond', pnl: 1660.0, pct_of_portfolio: 0.0065 },
+      ],
+      positions: [],
+    },
+    {
+      key: 'rates_2022',
+      name: '2022 rate shock',
+      description: 'Central banks hike ~300 bps; stocks and bonds fall together while the dollar rallies.',
+      window: 'Jan - Oct 2022',
+      kind: 'historical',
+      shock: { equity_pct: -0.25, rates_bps: 250, usd_pct: 0.12, gold_pct: -0.05, crypto_pct: -0.65 },
+      value_before: 254180.5,
+      value_after: 196110.5,
+      pnl: -58070.0,
+      pnl_pct: -0.2285,
+      fx_pnl: 9800.0,
+      by_factor: [
+        { key: 'equity', pnl: -36920.0, pct_of_portfolio: -0.1453 },
+        { key: 'crypto', pnl: -17730.0, pct_of_portfolio: -0.0698 },
+        { key: 'rates', pnl: -3420.0, pct_of_portfolio: -0.0135 },
+      ],
+      by_asset_class: [],
+      positions: [],
+    },
+    {
+      key: 'rates_up_100',
+      name: 'Rates +100 bps',
+      description: 'Parallel 100 bps upward shift in yields with a modest equity derating.',
+      window: 'Instant shock',
+      kind: 'parametric',
+      shock: { equity_pct: -0.05, rates_bps: 100, usd_pct: 0.02, gold_pct: -0.02, crypto_pct: -0.1 },
+      value_before: 254180.5,
+      value_after: 242310.0,
+      pnl: -11870.5,
+      pnl_pct: -0.0467,
+      fx_pnl: 2150.0,
+      by_factor: [
+        { key: 'equity', pnl: -8100.5, pct_of_portfolio: -0.0319 },
+        { key: 'crypto', pnl: -2400.0, pct_of_portfolio: -0.0094 },
+        { key: 'rates', pnl: -1370.0, pct_of_portfolio: -0.0054 },
+      ],
+      by_asset_class: [],
+      positions: [],
+    },
+  ],
+}
+
+const SAMPLE_ATTRIBUTION_REPORT: AttributionReport = {
+  as_of: '2026-04-06',
+  period: 'all',
+  group_by: 'asset_class',
+  start_date: '2025-01-02',
+  end_date: '2026-04-06',
+  benchmark_mode: 'equal_weight',
+  benchmark_label: 'Equal-weight opportunity set',
+  excluded: [],
+  time_weighted_return_pct: 0.1842,
+  basis:
+    'Single-period buy-and-hold from the window start, using the positions held on that date.',
+  totals: {
+    portfolio_return_pct: 0.1842,
+    benchmark_return_pct: 0.141,
+    active_return_pct: 0.0432,
+    allocation_pct: 0.0245,
+    selection_pct: 0.0132,
+    interaction_pct: 0.0055,
+    residual_pct: 0.0,
+    weights_normalised: false,
+  },
+  segments: [
+    {
+      key: 'Stock',
+      portfolio_weight: 0.32,
+      benchmark_weight: 0.25,
+      portfolio_return_pct: 0.264,
+      benchmark_return_pct: 0.215,
+      allocation_pct: 0.0052,
+      selection_pct: 0.0123,
+      interaction_pct: 0.0034,
+      total_pct: 0.0209,
+    },
+    {
+      key: 'ETF',
+      portfolio_weight: 0.48,
+      benchmark_weight: 0.25,
+      portfolio_return_pct: 0.162,
+      benchmark_return_pct: 0.155,
+      allocation_pct: 0.0032,
+      selection_pct: 0.0018,
+      interaction_pct: 0.0016,
+      total_pct: 0.0066,
+    },
+    {
+      key: 'Bond',
+      portfolio_weight: 0.08,
+      benchmark_weight: 0.25,
+      portfolio_return_pct: 0.028,
+      benchmark_return_pct: 0.032,
+      allocation_pct: 0.0185,
+      selection_pct: -0.001,
+      interaction_pct: 0.0007,
+      total_pct: 0.0182,
+    },
+    {
+      key: 'Crypto',
+      portfolio_weight: 0.12,
+      benchmark_weight: 0.25,
+      portfolio_return_pct: 0.161,
+      benchmark_return_pct: 0.162,
+      allocation_pct: -0.0024,
+      selection_pct: 0.0001,
+      interaction_pct: -0.0002,
+      total_pct: -0.0025,
+    },
+  ],
+}
+
+export async function getPortfolioXRay(
+  config: DataConfig,
+  portfolioId: number = getStoredPortfolioId(),
+): Promise<XRayReport> {
+  if (config.source === 'snapshot') {
+    return SAMPLE_XRAY_REPORT
+  }
+  try {
+    return await requestJson<XRayReport>(
+      apiUrl(config, `/api/v1/portfolio/xray?portfolio_id=${portfolioId}`),
+      config,
+    )
+  } catch {
+    return SAMPLE_XRAY_REPORT
+  }
+}
+
+export async function getStressReport(
+  config: DataConfig,
+  portfolioId: number = getStoredPortfolioId(),
+): Promise<StressReport> {
+  if (config.source === 'snapshot') {
+    return SAMPLE_STRESS_REPORT
+  }
+  try {
+    return await requestJson<StressReport>(
+      apiUrl(config, `/api/v1/portfolio/stress?portfolio_id=${portfolioId}`),
+      config,
+    )
+  } catch {
+    return SAMPLE_STRESS_REPORT
+  }
+}
+
+export async function runCustomStress(
+  config: DataConfig,
+  custom: StressShock,
+  portfolioId: number = getStoredPortfolioId(),
+): Promise<StressReport> {
+  if (config.source === 'snapshot') {
+    const val = SAMPLE_STRESS_REPORT.total_value
+    const move =
+      0.75 * custom.equity_pct +
+      0.08 * (-6.5 * (custom.rates_bps / 10000)) +
+      0.12 * custom.crypto_pct +
+      0.05 * custom.gold_pct +
+      0.45 * custom.usd_pct
+    const pnl = Number((val * move).toFixed(2))
+    return {
+      ...SAMPLE_STRESS_REPORT,
+      results: [
+        {
+          key: 'custom',
+          name: 'Custom scenario',
+          description: 'User-defined simultaneous shocks.',
+          window: 'Instant shock',
+          kind: 'custom',
+          shock: custom,
+          value_before: val,
+          value_after: Number((val + pnl).toFixed(2)),
+          pnl,
+          pnl_pct: Number(move.toFixed(4)),
+          fx_pnl: Number((val * 0.45 * custom.usd_pct).toFixed(2)),
+          by_factor: [
+            { key: 'equity', pnl: Number((val * 0.75 * custom.equity_pct).toFixed(2)), pct_of_portfolio: Number((0.75 * custom.equity_pct).toFixed(4)) },
+            { key: 'crypto', pnl: Number((val * 0.12 * custom.crypto_pct).toFixed(2)), pct_of_portfolio: Number((0.12 * custom.crypto_pct).toFixed(4)) },
+            { key: 'rates', pnl: Number((val * 0.08 * (-6.5 * (custom.rates_bps / 10000))).toFixed(2)), pct_of_portfolio: Number((0.08 * (-6.5 * (custom.rates_bps / 10000))).toFixed(4)) },
+          ],
+          by_asset_class: [],
+          positions: SAMPLE_STRESS_REPORT.results[0].positions.map((pos) => {
+            const pMove =
+              pos.factor === 'equity'
+                ? pos.sensitivity * custom.equity_pct
+                : pos.factor === 'crypto'
+                  ? custom.crypto_pct
+                  : -6.5 * (custom.rates_bps / 10000)
+            const pVal = val * pos.weight
+            return {
+              ...pos,
+              price_move_pct: Number(pMove.toFixed(4)),
+              fx_move_pct: Number(custom.usd_pct.toFixed(4)),
+              total_move_pct: Number((pMove + custom.usd_pct * 0.5).toFixed(4)),
+              pnl: Number((pVal * (pMove + custom.usd_pct * 0.5)).toFixed(2)),
+            }
+          }),
+        },
+        ...SAMPLE_STRESS_REPORT.results,
+      ],
+    }
+  }
+  return requestJson<StressReport>(
+    apiUrl(config, `/api/v1/portfolio/stress?portfolio_id=${portfolioId}`),
+    config,
+    {
+      method: 'POST',
+      body: JSON.stringify({
+        scenarios: ['gfc_2008', 'covid_2020', 'rates_2022', 'rates_up_100', 'rates_down_100', 'equity_down_20', 'usd_up_10'],
+        custom,
+      }),
+    },
+  )
+}
+
+export async function getAttributionReport(
+  config: DataConfig,
+  period: AttributionPeriod = 'all',
+  groupBy: AttributionGroupBy = 'asset_class',
+  portfolioId: number = getStoredPortfolioId(),
+): Promise<AttributionReport> {
+  if (config.source === 'snapshot') {
+    return {
+      ...SAMPLE_ATTRIBUTION_REPORT,
+      period,
+      group_by: groupBy,
+    }
+  }
+  try {
+    return await requestJson<AttributionReport>(
+      apiUrl(
+        config,
+        `/api/v1/portfolio/attribution?period=${encodeURIComponent(period)}&group_by=${encodeURIComponent(groupBy)}&portfolio_id=${portfolioId}`,
+      ),
+      config,
+    )
+  } catch {
+    return {
+      ...SAMPLE_ATTRIBUTION_REPORT,
+      period,
+      group_by: groupBy,
+    }
+  }
+}
+

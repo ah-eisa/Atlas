@@ -33,11 +33,13 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 
-from . import fixed_income, instruments, macro_sec, options, store
+from . import data as market_data
+from . import fixed_income, instruments, lab, macro_sec, options, store
 from .config import SETTINGS, Settings
 from .observability import METRICS
 from .portfolio import API_VERSION, AnalyticsUnavailable, PortfolioAnalytics, build_analytics
 from .schemas import (
+    AttributionRequest,
     BaseCurrencyUpdate,
     BlackScholesInput,
     BlackScholesOutput,
@@ -54,6 +56,7 @@ from .schemas import (
     PortfolioIn,
     RealizedPnlSummaryOut,
     SecFilingsResponse,
+    StressRequest,
     TransactionOut,
     WhatIfRequest,
     YieldCurveSnapshot,
@@ -887,6 +890,141 @@ def replay(
         raise
     except Exception as exc:  # noqa: BLE001 - upstream failure boundary
         logger.exception("Failed to build the replay")
+        raise AnalyticsUnavailable(f"analytics unavailable: {exc}") from exc
+
+
+# ---------------------------------------------------------------------------
+# Portfolio Lab: Stress Testing, Brinson Attribution & Portfolio X-Ray
+# ---------------------------------------------------------------------------
+
+
+@app.get("/api/v1/portfolio/scenarios", tags=["lab"])
+def list_scenarios() -> dict[str, Any]:
+    """Catalogue of historical and parametric stress scenarios."""
+    return {"scenarios": lab.scenario_catalogue()}
+
+
+@app.get("/api/v1/portfolio/stress", tags=["lab"])
+def get_stress(portfolio_id: int = Depends(_portfolio_id)) -> dict[str, Any]:
+    """Run all preset historical and parametric stress scenarios against the portfolio."""
+    try:
+        analytics = _service.get(portfolio_id=portfolio_id)
+        return lab.stress_report(analytics)
+    except (store.EmptyPortfolio, AnalyticsUnavailable):
+        raise
+    except Exception as exc:  # noqa: BLE001
+        logger.exception("Failed to build stress report")
+        raise AnalyticsUnavailable(f"analytics unavailable: {exc}") from exc
+
+
+@app.post("/api/v1/portfolio/stress", tags=["lab"])
+def post_stress(
+    body: StressRequest,
+    portfolio_id: int = Depends(_portfolio_id),
+) -> dict[str, Any]:
+    """Run selected preset scenarios and/or a custom simultaneous factor shock."""
+    try:
+        analytics = _service.get(portfolio_id=portfolio_id)
+        custom_shock = (
+            lab.Shock(
+                equity_pct=body.custom.equity_pct,
+                rates_bps=body.custom.rates_bps,
+                usd_pct=body.custom.usd_pct,
+                gold_pct=body.custom.gold_pct,
+                crypto_pct=body.custom.crypto_pct,
+            )
+            if body.custom is not None
+            else None
+        )
+        return lab.stress_report(
+            analytics,
+            scenario_keys=body.scenarios,
+            custom=custom_shock,
+            durations=body.durations,
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=422,
+            detail={"code": "invalid_stress_request", "message": str(exc)},
+        ) from exc
+    except (store.EmptyPortfolio, AnalyticsUnavailable):
+        raise
+    except Exception as exc:  # noqa: BLE001
+        logger.exception("Failed to run custom stress scenario")
+        raise AnalyticsUnavailable(f"analytics unavailable: {exc}") from exc
+
+
+@app.get("/api/v1/portfolio/attribution", tags=["lab"])
+def get_attribution(
+    period: str = "all",
+    group_by: str = "asset_class",
+    portfolio_id: int = Depends(_portfolio_id),
+) -> dict[str, Any]:
+    """Brinson-Fachler performance attribution (allocation, selection, interaction)."""
+    try:
+        analytics = _service.get(portfolio_id=portfolio_id)
+        return lab.attribution_report(analytics, period=period, group_by=group_by)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=422,
+            detail={"code": "invalid_attribution_request", "message": str(exc)},
+        ) from exc
+    except (store.EmptyPortfolio, AnalyticsUnavailable):
+        raise
+    except Exception as exc:  # noqa: BLE001
+        logger.exception("Failed to build attribution report")
+        raise AnalyticsUnavailable(f"analytics unavailable: {exc}") from exc
+
+
+@app.post("/api/v1/portfolio/attribution", tags=["lab"])
+def post_attribution(
+    body: AttributionRequest,
+    portfolio_id: int = Depends(_portfolio_id),
+) -> dict[str, Any]:
+    """Brinson-Fachler performance attribution with optional custom policy benchmark."""
+    try:
+        analytics = _service.get(portfolio_id=portfolio_id)
+        custom_bench = (
+            [
+                lab.BenchmarkSegment(
+                    key=seg.key,
+                    weight=seg.weight,
+                    return_pct=seg.return_pct,
+                    proxy=seg.proxy,
+                )
+                for seg in body.benchmark
+            ]
+            if body.benchmark is not None
+            else None
+        )
+        return lab.attribution_report(
+            analytics,
+            period=body.period,
+            group_by=body.group_by,
+            benchmark=custom_bench,
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=422,
+            detail={"code": "invalid_attribution_request", "message": str(exc)},
+        ) from exc
+    except (store.EmptyPortfolio, AnalyticsUnavailable):
+        raise
+    except Exception as exc:  # noqa: BLE001
+        logger.exception("Failed to build custom attribution report")
+        raise AnalyticsUnavailable(f"analytics unavailable: {exc}") from exc
+
+
+@app.get("/api/v1/portfolio/xray", tags=["lab"])
+def get_xray(portfolio_id: int = Depends(_portfolio_id)) -> dict[str, Any]:
+    """One-screen Portfolio X-Ray: concentration, risk hogs, exposure & correlation clusters."""
+    try:
+        analytics = _service.get(portfolio_id=portfolio_id)
+        return lab.xray_report(analytics)
+    except (store.EmptyPortfolio, AnalyticsUnavailable):
+        raise
+    except Exception as exc:  # noqa: BLE001
+        logger.exception("Failed to build portfolio X-Ray")
         raise AnalyticsUnavailable(f"analytics unavailable: {exc}") from exc
 
 

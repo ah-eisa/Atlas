@@ -666,3 +666,158 @@ export interface BlackScholesOutput {
   put_time_value: number
   payoff_curve: PayoffPoint[]
 }
+
+// --------------------------------------------------------------------------
+// Portfolio Lab: Stress Testing, Brinson Attribution & Portfolio X-Ray
+// --------------------------------------------------------------------------
+
+export interface StressShock {
+  equity_pct: number
+  rates_bps: number
+  usd_pct: number
+  gold_pct: number
+  crypto_pct: number
+}
+
+export interface StressBucketRow {
+  key: string
+  pnl: number
+  pct_of_portfolio: number
+}
+
+export interface StressPositionRow {
+  ticker: string
+  name: string
+  asset_class: string
+  factor: string
+  weight: number
+  sensitivity: number
+  price_move_pct: number
+  fx_move_pct: number
+  total_move_pct: number
+  pnl: number
+}
+
+export interface StressScenarioResult {
+  key: string
+  name: string
+  description: string
+  window: string
+  kind: 'historical' | 'parametric' | 'custom' | string
+  shock: StressShock
+  value_before: number
+  value_after: number
+  pnl: number
+  pnl_pct: number
+  fx_pnl: number
+  by_factor: StressBucketRow[]
+  by_asset_class: StressBucketRow[]
+  positions: StressPositionRow[]
+}
+
+export interface StressReport {
+  as_of: string
+  base_currency: string
+  total_value: number
+  benchmark: string
+  results: StressScenarioResult[]
+  betas: Record<string, number>
+  methodology: string
+}
+
+export type AttributionPeriod = 'day' | 'week' | 'month' | 'ytd' | 'all'
+export type AttributionGroupBy = 'asset_class' | 'region' | 'currency'
+
+export interface AttributionSegmentRow {
+  key: string
+  portfolio_weight: number
+  benchmark_weight: number
+  portfolio_return_pct: number
+  benchmark_return_pct: number
+  allocation_pct: number
+  selection_pct: number
+  interaction_pct: number
+  total_pct: number
+}
+
+export interface AttributionTotals {
+  portfolio_return_pct: number
+  benchmark_return_pct: number
+  active_return_pct: number
+  allocation_pct: number
+  selection_pct: number
+  interaction_pct: number
+  residual_pct: number
+  weights_normalised: boolean
+}
+
+export interface AttributionReport {
+  as_of: string
+  period: AttributionPeriod
+  group_by: AttributionGroupBy
+  start_date: string
+  end_date: string
+  benchmark_mode: string
+  benchmark_label: string
+  excluded: string[]
+  time_weighted_return_pct: number
+  basis: string
+  segments: AttributionSegmentRow[]
+  totals: AttributionTotals
+}
+
+export interface XRayFinding {
+  severity: 'high' | 'medium' | 'low'
+  code: string
+  message: string
+}
+
+export interface XRayExposureItem {
+  key: string
+  weight: number
+}
+
+export interface XRayRiskVsCapitalRow {
+  ticker: string
+  weight: number
+  risk_share: number
+  risk_to_weight: number
+}
+
+export interface XRayOverlapPair {
+  a: string
+  b: string
+  correlation: number
+}
+
+export interface XRayOverlapCluster {
+  tickers: string[]
+  combined_weight: number
+}
+
+export interface XRayReport {
+  as_of: string
+  total_value: number
+  positions: number
+  headline: {
+    effective_holdings: number
+    herfindahl: number
+    largest_pct: number
+    top_five_pct: number
+    diversification_ratio: number | null
+  }
+  findings: XRayFinding[]
+  exposure: {
+    asset_class: XRayExposureItem[]
+    region: XRayExposureItem[]
+    currency: XRayExposureItem[]
+  }
+  risk_vs_capital: XRayRiskVsCapitalRow[]
+  overlap: {
+    pairs: XRayOverlapPair[]
+    clusters: XRayOverlapCluster[]
+    threshold: number
+  }
+  methodology: string
+}
+

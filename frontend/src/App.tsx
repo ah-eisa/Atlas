@@ -28,6 +28,7 @@ import type { DataSource, OrderType, PortfolioState, Position } from './lib/type
 const OverviewView = lazy(() => import('./views/OverviewView'))
 const PerformanceView = lazy(() => import('./views/PerformanceView'))
 const RiskView = lazy(() => import('./views/RiskView'))
+const LabView = lazy(() => import('./views/LabView'))
 const ProjectionView = lazy(() => import('./views/ProjectionView'))
 const HoldingsView = lazy(() => import('./views/HoldingsView'))
 const TransactionsView = lazy(() => import('./views/TransactionsView'))
@@ -387,6 +388,14 @@ function ViewContent({
       return <PerformanceView state={state} />
     case 'risk':
       return <RiskView state={state} config={config} />
+    case 'xray':
+      return (
+        <LabView
+          config={config}
+          portfolioId={state.portfolioId}
+          baseCurrency={state.baseCurrency || 'USD'}
+        />
+      )
     case 'projection':
       return <ProjectionView state={state} />
     default:

@@ -417,5 +417,47 @@ class BlackScholesOutput(BaseModel):
     payoff_curve: list[PayoffPoint]
 
 
+# --------------------------------------------------------------------------
+# Portfolio Lab (stress, attribution, X-Ray)
+# --------------------------------------------------------------------------
+
+
+class ShockIn(BaseModel):
+    """Simultaneous market moves. ``*_pct`` fields are fractions (-0.15 = -15%)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    equity_pct: float = Field(default=0.0, ge=-0.95, le=2.0, allow_inf_nan=False)
+    rates_bps: float = Field(default=0.0, ge=-1000.0, le=1000.0, allow_inf_nan=False)
+    usd_pct: float = Field(default=0.0, ge=-0.5, le=1.0, allow_inf_nan=False)
+    gold_pct: float = Field(default=0.0, ge=-0.9, le=3.0, allow_inf_nan=False)
+    crypto_pct: float | None = Field(default=None, ge=-0.99, le=5.0, allow_inf_nan=False)
+
+
+class StressRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    scenarios: list[str] | None = None
+    custom: ShockIn | None = None
+    durations: dict[str, float] | None = None
+
+
+class BenchmarkSegmentIn(BaseModel):
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
+
+    key: str = Field(min_length=1, max_length=60)
+    weight: float = Field(ge=0, le=1.0, allow_inf_nan=False)
+    return_pct: float | None = Field(default=None, ge=-0.99, le=100.0, allow_inf_nan=False)
+    proxy: str | None = Field(default=None, max_length=20)
+
+
+class AttributionRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    period: Literal["day", "week", "month", "ytd", "all"] = "all"
+    group_by: Literal["asset_class", "region", "currency"] = "asset_class"
+    benchmark: list[BenchmarkSegmentIn] | None = None
+
+
 def is_finite(value: float) -> bool:
     return math.isfinite(value)
