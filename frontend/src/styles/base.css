@@ -19,13 +19,23 @@ body,
 
 body {
   margin: 0;
-  background: var(--surface-page);
+  background-color: var(--surface-page);
+  background-image:
+    radial-gradient(ellipse 90% 50% at 50% -10%, rgba(0, 210, 255, 0.05), transparent 70%),
+    radial-gradient(ellipse 40% 40% at 85% 10%, rgba(139, 92, 246, 0.04), transparent 60%);
+  background-attachment: fixed;
   color: var(--text-primary);
   font-family: var(--font-sans);
   font-size: var(--size-body);
   line-height: var(--leading-normal);
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
+}
+
+[data-theme='light'] body {
+  background-image:
+    radial-gradient(ellipse 90% 50% at 50% -10%, rgba(2, 132, 199, 0.04), transparent 70%),
+    radial-gradient(ellipse 40% 40% at 85% 10%, rgba(124, 58, 237, 0.03), transparent 60%);
 }
 
 /* Custom Sleek Cyberpunk Scrollbars */
