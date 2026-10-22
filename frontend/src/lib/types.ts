@@ -983,5 +983,20 @@ export interface WatchlistResponse {
   triggered_alerts: SmartAlert[]
 }
 
+export interface MarketQuote {
+  symbol: string
+  name: string
+  price: string
+  change: string
+  pct: string
+  isPositive: boolean
+}
+
+export interface MarketTickerResponse {
+  as_of: string
+  quotes: MarketQuote[]
+}
+
+
 
 

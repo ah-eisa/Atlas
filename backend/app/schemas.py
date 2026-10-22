@@ -505,5 +505,19 @@ class AlertRuleIn(BaseModel):
     label: str = Field(default="", max_length=160)
 
 
+class MarketQuote(BaseModel):
+    symbol: str
+    name: str
+    price: str
+    change: str
+    pct: str
+    isPositive: bool
+
+
+class MarketTickerResponse(BaseModel):
+    as_of: str
+    quotes: list[MarketQuote]
+
+
 def is_finite(value: float) -> bool:
     return math.isfinite(value)

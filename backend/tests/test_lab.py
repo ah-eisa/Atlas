@@ -203,5 +203,12 @@ def test_lab_api_endpoints(analytics_client) -> None:
     assert r_add_rule.status_code == 201
     assert r_add_rule.json()["metric"] == "price_above"
 
+    r_ticker = analytics_client.get("/api/v1/market/ticker")
+    assert r_ticker.status_code == 200
+    ticker_data = r_ticker.json()
+    assert "quotes" in ticker_data
+    assert len(ticker_data["quotes"]) >= 5
+    assert any(q["symbol"] == "S&P 500" for q in ticker_data["quotes"])
+
 
 

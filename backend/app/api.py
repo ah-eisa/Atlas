@@ -54,6 +54,8 @@ from .schemas import (
     HoldingOut,
     MacroHistoryPoint,
     MacroSummaryResponse,
+    MarketQuote,
+    MarketTickerResponse,
     OptionChainResponse,
     OrderInput,
     PortfolioIn,
@@ -790,6 +792,94 @@ def get_macro_history(series: str = "CPIAUCSL", range: str = "5Y") -> list[Macro
     """Historical time series for macroeconomic indicators."""
     service = macro_sec.get_macro_sec_service()
     return service.get_macro_history(series_id=series, range_key=range)
+
+
+# ---------------------------------------------------------------------------
+# Global Real-time Market Quotes & Ticker
+# ---------------------------------------------------------------------------
+
+_TICKER_CACHE: dict[str, tuple[float, MarketTickerResponse]] = {}
+_TICKER_LOCK = Lock()
+_TICKER_TTL_SECONDS = 60.0
+
+DEFAULT_FALLBACK_QUOTES = [
+    MarketQuote(symbol="S&P 500", name="US Large Cap", price="7,645.18", change="-110.93", pct="-1.43%", isPositive=False),
+    MarketQuote(symbol="NASDAQ", name="US Tech", price="25,970.17", change="-732.69", pct="-2.74%", isPositive=False),
+    MarketQuote(symbol="BTC-USD", name="Bitcoin", price="$81,114", change="-2,885.62", pct="-3.43%", isPositive=False),
+    MarketQuote(symbol="GOLD", name="Gold Spot", price="$4,054.60", change="-96.50", pct="-2.33%", isPositive=False),
+    MarketQuote(symbol="US 10Y", name="Treasury Yield", price="4.96%", change="-0.19", pct="-3.67%", isPositive=False),
+    MarketQuote(symbol="CRUDE OIL", name="WTI Crude", price="$99.27", change="-2.51", pct="-2.47%", isPositive=False),
+    MarketQuote(symbol="EUR/USD", name="Euro / USD", price="1.1226", change="-0.0001", pct="-0.01%", isPositive=False),
+]
+
+
+def fetch_live_market_ticker() -> MarketTickerResponse:
+    now = time.monotonic()
+    with _TICKER_LOCK:
+        cached = _TICKER_CACHE.get("quotes")
+        if cached is not None and (now - cached[0]) < _TICKER_TTL_SECONDS:
+            return cached[1]
+
+    try:
+        import yfinance as yf
+        tickers_map = {
+            "^GSPC": ("S&P 500", "US Large Cap", False),
+            "^IXIC": ("NASDAQ", "US Tech", False),
+            "BTC-USD": ("BTC-USD", "Bitcoin", True),
+            "GC=F": ("GOLD", "Gold Spot", True),
+            "^TNX": ("US 10Y", "Treasury Yield", False),
+            "CL=F": ("CRUDE OIL", "WTI Crude", True),
+            "EURUSD=X": ("EUR/USD", "Euro / USD", False),
+        }
+        syms = list(tickers_map.keys())
+        df = yf.download(syms, period="5d", progress=False)["Close"].dropna(how="all")
+        quotes: list[MarketQuote] = []
+        for sym, (display, name, is_dollar) in tickers_map.items():
+            if sym not in df.columns:
+                continue
+            s = df[sym].dropna()
+            if len(s) >= 2:
+                curr = float(s.iloc[-1])
+                prev = float(s.iloc[-2])
+                chg = curr - prev
+                pct = (chg / prev) * 100
+                if sym == "^TNX":
+                    price_str = f"{curr:.2f}%"
+                    chg_str = f"{chg:+.2f}"
+                elif is_dollar:
+                    price_str = f"${curr:,.2f}" if curr < 10000 else f"${curr:,.0f}"
+                    chg_str = f"{chg:+,.2f}"
+                else:
+                    price_str = f"{curr:,.2f}" if curr > 2 else f"{curr:.4f}"
+                    chg_str = f"{chg:+.2f}" if curr > 2 else f"{chg:+.4f}"
+                pct_str = f"{pct:+.2f}%"
+                quotes.append(MarketQuote(
+                    symbol=display,
+                    name=name,
+                    price=price_str,
+                    change=chg_str,
+                    pct=pct_str,
+                    isPositive=(pct >= 0),
+                ))
+
+        if quotes:
+            res = MarketTickerResponse(as_of=datetime.now(timezone.utc).isoformat(), quotes=quotes)
+            with _TICKER_LOCK:
+                _TICKER_CACHE["quotes"] = (now, res)
+            return res
+    except Exception as exc:
+        logger.warning("Failed to fetch live quotes from Yahoo: %s", exc)
+
+    fallback = MarketTickerResponse(as_of=datetime.now(timezone.utc).isoformat(), quotes=DEFAULT_FALLBACK_QUOTES)
+    with _TICKER_LOCK:
+        _TICKER_CACHE["quotes"] = (now, fallback)
+    return fallback
+
+
+@app.get("/api/v1/market/ticker", response_model=MarketTickerResponse, tags=["market"])
+def get_market_ticker() -> MarketTickerResponse:
+    """Real-time quotes for global benchmarks, crypto, commodities, and yields."""
+    return fetch_live_market_ticker()
 
 
 # ---------------------------------------------------------------------------

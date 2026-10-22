@@ -155,7 +155,7 @@ export function TopBar({
 
   return (
     <header className={analyticsReady ? 'topbar' : 'topbar topbar--compact'}>
-      <MarketTickerBar />
+      <MarketTickerBar config={config} />
 
       <div className="topbar__chrome">
         <div className="topbar__brand-group">

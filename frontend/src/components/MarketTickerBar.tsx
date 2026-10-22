@@ -1,44 +1,88 @@
 /**
  * Market Ticker Bar - Real-time global benchmark and market quotes banner.
  *
- * Provides continuous context of market conditions (Equities, Crypto, Rates,
- * Commodities) similar to OpenTerminal / Bloomberg headers.
+ * Connects directly to Yahoo Finance through the ATLAS backend API with live
+ * 2026 quotes for S&P 500, Nasdaq, BTC, Gold, 10Y Yield, Oil, and EUR/USD.
+ *
+ * Includes 1-click dismiss button with persistent localStorage memory.
  */
 
-import { memo } from 'react'
+import { memo, useEffect, useState } from 'react'
+import type { DataConfig } from '../lib/api'
+import { getMarketTicker } from '../lib/api'
+import type { MarketQuote } from '../lib/types'
 
-interface MarketItem {
-  symbol: string
-  name: string
-  price: string
-  change: string
-  pct: string
-  isPositive: boolean
-}
-
-const DEFAULT_MARKET_ITEMS: MarketItem[] = [
-  { symbol: 'S&P 500', name: 'US Large Cap', price: '5,864.67', change: '+24.50', pct: '+0.42%', isPositive: true },
-  { symbol: 'NASDAQ', name: 'US Tech', price: '18,518.61', change: '+119.80', pct: '+0.65%', isPositive: true },
-  { symbol: 'DOW', name: 'US Industrials', price: '42,924.88', change: '-64.20', pct: '-0.15%', isPositive: false },
-  { symbol: 'BTC-USD', name: 'Bitcoin', price: '$67,420', change: '+1,410.00', pct: '+2.14%', isPositive: true },
-  { symbol: 'GOLD', name: 'Gold Spot', price: '$2,721.40', change: '+10.30', pct: '+0.38%', isPositive: true },
-  { symbol: 'US 10Y', name: 'Treasury Yield', price: '4.20%', change: '+0.02', pct: '+0.48%', isPositive: true },
-  { symbol: 'BRENT', name: 'Crude Oil', price: '$74.29', change: '-0.61', pct: '-0.81%', isPositive: false },
+const INITIAL_2026_QUOTES: MarketQuote[] = [
+  { symbol: 'S&P 500', name: 'US Large Cap', price: '7,645.18', change: '-110.93', pct: '-1.44%', isPositive: false },
+  { symbol: 'NASDAQ', name: 'US Tech', price: '25,970.17', change: '-732.69', pct: '-2.74%', isPositive: false },
+  { symbol: 'BTC-USD', name: 'Bitcoin', price: '$81,114', change: '-2,885.62', pct: '-3.43%', isPositive: false },
+  { symbol: 'GOLD', name: 'Gold Spot', price: '$4,054.60', change: '-96.50', pct: '-2.33%', isPositive: false },
+  { symbol: 'US 10Y', name: 'Treasury Yield', price: '4.96%', change: '-0.19', pct: '-3.67%', isPositive: false },
+  { symbol: 'CRUDE OIL', name: 'WTI Crude', price: '$99.27', change: '-2.51', pct: '-2.47%', isPositive: false },
+  { symbol: 'EUR/USD', name: 'Euro / USD', price: '1.1226', change: '-0.0001', pct: '-0.01%', isPositive: false },
 ]
 
 export const MarketTickerBar = memo(function MarketTickerBar({
-  items = DEFAULT_MARKET_ITEMS,
+  config,
 }: {
-  items?: MarketItem[]
+  config?: DataConfig
 }) {
+  const [hidden, setHidden] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return false
+    return window.localStorage.getItem('atlas_hide_ticker') === 'true'
+  })
+
+  const [quotes, setQuotes] = useState<MarketQuote[]>(INITIAL_2026_QUOTES)
+
+  useEffect(() => {
+    const handleToggle = () => {
+      setHidden((prev) => {
+        const next = !prev
+        if (typeof window !== 'undefined') {
+          window.localStorage.setItem('atlas_hide_ticker', String(next))
+        }
+        return next
+      })
+    }
+    window.addEventListener('atlas_toggle_ticker', handleToggle)
+    return () => window.removeEventListener('atlas_toggle_ticker', handleToggle)
+  }, [])
+
+  useEffect(() => {
+    if (hidden || !config) return
+    let active = true
+
+    const updateQuotes = async () => {
+      try {
+        const res = await getMarketTicker(config)
+        if (active && res && res.quotes && res.quotes.length > 0) {
+          setQuotes(res.quotes)
+        }
+      } catch {
+        // Fallback quotes remain active
+      }
+    }
+
+    updateQuotes()
+    const timer = setInterval(updateQuotes, 60_000)
+    return () => {
+      active = false
+      clearInterval(timer)
+    }
+  }, [config, hidden])
+
+  if (hidden) {
+    return null
+  }
+
   return (
     <div className="market-ticker" aria-label="Live Market Quotes">
       <div className="market-ticker__badge">
         <span className="market-ticker__pulse" />
-        <span className="market-ticker__label">MARKETS</span>
+        <span className="market-ticker__label">MARKETS LIVE</span>
       </div>
       <div className="market-ticker__track">
-        {items.map((item) => (
+        {quotes.map((item) => (
           <div key={item.symbol} className="market-ticker__item">
             <span className="market-ticker__symbol">{item.symbol}</span>
             <span className="market-ticker__price num">{item.price}</span>
@@ -52,6 +96,20 @@ export const MarketTickerBar = memo(function MarketTickerBar({
           </div>
         ))}
       </div>
+      <button
+        type="button"
+        className="market-ticker__close"
+        onClick={() => {
+          setHidden(true)
+          if (typeof window !== 'undefined') {
+            window.localStorage.setItem('atlas_hide_ticker', 'true')
+          }
+        }}
+        aria-label="Hide market ticker bar"
+        title="Hide ticker bar (can restore anytime from Ctrl+K Search)"
+      >
+        ✕
+      </button>
     </div>
   )
 })

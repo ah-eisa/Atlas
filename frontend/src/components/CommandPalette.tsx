@@ -464,6 +464,19 @@ export function CommandPalette({
       })
     }
 
+    list.push({
+      id: 'act-toggle-ticker',
+      category: 'Actions',
+      title: 'Toggle Market Ticker Bar (Show / Hide)',
+      subtitle: 'Show or hide the real-time global market ticker banner at the top of the screen',
+      badge: 'VIEW',
+      keywords: 'ticker market quotes banner hide show toggle',
+      action: () => {
+        onClose()
+        window.dispatchEvent(new CustomEvent('atlas_toggle_ticker'))
+      },
+    })
+
     if (config.source === 'api' && onCreatePortfolio) {
       list.push({
         id: 'act-new-portfolio',

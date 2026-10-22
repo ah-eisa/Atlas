@@ -34,6 +34,7 @@ import type {
   InstrumentInfo,
   MacroHistoryPoint,
   MacroSummaryResponse,
+  MarketTickerResponse,
   OptionChainResponse,
   OrderInput,
   Portfolio,
@@ -1867,6 +1868,32 @@ export async function deleteAlertRule(
     headers: config.apiKey ? { 'X-API-Key': config.apiKey } : undefined,
   })
 }
+
+const DEFAULT_MARKET_TICKER: MarketTickerResponse = {
+  as_of: '2026-10-22',
+  quotes: [
+    { symbol: 'S&P 500', name: 'US Large Cap', price: '7,645.18', change: '-110.93', pct: '-1.43%', isPositive: false },
+    { symbol: 'NASDAQ', name: 'US Tech', price: '25,970.17', change: '-732.69', pct: '-2.74%', isPositive: false },
+    { symbol: 'BTC-USD', name: 'Bitcoin', price: '$81,114', change: '-2,885.62', pct: '-3.43%', isPositive: false },
+    { symbol: 'GOLD', name: 'Gold Spot', price: '$4,054.60', change: '-96.50', pct: '-2.33%', isPositive: false },
+    { symbol: 'US 10Y', name: 'Treasury Yield', price: '4.96%', change: '-0.19', pct: '-3.67%', isPositive: false },
+    { symbol: 'CRUDE OIL', name: 'WTI Crude', price: '$99.27', change: '-2.51', pct: '-2.47%', isPositive: false },
+    { symbol: 'EUR/USD', name: 'Euro / USD', price: '1.1226', change: '-0.0001', pct: '-0.01%', isPositive: false },
+  ],
+}
+
+export async function getMarketTicker(config: DataConfig): Promise<MarketTickerResponse> {
+  if (config.source === 'snapshot') {
+    return DEFAULT_MARKET_TICKER
+  }
+  try {
+    return await requestJson<MarketTickerResponse>(apiUrl(config, '/api/v1/market/ticker'), config)
+  } catch (err) {
+    console.warn('Failed to fetch live market ticker, falling back to cached snapshot quotes:', err)
+    return DEFAULT_MARKET_TICKER
+  }
+}
+
 
 
 
