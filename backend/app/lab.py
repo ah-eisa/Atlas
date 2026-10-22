@@ -848,3 +848,190 @@ def xray_report(analytics: Any) -> dict[str, Any]:
             ),
         }
     )
+
+
+# --------------------------------------------------------------------------
+# Investment Report Generator: Factsheet & IC Memo
+# --------------------------------------------------------------------------
+
+
+def factsheet_report(
+    analytics: Any,
+    portfolio_name: str = "Primary Book",
+    realized_summary: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Compile a one-page institutional Factsheet and Investment Committee (IC) Memo."""
+    summary = analytics.summary()
+    risk = analytics.risk()
+    xray = xray_report(analytics)
+    stress = stress_report(
+        analytics,
+        scenario_keys=["gfc_2008", "covid_2020", "rates_2022", "rates_up_100"],
+    )
+    try:
+        attribution = attribution_report(analytics, period="all", group_by="asset_class")
+    except Exception:  # noqa: BLE001
+        attribution = {
+            "totals": _empty_totals(),
+            "segments": [],
+            "benchmark_label": "Equal-weight opportunity set",
+        }
+
+    base = analytics.portfolio.base_currency
+    positions_sorted = sorted(
+        analytics.positions, key=lambda p: float(p.allocation_pct), reverse=True
+    )
+    top_holdings = [
+        {
+            "ticker": p.ticker,
+            "name": p.name,
+            "asset_class": p.asset_class,
+            "region": p.region,
+            "currency": p.currency,
+            "weight": round_ratio(p.allocation_pct),
+            "value_base": round_money(p.value_base),
+            "unrealized_pnl": round_money(p.unrealized_pnl),
+            "unrealized_pnl_pct": round_ratio(p.unrealized_pnl_pct),
+        }
+        for p in positions_sorted[:8]
+    ]
+
+    twr = float(summary.get("changes", {}).get("all", {}).get("pct") or 0.0)
+    mwr = risk.get("money_weighted_return_pct")
+    bench_ret = float(risk.get("benchmark", {}).get("return_pct") or 0.0)
+    active_ret = twr - bench_ret
+    sharpe = risk.get("sharpe_ratio")
+    sortino = risk.get("sortino_ratio")
+    vol = risk.get("volatility_annualized_pct")
+    max_dd = risk.get("max_drawdown", {}).get("pct")
+    var_95 = risk.get("value_at_risk", {}).get("95", {}).get("historical_pct")
+    cvar_95 = risk.get("value_at_risk", {}).get("95", {}).get("cvar_pct")
+
+    worst_stress = min(stress["results"], key=lambda r: float(r["pnl_pct"])) if stress["results"] else None
+    top_attr_seg = attribution["segments"][0] if attribution.get("segments") else None
+
+    narrative = {
+        "mandate_overview": (
+            f"{portfolio_name} ({base}) holds {len(analytics.positions)} active positions with a total "
+            f"Net Asset Value of {summary['total_value']:,.2f} {base} against a cost basis of "
+            f"{summary['total_cost']:,.2f} {base} (Unrealised P&L: {summary['total_unrealized_pnl']:+,.2f} {base}, "
+            f"{float(summary['total_unrealized_pnl_pct'] or 0.0) * 100:+.2f}%)."
+        ),
+        "performance_drivers": (
+            f"Since inception, the book delivered a Time-Weighted Return (TWR) of {twr * 100:+.2f}% "
+            f"versus {bench_ret * 100:+.2f}% for {analytics.settings.benchmark_name} "
+            f"(Active Return: {active_ret * 100:+.2f}%). "
+            + (
+                f"Brinson-Fachler attribution indicates that {top_attr_seg['key']} was the primary "
+                f"active driver ({float(top_attr_seg['total_pct']) * 100:+.2f}% total active contribution: "
+                f"{float(top_attr_seg['allocation_pct']) * 100:+.2f}% allocation, "
+                f"{float(top_attr_seg['selection_pct']) * 100:+.2f}% selection)."
+                if top_attr_seg
+                else ""
+            )
+        ),
+        "risk_and_concentration": (
+            f"Annualised volatility stands at {float(vol or 0.0) * 100:.2f}% with a Sharpe ratio of "
+            f"{float(sharpe or 0.0):.2f} and historical maximum drawdown of {float(max_dd or 0.0) * 100:.2f}%. "
+            f"Effective holdings (1/HHI) equal {float(xray['headline']['effective_holdings']):.2f} across "
+            f"{xray['positions']} positions, with top-5 concentration at "
+            f"{float(xray['headline']['top_five_pct']) * 100:.1f}%."
+        ),
+        "stress_resilience": (
+            f"Across historical crisis replays, the severest modeled shock is {worst_stress['name']} "
+            f"({worst_stress['window']}), projecting an estimated drawdown of "
+            f"{float(worst_stress['pnl_pct']) * 100:+.2f}% ({float(worst_stress['pnl']):+,.2f} {base})."
+            if worst_stress
+            else "Stress testing completed across standard macro-financial scenarios."
+        ),
+    }
+
+    md_lines = [
+        f"# INVESTMENT COMMITTEE MEMO & FACTSHEET — {portfolio_name.upper()}",
+        f"**As of Date:** {analytics.as_of} | **Base Currency:** {base} | **Benchmark:** {analytics.settings.benchmark_name}",
+        "",
+        "## 1. Executive Mandate Summary",
+        f"- **Net Asset Value (NAV):** {summary['total_value']:,.2f} {base}",
+        f"- **Total Cost Basis:** {summary['total_cost']:,.2f} {base}",
+        f"- **Unrealised P&L:** {summary['total_unrealized_pnl']:+,.2f} {base} ({float(summary['total_unrealized_pnl_pct'] or 0.0) * 100:+.2f}%)",
+        f"- **Time-Weighted Return (TWR):** {twr * 100:+.2f}% (vs Benchmark {bench_ret * 100:+.2f}%, Active {active_ret * 100:+.2f}%)",
+        "",
+        "## 2. Institutional Narrative",
+        f"- **Mandate Overview:** {narrative['mandate_overview']}",
+        f"- **Performance Attribution:** {narrative['performance_drivers']}",
+        f"- **Risk & Concentration:** {narrative['risk_and_concentration']}",
+        f"- **Stress Resilience:** {narrative['stress_resilience']}",
+        "",
+        "## 3. Portfolio X-Ray Diagnostic Flags",
+    ]
+    for f in xray["findings"]:
+        md_lines.append(f"- **[{f['severity'].upper()}]** {f['message']}")
+
+    md_lines.extend(
+        [
+            "",
+            "## 4. Top Holdings",
+            "| Ticker | Name | Asset Class | Weight | Value | Unrealised P&L |",
+            "| :--- | :--- | :--- | ---: | ---: | ---: |",
+        ]
+    )
+    for h in top_holdings:
+        md_lines.append(
+            f"| `{h['ticker']}` | {h['name']} | {h['asset_class']} | "
+            f"{float(h['weight']) * 100:.2f}% | {float(h['value_base']):,.2f} {base} | "
+            f"{float(h['unrealized_pnl']):+,.2f} {base} ({float(h['unrealized_pnl_pct']) * 100:+.2f}%) |"
+        )
+
+    return json_safe(
+        {
+            "as_of": analytics.as_of,
+            "generated_at": summary.get("generated_at"),
+            "portfolio_name": portfolio_name,
+            "base_currency": base,
+            "benchmark": analytics.settings.benchmark_name,
+            "kpis": {
+                "total_value": round_money(summary["total_value"]),
+                "total_cost": round_money(summary["total_cost"]),
+                "unrealized_pnl": round_money(summary["total_unrealized_pnl"]),
+                "unrealized_pnl_pct": round_ratio(summary["total_unrealized_pnl_pct"]),
+                "realized_pnl": round_money(
+                    (realized_summary or {}).get("total_realized_pnl", 0.0)
+                ),
+                "win_rate_pct": round_ratio(
+                    (realized_summary or {}).get("win_rate_pct")
+                ),
+                "twr_pct": round_ratio(twr),
+                "mwr_pct": round_ratio(mwr),
+                "benchmark_return_pct": round_ratio(bench_ret),
+                "active_return_pct": round_ratio(active_ret),
+                "annualized_vol_pct": round_ratio(vol),
+                "sharpe": round_ratio(sharpe),
+                "sortino": round_ratio(sortino),
+                "max_drawdown_pct": round_ratio(max_dd),
+                "var_95_pct": round_ratio(var_95),
+                "cvar_95_pct": round_ratio(cvar_95),
+                "effective_holdings": xray["headline"]["effective_holdings"],
+                "top_five_pct": xray["headline"]["top_five_pct"],
+                "diversification_ratio": xray["headline"]["diversification_ratio"],
+            },
+            "narrative": narrative,
+            "top_holdings": top_holdings,
+            "xray_findings": xray["findings"],
+            "exposure": xray["exposure"],
+            "attribution_totals": attribution["totals"],
+            "attribution_segments": attribution["segments"],
+            "stress_highlights": [
+                {
+                    "key": r["key"],
+                    "name": r["name"],
+                    "window": r["window"],
+                    "pnl": r["pnl"],
+                    "pnl_pct": r["pnl_pct"],
+                    "value_after": r["value_after"],
+                }
+                for r in stress["results"]
+            ],
+            "markdown_memo": "\n".join(md_lines),
+        }
+    )
+

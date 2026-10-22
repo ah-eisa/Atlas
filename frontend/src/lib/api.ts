@@ -27,6 +27,7 @@ import type {
   BootstrapResponse,
   CashFlow,
   DataSource,
+  FactsheetReport,
   HistoricalYieldPoint,
   InstrumentInfo,
   MacroHistoryPoint,
@@ -1440,4 +1441,151 @@ export async function getAttributionReport(
     }
   }
 }
+
+const SAMPLE_FACTSHEET_REPORT: FactsheetReport = {
+  as_of: '2026-04-06',
+  generated_at: '2026-04-06T16:00:00Z',
+  portfolio_name: 'Global Multi-Asset Mandate',
+  base_currency: 'EUR',
+  benchmark: 'S&P 500',
+  kpis: {
+    total_value: 254180.5,
+    total_cost: 214500.0,
+    unrealized_pnl: 39680.5,
+    unrealized_pnl_pct: 0.185,
+    realized_pnl: 6420.0,
+    win_rate_pct: 66.67,
+    twr_pct: 0.1842,
+    mwr_pct: 0.1795,
+    benchmark_return_pct: 0.141,
+    active_return_pct: 0.0432,
+    annualized_vol_pct: 0.142,
+    sharpe: 1.18,
+    sortino: 1.64,
+    max_drawdown_pct: -0.094,
+    var_95_pct: -0.0145,
+    cvar_95_pct: -0.021,
+    effective_holdings: 5.82,
+    top_five_pct: 0.784,
+    diversification_ratio: 1.42,
+  },
+  narrative: {
+    mandate_overview:
+      'Global Multi-Asset Mandate (EUR) holds 8 active positions with a total Net Asset Value of 254,180.50 EUR against a cost basis of 214,500.00 EUR (Unrealised P&L: +39,680.50 EUR, +18.50%).',
+    performance_drivers:
+      'Since inception, the book delivered a Time-Weighted Return (TWR) of +18.42% versus +14.10% for S&P 500 (Active Return: +4.32%). Brinson-Fachler attribution indicates that Stock was the primary active driver (+2.09% total active contribution: +0.52% allocation, +1.23% selection).',
+    risk_and_concentration:
+      'Annualised volatility stands at 14.20% with a Sharpe ratio of 1.18 and historical maximum drawdown of -9.40%. Effective holdings (1/HHI) equal 5.82 across 8 positions, with top-5 concentration at 78.4%.',
+    stress_resilience:
+      'Across historical crisis replays, the severest modeled shock is 2008 financial crisis (Sep 2008 - Mar 2009), projecting an estimated drawdown of -37.67% (-95,760.40 EUR).',
+  },
+  top_holdings: [
+    {
+      ticker: 'VWCE.DE',
+      name: 'Vanguard FTSE All-World',
+      asset_class: 'ETF',
+      region: 'Global',
+      currency: 'EUR',
+      weight: 0.245,
+      value_base: 62274.22,
+      unrealized_pnl: 9850.0,
+      unrealized_pnl_pct: 0.1879,
+    },
+    {
+      ticker: 'NVDA',
+      name: 'NVIDIA Corp',
+      asset_class: 'Stock',
+      region: 'US',
+      currency: 'USD',
+      weight: 0.14,
+      value_base: 35585.27,
+      unrealized_pnl: 11240.0,
+      unrealized_pnl_pct: 0.4617,
+    },
+    {
+      ticker: 'MSFT',
+      name: 'Microsoft Corp',
+      asset_class: 'Stock',
+      region: 'US',
+      currency: 'USD',
+      weight: 0.14,
+      value_base: 35585.27,
+      unrealized_pnl: 6420.0,
+      unrealized_pnl_pct: 0.2201,
+    },
+    {
+      ticker: 'AAPL',
+      name: 'Apple Inc',
+      asset_class: 'Stock',
+      region: 'US',
+      currency: 'USD',
+      weight: 0.135,
+      value_base: 34314.37,
+      unrealized_pnl: 5110.0,
+      unrealized_pnl_pct: 0.175,
+    },
+    {
+      ticker: 'BTC-USD',
+      name: 'Bitcoin',
+      asset_class: 'Crypto',
+      region: 'Global',
+      currency: 'USD',
+      weight: 0.12,
+      value_base: 30501.66,
+      unrealized_pnl: 6200.5,
+      unrealized_pnl_pct: 0.2551,
+    },
+    {
+      ticker: 'AGGH.AS',
+      name: 'iShares Global Aggregate Bond',
+      asset_class: 'Bond',
+      region: 'Global',
+      currency: 'EUR',
+      weight: 0.08,
+      value_base: 20334.44,
+      unrealized_pnl: 860.0,
+      unrealized_pnl_pct: 0.0442,
+    },
+  ],
+  xray_findings: SAMPLE_XRAY_REPORT.findings,
+  exposure: SAMPLE_XRAY_REPORT.exposure,
+  attribution_totals: SAMPLE_ATTRIBUTION_REPORT.totals,
+  attribution_segments: SAMPLE_ATTRIBUTION_REPORT.segments,
+  stress_highlights: SAMPLE_STRESS_REPORT.results.map((r) => ({
+    key: r.key,
+    name: r.name,
+    window: r.window,
+    pnl: r.pnl,
+    pnl_pct: r.pnl_pct,
+    value_after: r.value_after,
+  })),
+  markdown_memo: [
+    '# INVESTMENT COMMITTEE MEMO & FACTSHEET — GLOBAL MULTI-ASSET MANDATE',
+    '**As of Date:** 2026-04-06 | **Base Currency:** EUR | **Benchmark:** S&P 500',
+    '',
+    '## 1. Executive Mandate Summary',
+    '- **Net Asset Value (NAV):** 254,180.50 EUR',
+    '- **Total Cost Basis:** 214,500.00 EUR',
+    '- **Unrealised P&L:** +39,680.50 EUR (+18.50%)',
+    '- **Time-Weighted Return (TWR):** +18.42% (vs Benchmark +14.10%, Active +4.32%)',
+  ].join('\n'),
+}
+
+export async function getPortfolioReport(
+  config: DataConfig,
+  portfolioId: number = getStoredPortfolioId(),
+): Promise<FactsheetReport> {
+  if (config.source === 'snapshot') {
+    return SAMPLE_FACTSHEET_REPORT
+  }
+  try {
+    return await requestJson<FactsheetReport>(
+      apiUrl(config, `/api/v1/portfolio/report?portfolio_id=${portfolioId}`),
+      config,
+    )
+  } catch {
+    return SAMPLE_FACTSHEET_REPORT
+  }
+}
+
 

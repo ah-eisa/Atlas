@@ -3,6 +3,7 @@ import { Panel, Segmented } from '../components/Panel'
 import {
   type DataConfig,
   getAttributionReport,
+  getPortfolioReport,
   getPortfolioXRay,
   getStressReport,
   runCustomStress,
@@ -19,6 +20,7 @@ import type {
   AttributionGroupBy,
   AttributionPeriod,
   AttributionReport,
+  FactsheetReport,
   StressReport,
   StressShock,
   XRayReport,
@@ -30,7 +32,7 @@ interface LabViewProps {
   baseCurrency: string
 }
 
-type LabTab = 'xray' | 'stress' | 'attribution'
+type LabTab = 'xray' | 'stress' | 'attribution' | 'report'
 
 export function LabView({ config, portfolioId, baseCurrency }: LabViewProps) {
   const [activeTab, setActiveTab] = useState<LabTab>('xray')
@@ -56,6 +58,10 @@ export function LabView({ config, portfolioId, baseCurrency }: LabViewProps) {
   const [attrGroupBy, setAttrGroupBy] = useState<AttributionGroupBy>('asset_class')
   const [attribution, setAttribution] = useState<AttributionReport | null>(null)
   const [attrLoading, setAttrLoading] = useState(false)
+
+  // Factsheet / IC Memo state
+  const [report, setReport] = useState<FactsheetReport | null>(null)
+  const [copiedMemo, setCopiedMemo] = useState(false)
 
   const loadXray = useCallback(async () => {
     setXrayLoading(true)
@@ -92,10 +98,24 @@ export function LabView({ config, portfolioId, baseCurrency }: LabViewProps) {
     }
   }, [config, portfolioId, attrPeriod, attrGroupBy])
 
+  const loadReport = useCallback(async () => {
+    try {
+      const data = await getPortfolioReport(config, portfolioId)
+      setReport(data)
+    } catch {
+      // Handled gracefully
+    }
+  }, [config, portfolioId])
+
   useEffect(() => {
     const initial = consumePendingIntent('xray')
     if (initial) {
-      if (initial.tab === 'xray' || initial.tab === 'stress' || initial.tab === 'attribution') {
+      if (
+        initial.tab === 'xray' ||
+        initial.tab === 'stress' ||
+        initial.tab === 'attribution' ||
+        initial.tab === 'report'
+      ) {
         setActiveTab(initial.tab)
       }
       if (initial.scenarioKey) {
@@ -103,7 +123,12 @@ export function LabView({ config, portfolioId, baseCurrency }: LabViewProps) {
       }
     }
     return subscribeCommandIntent('xray', (intent) => {
-      if (intent.tab === 'xray' || intent.tab === 'stress' || intent.tab === 'attribution') {
+      if (
+        intent.tab === 'xray' ||
+        intent.tab === 'stress' ||
+        intent.tab === 'attribution' ||
+        intent.tab === 'report'
+      ) {
         setActiveTab(intent.tab)
       }
       if (intent.scenarioKey) {
@@ -115,7 +140,8 @@ export function LabView({ config, portfolioId, baseCurrency }: LabViewProps) {
   useEffect(() => {
     void loadXray()
     void loadStress()
-  }, [loadXray, loadStress])
+    void loadReport()
+  }, [loadXray, loadStress, loadReport])
 
   useEffect(() => {
     void loadAttribution()
@@ -151,6 +177,7 @@ export function LabView({ config, portfolioId, baseCurrency }: LabViewProps) {
                 { value: 'xray', label: '1. Portfolio X-Ray' },
                 { value: 'stress', label: '2. Stress Lab' },
                 { value: 'attribution', label: '3. Attribution Engine' },
+                { value: 'report', label: '4. Factsheet & IC Memo' },
               ]}
             />
           }
@@ -765,6 +792,277 @@ export function LabView({ config, portfolioId, baseCurrency }: LabViewProps) {
                   </table>
                 </div>
               </Panel>
+            </div>
+          )}
+
+          {activeTab === 'report' && report && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+              <div
+                style={{
+                  display: 'flex',
+                  flexWrap: 'wrap',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  gap: '0.75rem',
+                  padding: '0.85rem 1rem',
+                  background: 'var(--bg-elevated)',
+                  border: '1px solid var(--border-subtle)',
+                }}
+              >
+                <div>
+                  <strong style={{ fontSize: '0.95rem' }}>
+                    {report.portfolio_name} — Executive Factsheet & IC Memo
+                  </strong>
+                  <div style={{ fontSize: '0.78rem', color: 'var(--text-secondary)' }}>
+                    As of {report.as_of} · Base Currency: {report.base_currency} · Benchmark:{' '}
+                    {report.benchmark}
+                  </div>
+                </div>
+                <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                  <button
+                    type="button"
+                    className="button button--quiet button--sm"
+                    onClick={() => {
+                      void navigator.clipboard.writeText(report.markdown_memo)
+                      setCopiedMemo(true)
+                      window.setTimeout(() => setCopiedMemo(false), 2000)
+                    }}
+                  >
+                    {copiedMemo ? 'Copied IC Memo ✓' : 'Copy IC Memo (Markdown)'}
+                  </button>
+                  <button
+                    type="button"
+                    className="button button--primary button--sm"
+                    onClick={() => window.print()}
+                  >
+                    Print / Save PDF Factsheet
+                  </button>
+                </div>
+              </div>
+
+              <div className="kpi">
+                <div className="kpi__cell">
+                  <div className="kpi__label">Net Asset Value (NAV)</div>
+                  <div className="kpi__value num">
+                    {formatMoney(report.kpis.total_value)} {report.base_currency}
+                  </div>
+                  <div className="kpi__sub">
+                    Cost Basis: {formatMoney(report.kpis.total_cost)} {report.base_currency}
+                  </div>
+                </div>
+                <div className="kpi__cell">
+                  <div className="kpi__label">Unrealised P&L</div>
+                  <div className={`kpi__value num ${signClass(report.kpis.unrealized_pnl)}`}>
+                    {formatMoney(report.kpis.unrealized_pnl)} (
+                    {formatPercentSigned(report.kpis.unrealized_pnl_pct)})
+                  </div>
+                  <div className="kpi__sub">
+                    Realised P&L: {formatMoney(report.kpis.realized_pnl)} {report.base_currency}
+                  </div>
+                </div>
+                <div className="kpi__cell">
+                  <div className="kpi__label">Time-Weighted Return</div>
+                  <div className={`kpi__value num ${signClass(report.kpis.twr_pct)}`}>
+                    {formatPercentSigned(report.kpis.twr_pct)}
+                  </div>
+                  <div className="kpi__sub">
+                    Active vs Benchmark: {formatPercentSigned(report.kpis.active_return_pct)}
+                  </div>
+                </div>
+                <div className="kpi__cell">
+                  <div className="kpi__label">Sharpe / Sortino</div>
+                  <div className="kpi__value num">
+                    {formatRatio(report.kpis.sharpe)} / {formatRatio(report.kpis.sortino)}
+                  </div>
+                  <div className="kpi__sub">
+                    Ann. Vol: {formatPercent(report.kpis.annualized_vol_pct)} · Max DD:{' '}
+                    {formatPercent(report.kpis.max_drawdown_pct)}
+                  </div>
+                </div>
+              </div>
+
+              <Panel
+                title="Investment Committee (IC) Executive Commentary"
+                subtitle="Automated institutional synthesis of mandate performance, Brinson attribution, risk concentration, and crisis stress resilience"
+                padded
+              >
+                <div
+                  style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
+                    gap: '0.85rem',
+                  }}
+                >
+                  <div
+                    style={{
+                      padding: '0.85rem',
+                      border: '1px solid var(--border-subtle)',
+                      background: 'var(--bg-elevated)',
+                    }}
+                  >
+                    <div
+                      style={{
+                        fontSize: '0.72rem',
+                        textTransform: 'uppercase',
+                        color: 'var(--text-secondary)',
+                        marginBottom: '0.35rem',
+                        fontWeight: 600,
+                      }}
+                    >
+                      1. Mandate & Valuation
+                    </div>
+                    <p style={{ margin: 0, fontSize: '0.86rem', lineHeight: 1.5 }}>
+                      {report.narrative.mandate_overview}
+                    </p>
+                  </div>
+                  <div
+                    style={{
+                      padding: '0.85rem',
+                      border: '1px solid var(--border-subtle)',
+                      background: 'var(--bg-elevated)',
+                    }}
+                  >
+                    <div
+                      style={{
+                        fontSize: '0.72rem',
+                        textTransform: 'uppercase',
+                        color: 'var(--text-secondary)',
+                        marginBottom: '0.35rem',
+                        fontWeight: 600,
+                      }}
+                    >
+                      2. Performance Attribution Drivers
+                    </div>
+                    <p style={{ margin: 0, fontSize: '0.86rem', lineHeight: 1.5 }}>
+                      {report.narrative.performance_drivers}
+                    </p>
+                  </div>
+                  <div
+                    style={{
+                      padding: '0.85rem',
+                      border: '1px solid var(--border-subtle)',
+                      background: 'var(--bg-elevated)',
+                    }}
+                  >
+                    <div
+                      style={{
+                        fontSize: '0.72rem',
+                        textTransform: 'uppercase',
+                        color: 'var(--text-secondary)',
+                        marginBottom: '0.35rem',
+                        fontWeight: 600,
+                      }}
+                    >
+                      3. Risk & Concentration Profile
+                    </div>
+                    <p style={{ margin: 0, fontSize: '0.86rem', lineHeight: 1.5 }}>
+                      {report.narrative.risk_and_concentration}
+                    </p>
+                  </div>
+                  <div
+                    style={{
+                      padding: '0.85rem',
+                      border: '1px solid var(--border-subtle)',
+                      background: 'var(--bg-elevated)',
+                    }}
+                  >
+                    <div
+                      style={{
+                        fontSize: '0.72rem',
+                        textTransform: 'uppercase',
+                        color: 'var(--text-secondary)',
+                        marginBottom: '0.35rem',
+                        fontWeight: 600,
+                      }}
+                    >
+                      4. Historical Crisis Stress Resilience
+                    </div>
+                    <p style={{ margin: 0, fontSize: '0.86rem', lineHeight: 1.5 }}>
+                      {report.narrative.stress_resilience}
+                    </p>
+                  </div>
+                </div>
+              </Panel>
+
+              <div
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))',
+                  gap: '1rem',
+                }}
+              >
+                <Panel
+                  title="Top Mandate Holdings"
+                  subtitle="Ranked by portfolio capital allocation"
+                  padded
+                >
+                  <div className="grid__scroll">
+                    <table className="table">
+                      <thead>
+                        <tr>
+                          <th>Ticker</th>
+                          <th>Name</th>
+                          <th>Class</th>
+                          <th className="num">Weight</th>
+                          <th className="num">Value ({report.base_currency})</th>
+                          <th className="num">Unrealised P&L</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {report.top_holdings.map((h) => (
+                          <tr key={h.ticker}>
+                            <td className="num">
+                              <strong>{h.ticker}</strong>
+                            </td>
+                            <td>{h.name}</td>
+                            <td>{h.asset_class}</td>
+                            <td className="num">{formatPercent(h.weight)}</td>
+                            <td className="num">{formatMoney(h.value_base)}</td>
+                            <td className={`num ${signClass(h.unrealized_pnl_pct)}`}>
+                              {formatPercentSigned(h.unrealized_pnl_pct)}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </Panel>
+
+                <Panel
+                  title="Crisis Stress Audit Summary"
+                  subtitle="Projected NAV impact across historical & rate shock scenarios"
+                  padded
+                >
+                  <div className="grid__scroll">
+                    <table className="table">
+                      <thead>
+                        <tr>
+                          <th>Scenario</th>
+                          <th>Window</th>
+                          <th className="num">Stressed NAV</th>
+                          <th className="num">Drawdown %</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {report.stress_highlights.map((s) => (
+                          <tr key={s.key}>
+                            <td>
+                              <strong>{s.name}</strong>
+                            </td>
+                            <td className="num">{s.window}</td>
+                            <td className="num">
+                              {formatMoney(s.value_after)} {report.base_currency}
+                            </td>
+                            <td className={`num ${signClass(s.pnl_pct)}`}>
+                              {formatPercentSigned(s.pnl_pct)}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </Panel>
+              </div>
             </div>
           )}
 

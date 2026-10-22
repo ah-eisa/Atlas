@@ -1028,6 +1028,22 @@ def get_xray(portfolio_id: int = Depends(_portfolio_id)) -> dict[str, Any]:
         raise AnalyticsUnavailable(f"analytics unavailable: {exc}") from exc
 
 
+@app.get("/api/v1/portfolio/report", tags=["lab"])
+def get_portfolio_report(portfolio_id: int = Depends(_portfolio_id)) -> dict[str, Any]:
+    """Compile a one-page institutional Factsheet & Investment Committee (IC) Memo."""
+    try:
+        analytics = _service.get(portfolio_id=portfolio_id)
+        portfolios = store.list_portfolios(SETTINGS)
+        pname = next((p["name"] for p in portfolios if p["id"] == portfolio_id), "Primary Book")
+        realized = store.get_realized_pnl_summary(SETTINGS, portfolio_id)
+        return lab.factsheet_report(analytics, portfolio_name=pname, realized_summary=realized)
+    except (store.EmptyPortfolio, AnalyticsUnavailable):
+        raise
+    except Exception as exc:  # noqa: BLE001
+        logger.exception("Failed to build portfolio factsheet report")
+        raise AnalyticsUnavailable(f"analytics unavailable: {exc}") from exc
+
+
 @app.get("/api/v1/search", tags=["search"])
 def unified_search(
     q: str = "",

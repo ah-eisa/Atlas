@@ -254,6 +254,18 @@ export function CommandPalette({
           onClose()
         },
       },
+      {
+        id: 'lab-factsheet-report',
+        category: 'Lab & Stress',
+        title: 'Investment Factsheet & IC Memo Generator',
+        subtitle: 'One-page institutional portfolio factsheet, executive commentary, Markdown memo, and print/PDF',
+        badge: 'FACTSHEET',
+        keywords: 'factsheet report ic memo investment committee pdf print markdown summary',
+        action: () => {
+          dispatchCommandIntent({ view: 'xray', tab: 'report' })
+          onClose()
+        },
+      },
     )
 
     // Macro & Fixed Income Series

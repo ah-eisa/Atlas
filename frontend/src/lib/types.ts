@@ -821,3 +821,71 @@ export interface XRayReport {
   methodology: string
 }
 
+export interface FactsheetHoldingRow {
+  ticker: string
+  name: string
+  asset_class: string
+  region: string | null
+  currency: string
+  weight: number
+  value_base: number
+  unrealized_pnl: number
+  unrealized_pnl_pct: number
+}
+
+export interface FactsheetStressHighlight {
+  key: string
+  name: string
+  window: string
+  pnl: number
+  pnl_pct: number
+  value_after: number
+}
+
+export interface FactsheetReport {
+  as_of: string
+  generated_at: string | null
+  portfolio_name: string
+  base_currency: string
+  benchmark: string
+  kpis: {
+    total_value: number
+    total_cost: number
+    unrealized_pnl: number
+    unrealized_pnl_pct: number
+    realized_pnl: number
+    win_rate_pct: number | null
+    twr_pct: number
+    mwr_pct: number | null
+    benchmark_return_pct: number
+    active_return_pct: number
+    annualized_vol_pct: number | null
+    sharpe: number | null
+    sortino: number | null
+    max_drawdown_pct: number | null
+    var_95_pct: number | null
+    cvar_95_pct: number | null
+    effective_holdings: number
+    top_five_pct: number
+    diversification_ratio: number | null
+  }
+  narrative: {
+    mandate_overview: string
+    performance_drivers: string
+    risk_and_concentration: string
+    stress_resilience: string
+  }
+  top_holdings: FactsheetHoldingRow[]
+  xray_findings: XRayFinding[]
+  exposure: {
+    asset_class: XRayExposureItem[]
+    region: XRayExposureItem[]
+    currency: XRayExposureItem[]
+  }
+  attribution_totals: AttributionTotals
+  attribution_segments: AttributionSegmentRow[]
+  stress_highlights: FactsheetStressHighlight[]
+  markdown_memo: string
+}
+
+

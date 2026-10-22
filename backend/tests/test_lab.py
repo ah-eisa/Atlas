@@ -140,3 +140,12 @@ def test_lab_api_endpoints(analytics_client) -> None:
     assert r_search.json()["candidate_ticker"] == "NVDA"
     assert "scenarios" in r_search.json()
 
+    r_rep = analytics_client.get("/api/v1/portfolio/report")
+    assert r_rep.status_code == 200
+    payload = r_rep.json()
+    assert "kpis" in payload
+    assert "narrative" in payload
+    assert "markdown_memo" in payload
+    assert "# INVESTMENT COMMITTEE MEMO" in payload["markdown_memo"]
+
+
