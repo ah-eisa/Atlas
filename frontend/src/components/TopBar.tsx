@@ -292,14 +292,18 @@ export function TopBar({
 
       <PrimaryNav view={view} analyticsReady={analyticsReady} holdingsCount={holdingsCount} />
 
-      {/* Masthead: Headline Readout */}
+      {/* Masthead: the portfolio's value. Full on the overview, one line elsewhere. */}
       {summary ? (
-        <div className="topbar__masthead">
+        <div
+          className={
+            view === 'overview' ? 'topbar__masthead' : 'topbar__masthead topbar__masthead--compact'
+          }
+        >
           <div className="topbar__identity">
             <div className="topbar__eyebrow">
               <span className="eyebrow">{portfolioName ?? 'Portfolio overview'}</span>
               <span className="panel__subtitle">
-                {summary.holdings_count} holdings · {health?.benchmark ?? '—'} benchmark
+                {summary.holdings_count} holdings, measured against {health?.benchmark ?? 'the benchmark'}
               </span>
             </div>
 
@@ -337,8 +341,8 @@ export function TopBar({
           <div className="topbar__aside">
             <Sparkline
               values={summary.sparkline.values}
-              width={236}
-              height={46}
+              width={320}
+              height={64}
               showEndpoint
               ariaLabel={`Portfolio value over the last ${summary.sparkline.values.length} trading days`}
             />

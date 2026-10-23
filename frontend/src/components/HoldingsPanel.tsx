@@ -215,7 +215,7 @@ export function HoldingsPanel({
                 {onOpenTradeModal && (
                   <button
                     type="button"
-                    className="button button--primary button--mini"
+                    className="button button--quiet button--mini"
                     onClick={() => onOpenTradeModal(info.row.original.ticker)}
                     title={`Trade ${info.row.original.ticker}`}
                   >

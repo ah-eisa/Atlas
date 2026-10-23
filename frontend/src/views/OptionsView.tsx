@@ -172,9 +172,9 @@ export default function OptionsView({ state, config }: OptionsViewProps) {
       {/* Header */}
       <div className="view__header">
         <div>
-          <h1 className="view__title">Options Derivatives & Greeks</h1>
+          <h1 className="view__title">Options</h1>
           <p className="view__subtitle">
-            Live options chain matrix, Black-Scholes pricing model, Greeks sensitivity laboratory, and payoff curves.
+            Look up the option chain for a symbol, or price a single option and see how its value responds to price, time and volatility.
           </p>
         </div>
 
@@ -182,8 +182,8 @@ export default function OptionsView({ state, config }: OptionsViewProps) {
           <Segmented
             ariaLabel="Options view switcher"
             options={[
-              { value: 'chain', label: 'Option Chain Matrix' },
-              { value: 'calculator', label: 'Black-Scholes & Greeks Lab' },
+              { value: 'chain', label: 'Option chain' },
+              { value: 'calculator', label: 'Pricing calculator' },
             ]}
             value={activeTab}
             onChange={setActiveTab}
@@ -365,17 +365,17 @@ export default function OptionsView({ state, config }: OptionsViewProps) {
                           <td style={{ textAlign: 'right', fontFamily: 'var(--font-mono)', color: 'var(--text-tertiary)', background: callItm ? 'rgba(66, 190, 101, 0.08)' : undefined }}>
                             {call?.open_interest ? call.open_interest.toLocaleString() : '—'}
                           </td>
-                          <td style={{ textAlign: 'right', fontFamily: 'var(--font-mono)', color: '#0f62fe', background: callItm ? 'rgba(66, 190, 101, 0.08)' : undefined }}>
+                          <td style={{ textAlign: 'right', fontFamily: 'var(--font-mono)', color: 'var(--text-primary)', background: callItm ? 'rgba(66, 190, 101, 0.08)' : undefined }}>
                             {call?.implied_volatility != null ? `${(call.implied_volatility * 100).toFixed(0)}%` : '—'}
                           </td>
 
                           {/* Strike Center Column */}
-                          <td style={{ textAlign: 'center', fontFamily: 'var(--font-mono)', fontWeight: 'bold', background: 'var(--surface-raised)', color: '#f1c21b' }}>
+                          <td style={{ textAlign: 'center', fontFamily: 'var(--font-mono)', fontWeight: 'bold', background: 'var(--surface-raised)', color: 'var(--text-primary)' }}>
                             ${strike.toFixed(2)}
                           </td>
 
                           {/* Put Columns */}
-                          <td style={{ textAlign: 'right', fontFamily: 'var(--font-mono)', color: '#0f62fe', background: putItm ? 'rgba(250, 77, 86, 0.08)' : undefined }}>
+                          <td style={{ textAlign: 'right', fontFamily: 'var(--font-mono)', color: 'var(--text-primary)', background: putItm ? 'rgba(250, 77, 86, 0.08)' : undefined }}>
                             {put?.implied_volatility != null ? `${(put.implied_volatility * 100).toFixed(0)}%` : '—'}
                           </td>
                           <td style={{ textAlign: 'right', fontFamily: 'var(--font-mono)', color: 'var(--text-tertiary)', background: putItm ? 'rgba(250, 77, 86, 0.08)' : undefined }}>
@@ -413,7 +413,7 @@ export default function OptionsView({ state, config }: OptionsViewProps) {
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 'var(--space-4)' }}>
               {/* Inputs */}
               <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
-                <div style={{ fontSize: 'var(--size-caption)', textTransform: 'uppercase', color: 'var(--text-tertiary)', letterSpacing: '0.5px' }}>
+                <div style={{ fontSize: 'var(--size-caption)', color: 'var(--text-tertiary)', letterSpacing: '0.5px' }}>
                   Option Parameters
                 </div>
 
@@ -504,7 +504,7 @@ export default function OptionsView({ state, config }: OptionsViewProps) {
 
               {/* Price Cards */}
               <div>
-                <div style={{ fontSize: 'var(--size-caption)', textTransform: 'uppercase', color: 'var(--text-tertiary)', letterSpacing: '0.5px', marginBottom: 'var(--space-3)' }}>
+                <div style={{ fontSize: 'var(--size-caption)', color: 'var(--text-tertiary)', letterSpacing: '0.5px', marginBottom: 'var(--space-3)' }}>
                   Theoretical Fair Value
                 </div>
 
@@ -530,7 +530,7 @@ export default function OptionsView({ state, config }: OptionsViewProps) {
 
                 {/* Greeks Grid */}
                 <div style={{ marginTop: 'var(--space-3)' }}>
-                  <div style={{ fontSize: 'var(--size-caption)', textTransform: 'uppercase', color: 'var(--text-tertiary)', letterSpacing: '0.5px', marginBottom: 'var(--space-2)' }}>
+                  <div style={{ fontSize: 'var(--size-caption)', color: 'var(--text-tertiary)', letterSpacing: '0.5px', marginBottom: 'var(--space-2)' }}>
                     The Greeks Sensitivities
                   </div>
 
@@ -566,10 +566,10 @@ export default function OptionsView({ state, config }: OptionsViewProps) {
                       </tr>
                       <tr>
                         <td style={{ fontWeight: 'bold' }}>Vega (ν)</td>
-                        <td style={{ textAlign: 'right', fontFamily: 'var(--font-mono)', color: '#0f62fe' }}>
+                        <td style={{ textAlign: 'right', fontFamily: 'var(--font-mono)', color: 'var(--text-primary)' }}>
                           {bsOutput ? `+$${bsOutput.call_greeks.vega.toFixed(3)}` : '—'}
                         </td>
-                        <td style={{ textAlign: 'right', fontFamily: 'var(--font-mono)', color: '#0f62fe' }}>
+                        <td style={{ textAlign: 'right', fontFamily: 'var(--font-mono)', color: 'var(--text-primary)' }}>
                           {bsOutput ? `+$${bsOutput.put_greeks.vega.toFixed(3)}` : '—'}
                         </td>
                         <td style={{ color: 'var(--text-tertiary)' }}>Sensitivity per 1% change in volatility</td>
@@ -603,7 +603,7 @@ export default function OptionsView({ state, config }: OptionsViewProps) {
             {/* Expiration Payoff SVG Graph */}
             <div style={{ marginTop: 'var(--space-4)' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-2)' }}>
-                <span style={{ fontSize: 'var(--size-caption)', textTransform: 'uppercase', color: 'var(--text-tertiary)', letterSpacing: '0.5px' }}>
+                <span style={{ fontSize: 'var(--size-caption)', color: 'var(--text-tertiary)', letterSpacing: '0.5px' }}>
                   Expiration Profit & Loss (P&L) Payoff Profile
                 </span>
                 <div style={{ display: 'flex', gap: 'var(--space-4)', fontSize: '11px' }}>
@@ -675,14 +675,14 @@ export default function OptionsView({ state, config }: OptionsViewProps) {
                     y1="20"
                     x2={getPayoffX(12)}
                     y2="190"
-                    stroke="#f1c21b"
+                    stroke="var(--viz-cat-4)"
                     strokeWidth="1"
                     strokeDasharray="3 3"
                   />
                   <text
                     x={getPayoffX(12)}
                     y="15"
-                    fill="#f1c21b"
+                    fill="var(--viz-cat-4)"
                     fontSize="10"
                     fontFamily="var(--font-mono)"
                     textAnchor="middle"

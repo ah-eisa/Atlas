@@ -248,10 +248,9 @@ export function PerformancePanel({ history, summary, returns, currency }: Perfor
         {summary.changes.all.flows !== 0 ? (
           <div className="performance__flows">
             <span>
-              External contributions are excluded from returns. Net invested: YTD{' '}
-              <span className="num">{formatMoneySigned(summary.changes.ytd.flows)}</span> ·
-              since inception{' '}
-              <span className="num">{formatMoneySigned(summary.changes.all.flows)}</span>.
+              Money you added or withdrew is not counted as return. Net added this year{' '}
+              <span className="num">{formatMoneySigned(summary.changes.ytd.flows)}</span>, since
+              the start <span className="num">{formatMoneySigned(summary.changes.all.flows)}</span>.
             </span>
           </div>
         ) : null}

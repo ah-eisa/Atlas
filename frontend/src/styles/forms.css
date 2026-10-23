@@ -53,7 +53,6 @@
   letter-spacing: var(--tracking-wide);
   color: var(--text-tertiary);
   text-align: left;
-  text-transform: uppercase;
 }
 
 .editor__table td {
@@ -348,7 +347,6 @@
   color: var(--text-tertiary);
   font-weight: var(--weight-medium);
   letter-spacing: var(--tracking-wide);
-  text-transform: uppercase;
   text-align: left;
 }
 

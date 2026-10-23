@@ -16,6 +16,7 @@ import './styles/panels.css'
 import './styles/forms.css'
 import './styles/dialog.css'
 import './styles/navigation.css'
+import './styles/views.css'
 
 import App from './App'
 import { applyTheme, getTheme, watchSystemTheme } from './lib/theme'

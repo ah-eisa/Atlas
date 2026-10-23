@@ -165,8 +165,8 @@ export function LabView({ config, portfolioId, baseCurrency }: LabViewProps) {
     <main className="app__main">
       <div className="view-stack">
         <Panel
-          title="Institutional Portfolio Lab"
-          subtitle="Portfolio X-Ray diagnostics, multi-factor crisis stress testing, and Brinson-Fachler performance attribution"
+          title="Lab"
+          subtitle="Diagnose concentration, test the portfolio against past crises, and see where its return came from"
           padded
           actions={
             <Segmented<LabTab>
@@ -174,17 +174,17 @@ export function LabView({ config, portfolioId, baseCurrency }: LabViewProps) {
               value={activeTab}
               onChange={setActiveTab}
               options={[
-                { value: 'xray', label: '1. Portfolio X-Ray' },
-                { value: 'stress', label: '2. Stress Lab' },
-                { value: 'attribution', label: '3. Attribution Engine' },
-                { value: 'report', label: '4. Factsheet & IC Memo' },
+                { value: 'xray', label: 'X-ray' },
+                { value: 'stress', label: 'Stress test' },
+                { value: 'attribution', label: 'Attribution' },
+                { value: 'report', label: 'Factsheet' },
               ]}
             />
           }
         >
           {activeTab === 'xray' && xray && (
             <div className="view-stack" style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-              <div className="kpi">
+              <div className="kpi kpi--auto">
                 <div className="kpi__cell">
                   <div className="kpi__label">Effective Holdings</div>
                   <div className="kpi__value num">
@@ -245,7 +245,7 @@ export function LabView({ config, portfolioId, baseCurrency }: LabViewProps) {
                             finding.severity === 'high'
                               ? 'var(--negative)'
                               : finding.severity === 'medium'
-                                ? '#d29922'
+                                ? 'var(--warning)'
                                 : 'var(--positive)'
                           }`,
                           background: 'var(--bg-elevated)',
@@ -255,14 +255,13 @@ export function LabView({ config, portfolioId, baseCurrency }: LabViewProps) {
                           className="num"
                           style={{
                             fontSize: '0.72rem',
-                            textTransform: 'uppercase',
                             padding: '0.15rem 0.45rem',
                             fontWeight: 600,
                             background: 'var(--bg-surface)',
                             border: '1px solid var(--border-subtle)',
                           }}
                         >
-                          {finding.severity}
+                          {finding.severity.charAt(0).toUpperCase() + finding.severity.slice(1)}
                         </span>
                         <span style={{ fontSize: '0.88rem' }}>{finding.message}</span>
                       </div>
@@ -358,7 +357,6 @@ export function LabView({ config, portfolioId, baseCurrency }: LabViewProps) {
                       <h4
                         style={{
                           fontSize: '0.78rem',
-                          textTransform: 'uppercase',
                           marginBottom: '0.5rem',
                           color: 'var(--text-secondary)',
                         }}
@@ -384,7 +382,6 @@ export function LabView({ config, portfolioId, baseCurrency }: LabViewProps) {
                       <h4
                         style={{
                           fontSize: '0.78rem',
-                          textTransform: 'uppercase',
                           marginBottom: '0.5rem',
                           color: 'var(--text-secondary)',
                         }}
@@ -410,7 +407,6 @@ export function LabView({ config, portfolioId, baseCurrency }: LabViewProps) {
                       <h4
                         style={{
                           fontSize: '0.78rem',
-                          textTransform: 'uppercase',
                           marginBottom: '0.5rem',
                           color: 'var(--text-secondary)',
                         }}
@@ -704,7 +700,7 @@ export function LabView({ config, portfolioId, baseCurrency }: LabViewProps) {
                 />
               </div>
 
-              <div className="kpi">
+              <div className="kpi kpi--auto">
                 <div className="kpi__cell">
                   <div className="kpi__label">Portfolio Return</div>
                   <div className={`kpi__value num ${signClass(attribution.totals.portfolio_return_pct)}`}>
@@ -840,7 +836,7 @@ export function LabView({ config, portfolioId, baseCurrency }: LabViewProps) {
                 </div>
               </div>
 
-              <div className="kpi">
+              <div className="kpi kpi--auto">
                 <div className="kpi__cell">
                   <div className="kpi__label">Net Asset Value (NAV)</div>
                   <div className="kpi__value num">
@@ -903,7 +899,6 @@ export function LabView({ config, portfolioId, baseCurrency }: LabViewProps) {
                     <div
                       style={{
                         fontSize: '0.72rem',
-                        textTransform: 'uppercase',
                         color: 'var(--text-secondary)',
                         marginBottom: '0.35rem',
                         fontWeight: 600,
@@ -925,7 +920,6 @@ export function LabView({ config, portfolioId, baseCurrency }: LabViewProps) {
                     <div
                       style={{
                         fontSize: '0.72rem',
-                        textTransform: 'uppercase',
                         color: 'var(--text-secondary)',
                         marginBottom: '0.35rem',
                         fontWeight: 600,
@@ -947,7 +941,6 @@ export function LabView({ config, portfolioId, baseCurrency }: LabViewProps) {
                     <div
                       style={{
                         fontSize: '0.72rem',
-                        textTransform: 'uppercase',
                         color: 'var(--text-secondary)',
                         marginBottom: '0.35rem',
                         fontWeight: 600,
@@ -969,7 +962,6 @@ export function LabView({ config, portfolioId, baseCurrency }: LabViewProps) {
                     <div
                       style={{
                         fontSize: '0.72rem',
-                        textTransform: 'uppercase',
                         color: 'var(--text-secondary)',
                         marginBottom: '0.35rem',
                         fontWeight: 600,

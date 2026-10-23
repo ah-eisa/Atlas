@@ -1,0 +1,125 @@
+/**
+ * Shared pieces of the market and lab views (bonds, macro and filings,
+ * options, lab).
+ *
+ * These views arrived from separate projects and used class names that no
+ * stylesheet defined, so their figures stacked one per row and their headers
+ * fell back to browser defaults. The classes are defined here in the same
+ * language as the rest of the product: hairline grids, sentence-case labels,
+ * figures in tabular numerals.
+ */
+
+/* A view's own introduction, for views that are a tool rather than a
+   report: what it is for in one sentence, and its mode switch. */
+.view__header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--space-5) var(--space-8);
+  padding: var(--space-7) var(--space-5) var(--space-6);
+  background: var(--surface-panel);
+}
+
+.view__title {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: var(--size-large);
+  font-weight: var(--weight-semibold);
+  line-height: var(--leading-tight);
+  letter-spacing: -0.015em;
+}
+
+.view__subtitle {
+  max-width: 68ch;
+  margin: var(--space-3) 0 0;
+  color: var(--text-secondary);
+  font-size: var(--size-body);
+  line-height: var(--leading-normal);
+}
+
+.view__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+/* A column of panels inside a panel. */
+.view-stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+
+/* A block of content on the panel surface. */
+.card {
+  padding: var(--space-5);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface-panel);
+}
+
+/* A row of headline figures that wraps to as many columns as fit. */
+.kpi-band {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1px;
+  background: var(--line);
+}
+
+/* The figures inside a panel: the cells fill the row they are on. */
+.kpi--auto {
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.kpi__sub,
+.kpi__caption {
+  color: var(--text-tertiary);
+  font-size: var(--size-caption);
+  line-height: var(--leading-snug);
+}
+
+.field__input {
+  width: 100%;
+  min-height: 34px;
+  padding: var(--space-1) var(--space-3);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface-raised);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  font-size: var(--size-body);
+  font-variant-numeric: tabular-nums;
+}
+
+.field__input:focus-visible {
+  border-color: var(--accent);
+  outline: none;
+  box-shadow: 0 0 0 1px var(--accent);
+}
+
+.color--positive {
+  color: var(--positive);
+}
+
+.color--negative {
+  color: var(--negative);
+}
+
+.color--warning {
+  color: var(--warning);
+}
+
+@media (max-width: 720px) {
+  .view__header {
+    padding: var(--space-5) var(--space-4);
+  }
+
+  .kpi-band {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}

@@ -1,146 +1,160 @@
 /**
- * Design tokens - Cyberpunk Trading Terminal Edition
+ * Design tokens - ATLAS.
  *
- * Infused with:
- *   - Midnight Obsidian & Cyber Slate surfaces
- *   - Electric Cyan, Lime, and Ruby performance signals with soft glows
- *   - Sleek micro-radii and modern elevation shadows
- *   - High-contrast tabular figures in IBM Plex Mono
+ * An instrument panel for someone managing their own money: deep ink-navy
+ * surfaces, warm off-white ink, and one accent - brass - reserved for where
+ * you are and the action you would take next. Gains and losses are green and
+ * coral, warnings orange, so the accent is never mistaken for a signal.
+ *
+ * Every figure is set in IBM Plex Sans with tabular numerals rather than a
+ * monospace face: columns still align, and the numbers read as figures, not
+ * as code. Labels are sentence case. Nothing glows.
+ *
+ * Chart colours come from here too (see charts/theme.ts). The categorical
+ * order was validated for colour-vision deficiency on both surfaces.
  */
 
 :root {
   color-scheme: dark;
 
   /* ---------------------------------------------------------------- *
-   * Surfaces - Cyberpunk Trading Terminal (Deep Midnight Obsidian)   *
+   * Surfaces - ink navy, stepping lighter as things come forward     *
    * ---------------------------------------------------------------- */
-  --surface-page: #080b11;
-  --surface-panel: #0d121d;
-  --surface-header: #121826;
-  --surface-raised: #182032;
-  --surface-hover: #1e283d;
-  --surface-active: #26324d;
+  --surface-page: #0c121c;
+  --surface-panel: #111926;
+  --surface-header: #141d2b;
+  --surface-raised: #1a2433;
+  --surface-hover: #1f2b3d;
+  --surface-active: #27364c;
 
-  /* Hairlines & Neon edges */
-  --line: #1c2538;
-  --line-strong: #2c3b59;
-  --line-faint: #131a27;
-  --line-neon: rgba(0, 210, 255, 0.4);
-
-  /* ---------------------------------------------------------------- *
-   * Text - crisp high contrast, vibrant supporting hierarchy          *
-   * ---------------------------------------------------------------- */
-  --text-primary: #f0f4fc;
-  --text-secondary: #94a3b8;
-  --text-tertiary: #64748b;
-  --text-disabled: #475569;
-  --text-inverse: #080b11;
+  --line: #1e2a3a;
+  --line-strong: #2c3b50;
+  --line-faint: #162030;
+  --line-neon: rgba(217, 178, 95, 0.4);
 
   /* ---------------------------------------------------------------- *
-   * Cyberpunk Accents & Neon Gradients                               *
+   * Ink                                                               *
    * ---------------------------------------------------------------- */
-  --accent: #00d2ff;
-  --accent-dim: #0284c7;
-  --accent-faint: rgba(0, 210, 255, 0.08);
-  --accent-glow: 0 0 16px rgba(0, 210, 255, 0.4);
-  --accent-gradient: linear-gradient(135deg, #00d2ff 0%, #3a7bd5 50%, #8a3ffc 100%);
-  --accent-gradient-subtle: linear-gradient(135deg, rgba(0, 210, 255, 0.15) 0%, rgba(58, 123, 213, 0.15) 100%);
+  --text-primary: #e9ecf1;
+  --text-secondary: #a3aebe;
+  --text-tertiary: #75839a;
+  --text-disabled: #4b586b;
+  --text-inverse: #1a1306;
 
   /* ---------------------------------------------------------------- *
-   * Semantic - Electric Terminal Performance Signals                 *
+   * Accent - brass. Current location and the primary action only.     *
    * ---------------------------------------------------------------- */
-  --positive: #00f076;
-  --positive-dim: #00a852;
-  --positive-bg: rgba(0, 240, 118, 0.09);
-  --positive-glow: 0 0 12px rgba(0, 240, 118, 0.35);
-  --negative: #ff3366;
-  --negative-dim: #b8143d;
-  --negative-bg: rgba(255, 51, 102, 0.09);
-  --negative-glow: 0 0 12px rgba(255, 51, 102, 0.35);
+  --accent: #d9b25f;
+  --accent-dim: #a8873f;
+  --accent-faint: rgba(217, 178, 95, 0.1);
+  --accent-glow: none;
+  --accent-gradient: #d9b25f;
+  --accent-gradient-subtle: rgba(217, 178, 95, 0.1);
+
+  /* ---------------------------------------------------------------- *
+   * Signals                                                           *
+   * ---------------------------------------------------------------- */
+  --positive: #4cc98f;
+  --positive-dim: #2f9466;
+  --positive-bg: rgba(76, 201, 143, 0.12);
+  --positive-glow: none;
+  --negative: #f0656f;
+  --negative-dim: #b8424c;
+  --negative-bg: rgba(240, 101, 111, 0.12);
+  --negative-glow: none;
   --neutral: var(--text-secondary);
-  --warning: #ffb703;
-  --warning-bg: rgba(255, 183, 3, 0.1);
-  --warning-glow: 0 0 12px rgba(255, 183, 3, 0.3);
-  --info: #38bdf8;
-  --purple: #b388ff;
+  --warning: #ef8a4a;
+  --warning-bg: rgba(239, 138, 74, 0.12);
+  --warning-glow: none;
+  --info: #6aa5f0;
+  --purple: #9085e9;
 
   /* ---------------------------------------------------------------- *
    * Data visualisation                                                *
    * ---------------------------------------------------------------- */
 
-  /* Categorical: vivid neon cyber ramp for allocation breakdowns. */
-  --viz-cat-1: #00d2ff;
-  --viz-cat-2: #3a7bd5;
-  --viz-cat-3: #8a3ffc;
-  --viz-cat-4: #00f076;
-  --viz-cat-5: #ffb703;
-  --viz-cat-6: #ff3366;
+  /* Categorical, in fixed order. Validated on #111926: every adjacent
+     pair clears the colour-vision and normal-vision floors, and all six
+     clear 3:1 against the surface. Green is left out on purpose - it
+     means "gain" here. */
+  --viz-cat-1: #3987e5;
+  --viz-cat-2: #d95926;
+  --viz-cat-3: #199e70;
+  --viz-cat-4: #c98500;
+  --viz-cat-5: #d55181;
+  --viz-cat-6: #9085e9;
 
-  /* Sequential: electric deep blue to cyber cyan. */
-  --viz-seq-1: #0d121d;
-  --viz-seq-2: #142033;
-  --viz-seq-3: #1a3254;
-  --viz-seq-4: #204778;
-  --viz-seq-5: #2864a6;
-  --viz-seq-6: #328ad8;
-  --viz-seq-7: #00d2ff;
+  /* Sequential: one hue (blue), from the surface to full strength. */
+  --viz-seq-1: #131f2e;
+  --viz-seq-2: #162d47;
+  --viz-seq-3: #1a3d66;
+  --viz-seq-4: #1c5099;
+  --viz-seq-5: #2a6cc4;
+  --viz-seq-6: #3987e5;
+  --viz-seq-7: #6da7ec;
 
-  /* Negative correlation */
-  --viz-negative: #8a2539;
+  /* The other pole of a correlation scale. */
+  --viz-negative: #c0565c;
 
-  /* Monthly return heat scale: vivid signals */
-  --heat-pos-1-bg: #092015;
-  --heat-pos-1-fg: #45d688;
-  --heat-pos-2-bg: #0c3020;
-  --heat-pos-2-fg: #00f076;
-  --heat-pos-3-bg: #10422c;
-  --heat-pos-3-fg: #66ffaa;
-  --heat-pos-4-bg: #14593b;
-  --heat-pos-4-fg: #b3ffcc;
-  --heat-neg-1-bg: #240c12;
-  --heat-neg-1-fg: #ff6b8b;
-  --heat-neg-2-bg: #38101a;
-  --heat-neg-2-fg: #ff3366;
-  --heat-neg-3-bg: #521526;
-  --heat-neg-3-fg: #ff809f;
-  --heat-neg-4-bg: #701c34;
-  --heat-neg-4-fg: #ffb3c6;
+  /* Monthly return heat scale: two hues, deepening with size. */
+  --heat-pos-1-bg: #10261f;
+  --heat-pos-1-fg: #6fd3a3;
+  --heat-pos-2-bg: #133325;
+  --heat-pos-2-fg: #82dcb1;
+  --heat-pos-3-bg: #17432f;
+  --heat-pos-3-fg: #a2e6c5;
+  --heat-pos-4-bg: #1b573c;
+  --heat-pos-4-fg: #cbf2de;
+  --heat-neg-1-bg: #2a161c;
+  --heat-neg-1-fg: #f08f97;
+  --heat-neg-2-bg: #391b23;
+  --heat-neg-2-fg: #f3a1a8;
+  --heat-neg-3-bg: #4d212c;
+  --heat-neg-3-fg: #f6b6bc;
+  --heat-neg-4-bg: #662938;
+  --heat-neg-4-fg: #fad3d6;
 
-  /* Chart furniture */
-  --viz-grid: #131a26;
-  --viz-axis: #26334a;
-  --viz-band: #162a45;
-  --viz-band-inner: #244977;
-  --viz-crosshair: #64748b;
-  --viz-benchmark: #8291a5;
+  /* Chart furniture: recessive, so the data carries the contrast. */
+  --viz-grid: #172233;
+  --viz-axis: #2a384d;
+  --viz-band: #182a42;
+  --viz-band-inner: #22426b;
+  --viz-crosshair: #75839a;
+  --viz-benchmark: #8794a8;
 
   /* ---------------------------------------------------------------- *
    * Typography                                                        *
    * ---------------------------------------------------------------- */
   --font-sans: 'IBM Plex Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  --font-mono: 'IBM Plex Mono', 'JetBrains Mono', 'Fira Code', monospace;
+  /* Figures: the same family with tabular numerals (set on .num). */
+  --font-mono: var(--font-sans);
+  /* Code, file names and raw CSV - the only true monospace. */
+  --font-code: 'IBM Plex Mono', ui-monospace, 'Cascadia Mono', monospace;
 
   /* Type scale */
-  --size-micro: 10px;
-  --size-label: 11px;
+  --size-micro: 11px;
+  --size-label: 12px;
   --size-caption: 12px;
-  --size-body: 13px;
-  --size-data: 14px;
+  --size-body: 14px;
+  --size-data: 15px;
   --size-heading: 16px;
-  --size-large: 20px;
-  --size-display: 34px;
+  --size-subhead: 18px;
+  --size-large: 24px;
+  --size-display: 52px;
 
   --weight-regular: 400;
   --weight-medium: 500;
   --weight-semibold: 600;
+  --weight-bold: 600;
 
   --leading-tight: 1.15;
   --leading-snug: 1.35;
   --leading-normal: 1.5;
 
-  /* Uppercase panel and column labels */
-  --tracking-label: 0.08em;
-  --tracking-wide: 0.04em;
+  /* Labels are sentence case; no tracking. Kept as tokens so older rules
+     that still reference them resolve to nothing. */
+  --tracking-label: 0;
+  --tracking-wide: 0;
 
   /* ---------------------------------------------------------------- *
    * Spacing                                                          *
@@ -156,24 +170,22 @@
   --space-9: 40px;
   --space-10: 48px;
 
-  /* Dense, terminal-like row rhythm */
-  --row-height: 30px;
-  --row-height-compact: 26px;
-  --header-height: 30px;
-  --panel-header-height: 36px;
+  --row-height: 36px;
+  --row-height-compact: 30px;
+  --header-height: 34px;
+  --panel-header-height: 48px;
 
   /* ---------------------------------------------------------------- *
-   * Motion & Physics                                                 *
+   * Motion                                                            *
    * ---------------------------------------------------------------- */
   --duration-fast: 120ms;
   --duration-base: 180ms;
   --easing: cubic-bezier(0.16, 1, 0.3, 1);
 
   /* Layout */
-  --max-width: 1800px;
+  --max-width: 1760px;
   --sidebar-width: 300px;
 
-  /* Sleek modern micro-radii */
   --radius-xs: 3px;
   --radius-sm: 5px;
   --radius: 8px;
@@ -181,17 +193,17 @@
   --radius-xl: 16px;
   --radius-full: 9999px;
 
-  /* Depth Elevation & Glows */
-  --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.35);
-  --shadow-md: 0 6px 20px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.05);
-  --shadow-lg: 0 18px 48px rgba(0, 0, 0, 0.75), 0 0 0 1px rgba(0, 210, 255, 0.25);
-  --shadow-glow: 0 0 20px rgba(0, 210, 255, 0.25);
-  --shadow-positive: 0 0 15px rgba(0, 240, 118, 0.25);
-  --shadow-negative: 0 0 15px rgba(255, 51, 102, 0.25);
+  /* Elevation: only for things that float (windows, menus). */
+  --shadow-sm: none;
+  --shadow-md: 0 8px 24px rgba(3, 7, 14, 0.45);
+  --shadow-lg: 0 24px 64px rgba(3, 7, 14, 0.6);
+  --shadow-glow: none;
+  --shadow-positive: none;
+  --shadow-negative: none;
 
-  --backdrop-blur: blur(14px);
-  --glass-bg: rgba(13, 18, 29, 0.85);
-  --glass-border: rgba(255, 255, 255, 0.08);
+  --backdrop-blur: none;
+  --glass-bg: var(--surface-panel);
+  --glass-border: var(--line);
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -202,97 +214,90 @@
 }
 
 /* -------------------------------------------------------------------- *
- * Light palette - Clean TradingView / Bloomberg Pro Light Mode         *
+ * Light palette - cool paper, the same roles                           *
  * -------------------------------------------------------------------- */
 [data-theme='light'] {
   color-scheme: light;
 
-  --surface-page: #f0f3f8;
+  --surface-page: #eef1f5;
   --surface-panel: #ffffff;
-  --surface-header: #f8fafc;
-  --surface-raised: #ffffff;
-  --surface-hover: #f1f5f9;
-  --surface-active: #e2e8f0;
+  --surface-header: #f7f8fa;
+  --surface-raised: #f3f5f8;
+  --surface-hover: #edf0f4;
+  --surface-active: #e2e7ee;
 
-  --line: #e2e8f0;
-  --line-strong: #cbd5e1;
-  --line-faint: #f1f5f9;
-  --line-neon: rgba(2, 132, 199, 0.4);
+  --line: #e1e6ed;
+  --line-strong: #c9d1dc;
+  --line-faint: #f0f3f7;
+  --line-neon: rgba(138, 100, 20, 0.4);
 
-  --text-primary: #0f172a;
-  --text-secondary: #475569;
-  --text-tertiary: #64748b;
-  --text-disabled: #94a3b8;
+  --text-primary: #131b27;
+  --text-secondary: #4a5668;
+  --text-tertiary: #677386;
+  --text-disabled: #9aa4b2;
   --text-inverse: #ffffff;
 
-  --accent: #0284c7;
-  --accent-dim: #0369a1;
-  --accent-faint: rgba(2, 132, 199, 0.08);
-  --accent-glow: 0 0 12px rgba(2, 132, 199, 0.25);
-  --accent-gradient: linear-gradient(135deg, #0284c7 0%, #2563eb 50%, #7c3aed 100%);
-  --accent-gradient-subtle: linear-gradient(135deg, rgba(2, 132, 199, 0.1) 0%, rgba(37, 99, 235, 0.1) 100%);
+  --accent: #8a6414;
+  --accent-dim: #6e500f;
+  --accent-faint: rgba(138, 100, 20, 0.08);
+  --accent-gradient: #8a6414;
+  --accent-gradient-subtle: rgba(138, 100, 20, 0.08);
 
-  --positive: #16a34a;
-  --positive-dim: #15803d;
-  --positive-bg: rgba(22, 163, 74, 0.1);
-  --positive-glow: 0 0 10px rgba(22, 163, 74, 0.2);
-  --negative: #dc2626;
-  --negative-dim: #b91c1c;
-  --negative-bg: rgba(220, 38, 38, 0.1);
-  --negative-glow: 0 0 10px rgba(220, 38, 38, 0.2);
+  --positive: #16794a;
+  --positive-dim: #115e39;
+  --positive-bg: rgba(22, 121, 74, 0.09);
+  --negative: #c2343f;
+  --negative-dim: #9c2a33;
+  --negative-bg: rgba(194, 52, 63, 0.08);
   --neutral: var(--text-secondary);
-  --warning: #d97706;
-  --warning-bg: rgba(217, 119, 6, 0.1);
-  --warning-glow: 0 0 10px rgba(217, 119, 6, 0.2);
-  --info: #0284c7;
-  --purple: #7c3aed;
+  --warning: #b9541a;
+  --warning-bg: rgba(185, 84, 26, 0.09);
+  --info: #2a6cc4;
+  --purple: #6250d6;
 
-  --viz-cat-1: #0284c7;
-  --viz-cat-2: #2563eb;
-  --viz-cat-3: #7c3aed;
-  --viz-cat-4: #16a34a;
-  --viz-cat-5: #d97706;
-  --viz-cat-6: #dc2626;
+  /* Categorical, same hues stepped for white. Three slots sit below 3:1
+     on white, so every categorical chart carries a legend with values. */
+  --viz-cat-1: #2a78d6;
+  --viz-cat-2: #eb6834;
+  --viz-cat-3: #1baf7a;
+  --viz-cat-4: #eda100;
+  --viz-cat-5: #e87ba4;
+  --viz-cat-6: #6250d6;
 
-  --viz-seq-1: #f4f7fb;
-  --viz-seq-2: #e2ebf5;
-  --viz-seq-3: #c9dbee;
-  --viz-seq-4: #a7c6e0;
-  --viz-seq-5: #7ea6cf;
-  --viz-seq-6: #4f7fb4;
-  --viz-seq-7: #22578f;
+  --viz-seq-1: #f2f7fd;
+  --viz-seq-2: #cde2fb;
+  --viz-seq-3: #9ec5f4;
+  --viz-seq-4: #6da7ec;
+  --viz-seq-5: #3987e5;
+  --viz-seq-6: #256abf;
+  --viz-seq-7: #184f95;
 
-  --viz-negative: #b06a72;
+  --viz-negative: #c8676c;
 
-  --heat-pos-1-bg: #e7f4eb;
-  --heat-pos-1-fg: #1f6b3d;
-  --heat-pos-2-bg: #cfeadb;
-  --heat-pos-2-fg: #17603a;
-  --heat-pos-3-bg: #a9dcbd;
-  --heat-pos-3-fg: #125230;
-  --heat-pos-4-bg: #7ecfa2;
-  --heat-pos-4-fg: #0d4426;
+  --heat-pos-1-bg: #e8f5ee;
+  --heat-pos-1-fg: #1d6b44;
+  --heat-pos-2-bg: #d0ecdd;
+  --heat-pos-2-fg: #175f3b;
+  --heat-pos-3-bg: #aadcc1;
+  --heat-pos-3-fg: #114f30;
+  --heat-pos-4-bg: #7fcaa2;
+  --heat-pos-4-fg: #0b3f25;
+  --heat-neg-1-bg: #fcedee;
+  --heat-neg-1-fg: #a63a42;
+  --heat-neg-2-bg: #f9dadd;
+  --heat-neg-2-fg: #912f37;
+  --heat-neg-3-bg: #f4c1c6;
+  --heat-neg-3-fg: #7b252c;
+  --heat-neg-4-bg: #eea6ad;
+  --heat-neg-4-fg: #651c22;
 
-  --heat-neg-1-bg: #fdecee;
-  --heat-neg-1-fg: #a8383f;
-  --heat-neg-2-bg: #fbdadd;
-  --heat-neg-2-fg: #932c33;
-  --heat-neg-3-bg: #f7c1c6;
-  --heat-neg-3-fg: #7d2229;
-  --heat-neg-4-bg: #f3a7ae;
-  --heat-neg-4-fg: #66191f;
+  --viz-grid: #edf0f4;
+  --viz-axis: #d3d9e2;
+  --viz-band: #dde9f9;
+  --viz-band-inner: #b8d2f3;
+  --viz-crosshair: #8792a3;
+  --viz-benchmark: #6c7789;
 
-  --viz-grid: #e8ebf0;
-  --viz-axis: #ccd2db;
-  --viz-band: #dbe7f8;
-  --viz-band-inner: #b3d0f2;
-  --viz-crosshair: #8a93a2;
-  --viz-benchmark: #6f7887;
-
-  --shadow-sm: 0 2px 6px rgba(0, 0, 0, 0.05);
-  --shadow-md: 0 4px 14px rgba(0, 0, 0, 0.08), 0 0 0 1px rgba(0, 0, 0, 0.04);
-  --shadow-lg: 0 12px 30px rgba(0, 0, 0, 0.12), 0 0 0 1px rgba(2, 132, 199, 0.2);
-  --shadow-glow: 0 0 15px rgba(2, 132, 199, 0.15);
-  --glass-bg: rgba(255, 255, 255, 0.9);
-  --glass-border: rgba(0, 0, 0, 0.06);
+  --shadow-md: 0 8px 24px rgba(19, 27, 39, 0.1);
+  --shadow-lg: 0 24px 64px rgba(19, 27, 39, 0.16);
 }

@@ -258,7 +258,7 @@ export default function FixedIncomeView({ config }: FixedIncomeViewProps) {
         actions={
           <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)', fontSize: 'var(--size-caption)' }}>
             <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
-              <span style={{ width: '12px', height: '3px', background: '#0f62fe', borderRadius: '1px' }} />
+              <span style={{ width: '12px', height: '3px', background: 'var(--viz-cat-1)', borderRadius: '1px' }} />
               <strong style={{ color: 'var(--text-primary)' }}>Current</strong>
             </span>
 
@@ -268,7 +268,7 @@ export default function FixedIncomeView({ config }: FixedIncomeViewProps) {
                 checked={show1mAgo}
                 onChange={(e) => setShow1mAgo(e.target.checked)}
               />
-              <span style={{ width: '12px', height: '2px', background: '#0072c3', borderTop: '1px dashed #0072c3' }} />
+              <span style={{ width: '12px', height: '2px', background: 'var(--viz-cat-2)', borderTop: '1px dashed var(--viz-cat-2)' }} />
               <span style={{ color: 'var(--text-secondary)' }}>1M Ago</span>
             </label>
 
@@ -278,7 +278,7 @@ export default function FixedIncomeView({ config }: FixedIncomeViewProps) {
                 checked={show1yAgo}
                 onChange={(e) => setShow1yAgo(e.target.checked)}
               />
-              <span style={{ width: '12px', height: '2px', background: '#8a3ffc', borderTop: '1px dashed #8a3ffc' }} />
+              <span style={{ width: '12px', height: '2px', background: 'var(--viz-cat-6)', borderTop: '1px dashed var(--viz-cat-6)' }} />
               <span style={{ color: 'var(--text-secondary)' }}>1Y Ago</span>
             </label>
 
@@ -364,7 +364,7 @@ export default function FixedIncomeView({ config }: FixedIncomeViewProps) {
               <path
                 d={buildPath(curve1y)}
                 fill="none"
-                stroke="#8a3ffc"
+                stroke="var(--viz-cat-6)"
                 strokeWidth="1.75"
                 strokeDasharray="4 3"
                 opacity="0.8"
@@ -376,7 +376,7 @@ export default function FixedIncomeView({ config }: FixedIncomeViewProps) {
               <path
                 d={buildPath(curve1m)}
                 fill="none"
-                stroke="#0072c3"
+                stroke="var(--viz-cat-2)"
                 strokeWidth="1.75"
                 strokeDasharray="3 3"
                 opacity="0.85"
@@ -388,7 +388,7 @@ export default function FixedIncomeView({ config }: FixedIncomeViewProps) {
               <path
                 d={buildPath(curvePoints)}
                 fill="none"
-                stroke="#0f62fe"
+                stroke="var(--viz-cat-1)"
                 strokeWidth="2.5"
               />
             )}
@@ -409,7 +409,7 @@ export default function FixedIncomeView({ config }: FixedIncomeViewProps) {
                     cx={x}
                     cy={y}
                     r={isHovered ? 6 : 4}
-                    fill="#0f62fe"
+                    fill="var(--viz-cat-1)"
                     stroke="var(--surface-panel)"
                     strokeWidth="2"
                   />
@@ -439,7 +439,7 @@ export default function FixedIncomeView({ config }: FixedIncomeViewProps) {
                       y1="20"
                       x2={x}
                       y2="220"
-                      stroke="#0f62fe"
+                      stroke="var(--viz-cat-1)"
                       strokeWidth="1"
                       strokeDasharray="2 2"
                     />
@@ -467,7 +467,7 @@ export default function FixedIncomeView({ config }: FixedIncomeViewProps) {
                     <text
                       x={boxX + 10}
                       y={boxY + 36}
-                      fill="#0f62fe"
+                      fill="var(--viz-cat-1)"
                       fontSize="11"
                       fontFamily="var(--font-mono)"
                     >
@@ -477,7 +477,7 @@ export default function FixedIncomeView({ config }: FixedIncomeViewProps) {
                       <text
                         x={boxX + 10}
                         y={boxY + 52}
-                        fill="#0072c3"
+                        fill="var(--viz-cat-2)"
                         fontSize="10"
                         fontFamily="var(--font-mono)"
                       >
@@ -489,7 +489,7 @@ export default function FixedIncomeView({ config }: FixedIncomeViewProps) {
                       <text
                         x={boxX + 10}
                         y={boxY + 68}
-                        fill="#8a3ffc"
+                        fill="var(--viz-cat-6)"
                         fontSize="10"
                         fontFamily="var(--font-mono)"
                       >
@@ -611,7 +611,7 @@ export default function FixedIncomeView({ config }: FixedIncomeViewProps) {
                 <path
                   d={buildHistPath('t10y2y')}
                   fill="none"
-                  stroke="#0f62fe"
+                  stroke="var(--viz-cat-1)"
                   strokeWidth="2"
                 />
               ) : (
@@ -619,20 +619,20 @@ export default function FixedIncomeView({ config }: FixedIncomeViewProps) {
                   <path
                     d={buildHistPath('dgs10')}
                     fill="none"
-                    stroke="#42be65"
+                    stroke="var(--viz-cat-3)"
                     strokeWidth="2"
                   />
                   <path
                     d={buildHistPath('aaa')}
                     fill="none"
-                    stroke="#0f62fe"
+                    stroke="var(--viz-cat-1)"
                     strokeWidth="1.75"
                     strokeDasharray="3 2"
                   />
                   <path
                     d={buildHistPath('baa')}
                     fill="none"
-                    stroke="#ff832b"
+                    stroke="var(--viz-cat-2)"
                     strokeWidth="2"
                   />
                 </>
@@ -669,13 +669,13 @@ export default function FixedIncomeView({ config }: FixedIncomeViewProps) {
         {historyMode === 'corporate' && (
           <div style={{ display: 'flex', gap: 'var(--space-4)', marginTop: 'var(--space-2)', fontSize: '11px', color: 'var(--text-secondary)' }}>
             <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
-              <span style={{ width: '10px', height: '3px', background: '#42be65' }} /> 10-Year Treasury
+              <span style={{ width: '10px', height: '3px', background: 'var(--viz-cat-3)' }} /> 10-Year Treasury
             </span>
             <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
-              <span style={{ width: '10px', height: '3px', background: '#0f62fe', borderTop: '1px dashed #0f62fe' }} /> Moody's Aaa (High Quality)
+              <span style={{ width: '10px', height: '3px', background: 'var(--viz-cat-1)', borderTop: '1px dashed var(--viz-cat-1)' }} /> Moody's Aaa (High Quality)
             </span>
             <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
-              <span style={{ width: '10px', height: '3px', background: '#ff832b' }} /> Moody's Baa (Corporate Spread)
+              <span style={{ width: '10px', height: '3px', background: 'var(--viz-cat-2)' }} /> Moody's Baa (Corporate Spread)
             </span>
           </div>
         )}
@@ -690,7 +690,7 @@ export default function FixedIncomeView({ config }: FixedIncomeViewProps) {
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 'var(--space-4)' }}>
           {/* Inputs Panel */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
-            <div style={{ fontSize: 'var(--size-caption)', textTransform: 'uppercase', color: 'var(--text-tertiary)', letterSpacing: '0.5px' }}>
+            <div style={{ fontSize: 'var(--size-caption)', color: 'var(--text-tertiary)', letterSpacing: '0.5px' }}>
               Bond Parameters
             </div>
 
@@ -768,7 +768,7 @@ export default function FixedIncomeView({ config }: FixedIncomeViewProps) {
 
           {/* Computed Output Metrics */}
           <div>
-            <div style={{ fontSize: 'var(--size-caption)', textTransform: 'uppercase', color: 'var(--text-tertiary)', letterSpacing: '0.5px', marginBottom: 'var(--space-3)' }}>
+            <div style={{ fontSize: 'var(--size-caption)', color: 'var(--text-tertiary)', letterSpacing: '0.5px', marginBottom: 'var(--space-3)' }}>
               Pricing & Sensitivities
             </div>
 
@@ -810,7 +810,7 @@ export default function FixedIncomeView({ config }: FixedIncomeViewProps) {
 
         {/* Rate Shock Scenario Table */}
         <div style={{ marginTop: 'var(--space-4)' }}>
-          <div style={{ fontSize: 'var(--size-caption)', textTransform: 'uppercase', color: 'var(--text-tertiary)', letterSpacing: '0.5px', marginBottom: 'var(--space-2)' }}>
+          <div style={{ fontSize: 'var(--size-caption)', color: 'var(--text-tertiary)', letterSpacing: '0.5px', marginBottom: 'var(--space-2)' }}>
             Interest Rate Shock Sensitivity Matrix (Stress Test)
           </div>
           <div style={{ overflowX: 'auto' }}>

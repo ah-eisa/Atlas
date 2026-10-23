@@ -195,9 +195,9 @@ export default function MacroSecView({ state, config }: MacroSecViewProps) {
       {/* View Header */}
       <div className="view__header">
         <div>
-          <h1 className="view__title">Macro & SEC Intelligence</h1>
+          <h1 className="view__title">Macro and filings</h1>
           <p className="view__subtitle">
-            Macroeconomic indicators from FRED and official audited regulatory filings from SEC EDGAR.
+            Economic indicators from the Federal Reserve (FRED), and company filings from the SEC's EDGAR database.
           </p>
         </div>
 
@@ -205,8 +205,8 @@ export default function MacroSecView({ state, config }: MacroSecViewProps) {
           <Segmented
             ariaLabel="Module view switcher"
             options={[
-              { value: 'macro', label: 'Macro Indicators' },
-              { value: 'sec', label: 'SEC EDGAR Filings' },
+              { value: 'macro', label: 'Indicators' },
+              { value: 'sec', label: 'Company filings' },
             ]}
             value={activeTab}
             onChange={setActiveTab}
@@ -336,14 +336,14 @@ export default function MacroSecView({ state, config }: MacroSecViewProps) {
                   {/* Gradient Area Fill */}
                   <defs>
                     <linearGradient id="macroAreaGradient" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="#0f62fe" stopOpacity="0.25" />
-                      <stop offset="100%" stopColor="#0f62fe" stopOpacity="0.0" />
+                      <stop offset="0%" stopColor="var(--viz-cat-1)" stopOpacity="0.25" />
+                      <stop offset="100%" stopColor="var(--viz-cat-1)" stopOpacity="0.0" />
                     </linearGradient>
                   </defs>
                   <path d={buildMacroAreaPath()} fill="url(#macroAreaGradient)" />
 
                   {/* Primary Line */}
-                  <path d={buildMacroPath()} fill="none" stroke="#0f62fe" strokeWidth="2.2" />
+                  <path d={buildMacroPath()} fill="none" stroke="var(--viz-cat-1)" strokeWidth="2.2" />
 
                   {/* Vertices & Hover Targets */}
                   {macroHistory.map((pt, i) => {
@@ -361,7 +361,7 @@ export default function MacroSecView({ state, config }: MacroSecViewProps) {
                           cx={x}
                           cy={y}
                           r={isHovered ? 5 : 2.5}
-                          fill="#0f62fe"
+                          fill="var(--viz-cat-1)"
                           stroke="var(--surface-panel)"
                           strokeWidth="1.5"
                         />
@@ -389,7 +389,7 @@ export default function MacroSecView({ state, config }: MacroSecViewProps) {
                             y1="20"
                             x2={x}
                             y2="210"
-                            stroke="#0f62fe"
+                            stroke="var(--viz-cat-1)"
                             strokeWidth="1"
                             strokeDasharray="2 2"
                           />
@@ -415,7 +415,7 @@ export default function MacroSecView({ state, config }: MacroSecViewProps) {
                           <text
                             x={boxX + 10}
                             y={boxY + 36}
-                            fill="#0f62fe"
+                            fill="var(--viz-cat-1)"
                             fontSize="12"
                             fontWeight="bold"
                             fontFamily="var(--font-mono)"

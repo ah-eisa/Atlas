@@ -74,103 +74,95 @@
 
 /* ------------------------------------------------------------------ *
  * Masthead                                                            *
+ *                                                                     *
+ * The portfolio's value is the one large thing in the product. On the *
+ * overview it leads the page; everywhere else it shrinks to one line, *
+ * so the view's own content starts near the top.                      *
  * ------------------------------------------------------------------ */
 
 .topbar__masthead {
   display: flex;
-  align-items: stretch;
+  align-items: flex-end;
   justify-content: space-between;
-  gap: var(--space-8);
-  padding: var(--space-6) var(--space-7);
+  gap: var(--space-9);
+  padding: var(--space-8) var(--space-7) var(--space-7);
+  border-bottom: 1px solid var(--line);
 }
 
 .topbar__identity {
   display: flex;
   flex-direction: column;
-  gap: var(--space-3);
+  gap: var(--space-4);
   min-width: 0;
 }
 
 .topbar__eyebrow {
   display: flex;
-  align-items: center;
-  gap: var(--space-3);
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-2) var(--space-4);
 }
 
 .eyebrow {
-  font-size: var(--size-micro);
+  color: var(--text-secondary);
+  font-size: var(--size-body);
   font-weight: var(--weight-medium);
-  letter-spacing: var(--tracking-label);
-  text-transform: uppercase;
-  color: var(--text-tertiary);
 }
 
 .topbar__value {
   display: flex;
   align-items: baseline;
-  gap: var(--space-4);
+  gap: var(--space-3);
 }
 
 .topbar__amount {
+  color: var(--text-primary);
   font-size: var(--size-display);
   font-weight: var(--weight-semibold);
-  line-height: var(--leading-tight);
-  color: var(--text-primary);
-  text-shadow: 0 0 24px rgba(0, 210, 255, 0.25);
-  letter-spacing: -0.02em;
+  line-height: 1;
+  letter-spacing: -0.03em;
 }
 
 .topbar__currency {
-  font-size: var(--size-caption);
-  letter-spacing: var(--tracking-label);
   color: var(--text-tertiary);
+  font-size: var(--size-heading);
   font-weight: var(--weight-medium);
 }
 
+/* Three changes, each a label over its figure. */
 .topbar__deltas {
   display: flex;
-  align-items: center;
-  gap: var(--space-4);
   flex-wrap: wrap;
+  gap: var(--space-4) var(--space-8);
+  margin-top: var(--space-2);
 }
 
 .topbar__delta {
   display: flex;
-  align-items: baseline;
-  gap: var(--space-2);
-  font-size: var(--size-caption);
-  padding: 0;
-  background: transparent;
-  border: none;
-  box-shadow: none;
-}
-
-.topbar__delta:not(:last-child)::after {
-  content: "•";
-  margin-left: var(--space-4);
-  color: var(--line-strong);
-  font-size: 10px;
+  flex-direction: column;
+  gap: 2px;
+  font-size: var(--size-data);
+  font-weight: var(--weight-medium);
 }
 
 .topbar__delta-label {
-  font-size: var(--size-micro);
-  font-weight: var(--weight-medium);
-  letter-spacing: var(--tracking-label);
-  text-transform: uppercase;
   color: var(--text-tertiary);
+  font-size: var(--size-caption);
+  font-weight: var(--weight-regular);
 }
 
 .topbar__delta-pct {
-  font-size: var(--size-caption);
+  font-size: var(--size-body);
+  font-weight: var(--weight-regular);
   opacity: 0.85;
 }
 
-/* Right side: inline sparkline over the as-of metadata. */
+/* Right side: the value's recent path over the as-of metadata. */
 .topbar__aside {
   display: flex;
   flex-direction: column;
   align-items: flex-end;
-  justify-content: space-between;
+  justify-content: flex-end;
   gap: var(--space-4);
   flex-shrink: 0;
 }
@@ -179,14 +171,51 @@
   display: flex;
   align-items: center;
   gap: var(--space-5);
-  font-size: var(--size-micro);
-  letter-spacing: var(--tracking-wide);
   color: var(--text-tertiary);
-  text-transform: uppercase;
+  font-size: var(--size-caption);
 }
 
 .topbar__meta-value {
   color: var(--text-secondary);
+}
+
+/* Compact: one line on every view but the overview. */
+.topbar__masthead--compact {
+  align-items: center;
+  padding: var(--space-4) var(--space-7);
+}
+
+.topbar__masthead--compact .topbar__identity {
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-2) var(--space-6);
+}
+
+.topbar__masthead--compact .topbar__eyebrow .panel__subtitle,
+.topbar__masthead--compact .topbar__aside,
+.topbar__masthead--compact .topbar__delta:not(:first-child) {
+  display: none;
+}
+
+.topbar__masthead--compact .topbar__amount {
+  font-size: var(--size-large);
+  letter-spacing: -0.02em;
+}
+
+.topbar__masthead--compact .topbar__currency {
+  font-size: var(--size-caption);
+}
+
+.topbar__masthead--compact .topbar__deltas {
+  margin-top: 0;
+}
+
+.topbar__masthead--compact .topbar__delta {
+  flex-direction: row;
+  align-items: baseline;
+  gap: var(--space-3);
+  font-size: var(--size-body);
 }
 
 .topbar__empty {
@@ -194,8 +223,8 @@
   align-items: baseline;
   gap: var(--space-4);
   padding: var(--space-4) var(--space-7);
-  font-size: var(--size-caption);
   color: var(--text-secondary);
+  font-size: var(--size-caption);
 }
 
 /* ------------------------------------------------------------------ *
@@ -218,46 +247,32 @@
   position: relative;
   display: flex;
   flex-direction: column;
-  gap: var(--space-1);
-  padding: var(--space-4) var(--space-5);
+  gap: var(--space-2);
+  padding: var(--space-5) var(--space-6) var(--space-6);
   background: var(--surface-panel);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
-  transition:
-    background-color var(--duration-fast) var(--easing),
-    box-shadow var(--duration-fast) var(--easing),
-    transform var(--duration-fast) var(--easing);
-}
-
-.kpi__cell:hover {
-  background: var(--surface-hover);
-  box-shadow: inset 0 2px 0 var(--accent), 0 4px 16px rgba(0, 210, 255, 0.16);
-  transform: translateY(-1px);
-  z-index: 2;
 }
 
 .kpi__label {
-  font-size: var(--size-micro);
-  font-weight: var(--weight-medium);
-  letter-spacing: var(--tracking-label);
-  color: var(--text-tertiary);
-  text-transform: uppercase;
-  white-space: nowrap;
   overflow: hidden;
+  color: var(--text-secondary);
+  font-size: var(--size-caption);
+  font-weight: var(--weight-medium);
   text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .kpi__value {
-  font-size: var(--size-large);
-  font-weight: var(--weight-medium);
-  line-height: var(--leading-tight);
   color: var(--text-primary);
-  letter-spacing: -0.01em;
+  font-size: var(--size-large);
+  font-weight: var(--weight-semibold);
+  line-height: var(--leading-tight);
+  letter-spacing: -0.015em;
 }
 
 .kpi__context {
-  font-size: var(--size-micro);
-  line-height: var(--leading-snug);
   color: var(--text-tertiary);
+  font-size: var(--size-caption);
+  line-height: var(--leading-snug);
 }
 
 /* ------------------------------------------------------------------ *
@@ -285,7 +300,6 @@
 .banner__label {
   font-size: var(--size-micro);
   letter-spacing: var(--tracking-label);
-  text-transform: uppercase;
   color: var(--text-tertiary);
   white-space: nowrap;
 }
@@ -304,7 +318,6 @@
   font-size: var(--size-micro);
   letter-spacing: var(--tracking-wide);
   text-decoration: none;
-  text-transform: uppercase;
   cursor: pointer;
   white-space: nowrap;
 }
@@ -335,14 +348,12 @@
 .state__kicker {
   font-size: var(--size-micro);
   letter-spacing: var(--tracking-label);
-  text-transform: uppercase;
   color: var(--text-tertiary);
 }
 
 .state__title {
   font-size: var(--size-label);
   letter-spacing: var(--tracking-label);
-  text-transform: uppercase;
   color: var(--text-secondary);
 }
 
@@ -389,7 +400,6 @@
   font-size: var(--size-micro);
   letter-spacing: var(--tracking-wide);
   color: var(--text-tertiary);
-  text-transform: uppercase;
 }
 
 /* ------------------------------------------------------------------ *

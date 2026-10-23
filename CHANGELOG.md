@@ -9,6 +9,32 @@ frontend ships against it.
 
 ## [Unreleased]
 
+### Changed — visual design
+
+- **A new palette.** Ink-navy surfaces with warm off-white text and a single
+  brass accent, used only for where you are and the primary action. Gains
+  and losses are green and coral and warnings orange, so the accent is never
+  read as a signal. Glows and the background gradients are gone. The light
+  theme uses the same roles on cool paper.
+- **Figures in IBM Plex Sans with tabular numerals** instead of a monospace
+  face; monospace is kept for code and raw CSV only.
+- **Sentence-case labels throughout**, on a larger type scale: panel
+  titles, figure labels, column headers and range toggles no longer shout.
+- **The portfolio's value leads the overview** at display size, with its
+  recent path beside it; on every other view it shrinks to one line so the
+  view's content starts near the top.
+- **Chart colours validated for colour-vision deficiency** on both
+  surfaces, in a fixed order that keeps green for gains only. The bonds,
+  macro and options charts, which hard-coded another design system's
+  colours, now use the same palette.
+- **The bonds, macro and filings, options and lab views** used class names
+  no stylesheet defined, so their figures stacked one per row and their
+  headers fell back to browser defaults. They now share the rest of the
+  product's layout, with plain-language titles and tabs (the lab's tabs are
+  no longer numbered as if they were steps).
+- Holdings rows use a quiet Trade button, so the one accent on the page is
+  the primary action.
+
 ### Changed — navigation and windows
 
 - **The views are grouped**: Portfolio (overview, performance, risk, lab,

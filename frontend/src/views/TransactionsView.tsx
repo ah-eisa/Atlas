@@ -240,8 +240,8 @@ export default function TransactionsView({
                   <td colSpan={9} style={{ textAlign: 'center', padding: 'var(--space-8)' }}>
                     <span className="panel__subtitle">
                       {loading
-                        ? 'Loading transactions...'
-                        : 'No trades recorded yet. Click "+ Place Trade Order" to execute your first order.'}
+                        ? 'Loading trades…'
+                        : 'No trades yet. Use Trade at the top of the page to record your first buy or sale.'}
                     </span>
                   </td>
                 </tr>
