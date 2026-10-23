@@ -87,6 +87,14 @@ def fx_symbol(from_currency: str, to_currency: str) -> str:
 
 
 @dataclass(frozen=True)
+class Lot:
+    """Units of a position bought on one date."""
+
+    acquired: str
+    quantity: float
+
+
+@dataclass(frozen=True)
 class Holding:
     """One position in the portfolio.
 
@@ -102,6 +110,10 @@ class Holding:
             applied to the cost basis.
         target_weight: Optional target weight as a fraction of the portfolio
             (0.17 for 17%). Used to report allocation drift.
+        lots: The open purchase lots behind ``quantity``, when the position
+            was built through the trade ledger. Each lot enters the position
+            history on its own date; without lots the whole quantity enters
+            on ``acquired``.
     """
 
     ticker: str
@@ -113,6 +125,7 @@ class Holding:
     cost_basis_per_unit: float
     acquired: str
     target_weight: float | None = None
+    lots: tuple[Lot, ...] = ()
 
     @property
     def region_label(self) -> str:

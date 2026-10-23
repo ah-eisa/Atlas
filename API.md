@@ -46,7 +46,7 @@ Every error uses the same shape:
 | `400` | `invalid_symbol` | The benchmark comparison symbol produced no usable history |
 | `401` | `unauthorized` | `X-API-Key` is required (or wrong) on a protected route |
 | `404` | `not_found` / `holding_not_found` / `cash_flow_not_found` / `instrument_not_found` | Unknown route, position, cash flow or symbol |
-| `409` | `duplicate_ticker` / `empty_portfolio` / `default_portfolio` | Ticker already held, analytics requested for an empty portfolio, or an attempt to delete the default portfolio |
+| `409` | `duplicate_ticker` / `empty_portfolio` / `default_portfolio` / `transaction_conflict` | Ticker already held, analytics requested for an empty portfolio, an attempt to delete the default portfolio, or deleting a purchase whose units a later sale has used |
 | `422` | `validation_error` | Body failed schema validation; `fields` lists each offending field |
 | `422` | `invalid_currency` / `invalid_target` / `invalid_window` / `invalid_ticker` | A well-formed request with an unusable value |
 | `500` | `storage_error` | The database could not be written |

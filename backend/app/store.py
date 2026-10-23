@@ -6,10 +6,13 @@ SQLite (rather than editing ``holdings.json`` by hand) gives the app atomic
 writes, uniqueness constraints and a revision counter the analytics cache can
 observe.
 
-The schema deliberately models *current positions*, not a trade ledger. Each row
-is one lot: ticker, quantity, cost basis and acquisition date. That is exactly
-what the valuation and P&L calculations need, and it avoids pretending to
-support tax-lot accounting that the UI cannot yet express.
+The ``holdings`` table models *current positions*: ticker, quantity, average
+cost basis and earliest acquisition date. Orders placed through the trade
+ledger also keep one row per purchase in ``lots``, so sales are matched FIFO
+and each purchase keeps its own date. A position edited directly (the editor,
+the CSV importer, the demo seed) no longer agrees with its lots; the next
+order notices that and starts again from a single lot equal to the edited
+position, rather than trading against a history that is no longer true.
 """
 
 from __future__ import annotations
@@ -23,7 +26,7 @@ from pathlib import Path
 from typing import Any, Iterator
 
 from .config import SETTINGS, Settings
-from .data import CashFlow, Holding, Portfolio, normalise_currency
+from .data import CashFlow, Holding, Lot, Portfolio, normalise_currency
 
 logger = logging.getLogger(__name__)
 
@@ -137,7 +140,59 @@ MIGRATIONS: list[tuple[int, str, Any]] = [
         "watchlist_and_alerts",
         lambda connection: _add_watchlist_and_alerts_tables(connection),
     ),
+    (
+        6,
+        "tax_lots",
+        lambda connection: _add_lot_tables(connection),
+    ),
 ]
+
+
+def _add_lot_tables(connection: sqlite3.Connection) -> None:
+    """Track each purchase as its own lot, and which lots every sale consumed.
+
+    ``lots`` is what makes FIFO real: a sale consumes the oldest lots first,
+    and each lot keeps its own acquisition date. ``sell_allocations`` records
+    exactly what a sale took from which lot, so deleting the sale can put it
+    back. The holding snapshot on a sale lets a fully closed position be
+    restored with its name, classification and target weight intact.
+    """
+    connection.execute(
+        """
+        CREATE TABLE IF NOT EXISTS lots (
+            id                 INTEGER PRIMARY KEY AUTOINCREMENT,
+            portfolio_id       INTEGER NOT NULL DEFAULT 1,
+            ticker             TEXT NOT NULL COLLATE NOCASE,
+            acquired           TEXT NOT NULL,
+            quantity_original  REAL NOT NULL CHECK (quantity_original > 0),
+            quantity_remaining REAL NOT NULL CHECK (quantity_remaining >= 0),
+            cost_per_unit      REAL NOT NULL CHECK (cost_per_unit >= 0),
+            transaction_id     INTEGER,
+            created_at         TEXT NOT NULL
+        )
+        """
+    )
+    connection.execute(
+        "CREATE INDEX IF NOT EXISTS ix_lots_position ON lots (portfolio_id, ticker)"
+    )
+    connection.execute(
+        """
+        CREATE TABLE IF NOT EXISTS sell_allocations (
+            id             INTEGER PRIMARY KEY AUTOINCREMENT,
+            transaction_id INTEGER NOT NULL,
+            lot_id         INTEGER NOT NULL,
+            quantity       REAL NOT NULL CHECK (quantity > 0)
+        )
+        """
+    )
+    connection.execute(
+        "CREATE INDEX IF NOT EXISTS ix_sell_allocations_tx ON sell_allocations (transaction_id)"
+    )
+    columns = {
+        row["name"] for row in connection.execute("PRAGMA table_info(transactions)").fetchall()
+    }
+    if "holding_snapshot" not in columns:
+        connection.execute("ALTER TABLE transactions ADD COLUMN holding_snapshot TEXT")
 
 
 def _add_watchlist_and_alerts_tables(connection: sqlite3.Connection) -> None:
@@ -314,6 +369,10 @@ class TransactionNotFound(StoreError):
 
 class OrderValidationError(StoreError):
     """An order cannot be executed (e.g. selling more than owned)."""
+
+
+class TransactionConflict(StoreError):
+    """A transaction cannot be reversed without breaking a later one."""
 
 
 def _now() -> str:
@@ -707,6 +766,37 @@ def create_portfolio(
     }
 
 
+def position_lots(
+    settings: Settings = SETTINGS, portfolio_id: int = DEFAULT_PORTFOLIO_ID
+) -> dict[str, tuple[Lot, ...]]:
+    """Open lots per ticker, for the positions whose lots still describe them.
+
+    A position edited by hand since its last order is left out: its lots no
+    longer add up to it, and the analytics fall back to its acquisition date.
+    """
+    result: dict[str, tuple[Lot, ...]] = {}
+    with connect(settings) as connection:
+        # A database that has not been migrated yet (read by a script before
+        # the API has started) has no lots, and its positions need none.
+        has_lots = connection.execute(
+            "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'lots'"
+        ).fetchone()
+        if has_lots is None:
+            return result
+        holdings = connection.execute(
+            "SELECT * FROM holdings WHERE portfolio_id = ?", (portfolio_id,)
+        ).fetchall()
+        for holding in holdings:
+            ticker = str(holding["ticker"])
+            open_lots = _open_lots(connection, portfolio_id, ticker)
+            if open_lots and _lots_match_holding(open_lots, holding):
+                result[ticker.upper()] = tuple(
+                    Lot(acquired=str(lot["acquired"]), quantity=float(lot["quantity_remaining"]))
+                    for lot in open_lots
+                )
+    return result
+
+
 def build_portfolio(
     settings: Settings = SETTINGS, portfolio_id: int = DEFAULT_PORTFOLIO_ID
 ) -> Portfolio:
@@ -714,6 +804,7 @@ def build_portfolio(
     rows = list_holdings(settings, portfolio_id)
     if not rows:
         raise EmptyPortfolio("the portfolio has no positions")
+    lots = position_lots(settings, portfolio_id)
     holdings = tuple(
         Holding(
             ticker=row["ticker"],
@@ -727,6 +818,7 @@ def build_portfolio(
             target_weight=(
                 float(row["target_weight"]) if row["target_weight"] is not None else None
             ),
+            lots=lots.get(row["ticker"].upper(), ()),
         )
         for row in rows
     )
@@ -825,17 +917,200 @@ def list_transactions(
     return [_transaction_row_to_dict(row) for row in rows]
 
 
+# Quantities below this are treated as zero, so floating-point residue from a
+# sale never leaves a dust position behind.
+_QTY_EPS = 1e-6
+
+
+def _holding_row(
+    connection: sqlite3.Connection, portfolio_id: int, ticker: str
+) -> sqlite3.Row | None:
+    return connection.execute(
+        "SELECT * FROM holdings WHERE portfolio_id = ? AND ticker = ? COLLATE NOCASE",
+        (portfolio_id, ticker),
+    ).fetchone()
+
+
+def _open_lots(
+    connection: sqlite3.Connection, portfolio_id: int, ticker: str
+) -> list[sqlite3.Row]:
+    """Lots with units left, oldest first: the order a FIFO sale consumes them."""
+    return connection.execute(
+        """
+        SELECT * FROM lots
+        WHERE portfolio_id = ? AND ticker = ? COLLATE NOCASE AND quantity_remaining > ?
+        ORDER BY acquired, id
+        """,
+        (portfolio_id, ticker, _QTY_EPS),
+    ).fetchall()
+
+
+def _lots_summary(lots: list[sqlite3.Row]) -> tuple[float, float, str | None]:
+    """Total units, average cost per unit and earliest acquisition of some lots."""
+    quantity = sum(float(lot["quantity_remaining"]) for lot in lots)
+    if quantity <= _QTY_EPS:
+        return 0.0, 0.0, None
+    cost = sum(float(lot["quantity_remaining"]) * float(lot["cost_per_unit"]) for lot in lots)
+    return quantity, cost / quantity, min(str(lot["acquired"]) for lot in lots)
+
+
+def _lots_match_holding(lots: list[sqlite3.Row], holding: sqlite3.Row | None) -> bool:
+    """Whether the lots still describe the stored position exactly."""
+    if holding is None:
+        return not lots
+    quantity, cost, earliest = _lots_summary(lots)
+    held = float(holding["quantity"])
+    basis = float(holding["cost_basis_per_unit"])
+    return (
+        abs(quantity - held) <= _QTY_EPS * max(1.0, held)
+        and abs(cost - basis) <= 1e-9 * max(1.0, abs(basis))
+        and earliest == str(holding["acquired"])[:10]
+    )
+
+
+def _reconcile_lots(
+    connection: sqlite3.Connection,
+    portfolio_id: int,
+    ticker: str,
+    holding: sqlite3.Row | None,
+) -> list[sqlite3.Row]:
+    """The open lots of a position, rebuilt from the position when they disagree.
+
+    A position edited outside the ledger is the truth; its old lots are not.
+    They are replaced by one lot equal to the position, which also means the
+    orders placed before the edit can no longer be reversed lot by lot.
+    """
+    lots = _open_lots(connection, portfolio_id, ticker)
+    if _lots_match_holding(lots, holding):
+        return lots
+    connection.execute(
+        "DELETE FROM lots WHERE portfolio_id = ? AND ticker = ? COLLATE NOCASE",
+        (portfolio_id, ticker),
+    )
+    if holding is None:
+        return []
+    quantity = float(holding["quantity"])
+    connection.execute(
+        """
+        INSERT INTO lots (
+            portfolio_id, ticker, acquired, quantity_original, quantity_remaining,
+            cost_per_unit, transaction_id, created_at
+        ) VALUES (?, ?, ?, ?, ?, ?, NULL, ?)
+        """,
+        (
+            portfolio_id,
+            str(holding["ticker"]),
+            str(holding["acquired"])[:10],
+            quantity,
+            quantity,
+            float(holding["cost_basis_per_unit"]),
+            _now(),
+        ),
+    )
+    return _open_lots(connection, portfolio_id, ticker)
+
+
+def _holding_metadata(holding: sqlite3.Row) -> dict[str, Any]:
+    """What a position is, apart from how much of it is held."""
+    return {
+        "name": str(holding["name"]),
+        "asset_class": str(holding["asset_class"]),
+        "region": holding["region"],
+        "currency": str(holding["currency"]),
+        "target_weight": holding["target_weight"],
+    }
+
+
+def _instrument_metadata(ticker: str) -> dict[str, Any]:
+    """Describe a ticker bought for the first time, from the instrument lookup."""
+    try:
+        from .instruments import lookup
+
+        inst = lookup(ticker)
+        return {
+            "name": inst.name or ticker,
+            "asset_class": inst.asset_class or "Stock",
+            "region": inst.region,
+            "currency": inst.currency or "USD",
+            "target_weight": None,
+        }
+    except Exception:  # noqa: BLE001 - an offline lookup must not block the order
+        return {
+            "name": ticker,
+            "asset_class": "Stock",
+            "region": None,
+            "currency": "USD",
+            "target_weight": None,
+        }
+
+
+def _sync_holding(
+    connection: sqlite3.Connection,
+    portfolio_id: int,
+    ticker: str,
+    holding: sqlite3.Row | None,
+    metadata: dict[str, Any] | None,
+) -> None:
+    """Write the position the open lots now add up to (or remove it)."""
+    quantity, cost, earliest = _lots_summary(_open_lots(connection, portfolio_id, ticker))
+    now = _now()
+    if quantity <= _QTY_EPS:
+        if holding is not None:
+            connection.execute("DELETE FROM holdings WHERE id = ?", (holding["id"],))
+        return
+    if holding is not None:
+        connection.execute(
+            """
+            UPDATE holdings
+            SET quantity = ?, cost_basis_per_unit = ?, acquired = ?, updated_at = ?
+            WHERE id = ?
+            """,
+            (quantity, cost, earliest, now, holding["id"]),
+        )
+        return
+    meta = metadata or _instrument_metadata(ticker)
+    connection.execute(
+        """
+        INSERT INTO holdings (
+            portfolio_id, ticker, name, asset_class, region, currency,
+            quantity, cost_basis_per_unit, acquired, target_weight,
+            created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            portfolio_id,
+            ticker,
+            meta["name"],
+            meta["asset_class"],
+            meta["region"],
+            meta["currency"],
+            quantity,
+            cost,
+            earliest,
+            meta["target_weight"],
+            now,
+            now,
+        ),
+    )
+
+
 def place_order(
     data: dict[str, Any],
     settings: Settings = SETTINGS,
     portfolio_id: int = DEFAULT_PORTFOLIO_ID,
 ) -> dict[str, Any]:
-    """Execute a Buy or Sell order with FIFO lot matching and update portfolio positions."""
+    """Execute a Buy or Sell order with FIFO lot matching and update portfolio positions.
+
+    A buy opens a new lot dated on its execution day. A sell consumes the
+    oldest lots that were already held on its execution day, and its realized
+    P&L is measured against the cost of exactly those lots.
+    """
     ticker_clean = str(data["ticker"]).strip().upper()
     order_type_clean = str(data["order_type"]).strip().upper()
     quantity = float(data["quantity"])
     price = float(data["price"])
     executed_at = str(data["executed_at"])
+    executed_on = executed_at[:10]
     notes = str(data.get("notes", "")).strip()
 
     if quantity <= 0:
@@ -848,98 +1123,50 @@ def place_order(
     now = _now()
 
     with connect(settings) as connection:
-        # Find current holding
-        row = connection.execute(
-            """
-            SELECT id, ticker, name, asset_class, region, currency,
-                   quantity, cost_basis_per_unit, acquired, target_weight
-            FROM holdings
-            WHERE portfolio_id = ? AND ticker = ? COLLATE NOCASE
-            """,
-            (portfolio_id, ticker_clean),
-        ).fetchone()
+        holding = _holding_row(connection, portfolio_id, ticker_clean)
+        lots = _reconcile_lots(connection, portfolio_id, ticker_clean, holding)
 
         realized_pnl = 0.0
+        allocations: list[tuple[int, float, float]] = []
+        snapshot: str | None = None
+        metadata: dict[str, Any] | None = None
 
         if order_type_clean == "BUY":
-            if row is not None:
-                current_qty = float(row["quantity"])
-                current_cost = float(row["cost_basis_per_unit"])
-                new_qty = current_qty + quantity
-                new_cost = (current_qty * current_cost + quantity * price) / new_qty
-                connection.execute(
-                    """
-                    UPDATE holdings
-                    SET quantity = ?, cost_basis_per_unit = ?, updated_at = ?
-                    WHERE id = ?
-                    """,
-                    (new_qty, new_cost, now, row["id"]),
-                )
-            else:
-                try:
-                    from .instruments import lookup
-                    inst = lookup(ticker_clean)
-                    name = inst.name or ticker_clean
-                    asset_class = inst.asset_class or "Stock"
-                    region = inst.region
-                    currency = inst.currency or "USD"
-                except Exception:
-                    name = ticker_clean
-                    asset_class = "Stock"
-                    region = None
-                    currency = "USD"
-
-                connection.execute(
-                    """
-                    INSERT INTO holdings (
-                        portfolio_id, ticker, name, asset_class, region, currency,
-                        quantity, cost_basis_per_unit, acquired, target_weight,
-                        created_at, updated_at
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?)
-                    """,
-                    (
-                        portfolio_id,
-                        ticker_clean,
-                        name,
-                        asset_class,
-                        region,
-                        currency,
-                        quantity,
-                        price,
-                        executed_at,
-                        now,
-                        now,
-                    ),
-                )
-        elif order_type_clean == "SELL":
-            if row is None:
+            if holding is None:
+                metadata = _instrument_metadata(ticker_clean)
+        else:
+            if holding is None:
                 raise OrderValidationError(f"Cannot sell {ticker_clean}: no position in portfolio")
-            current_qty = float(row["quantity"])
-            if current_qty < quantity:
+            current_qty = float(holding["quantity"])
+            if current_qty + _QTY_EPS < quantity:
                 raise OrderValidationError(
                     f"Cannot sell {quantity} shares of {ticker_clean}: only {current_qty} held"
                 )
-            cost_basis = float(row["cost_basis_per_unit"])
-            realized_pnl = (price - cost_basis) * quantity
-            remaining_qty = current_qty - quantity
-            if remaining_qty <= 1e-6:
-                connection.execute("DELETE FROM holdings WHERE id = ?", (row["id"],))
-            else:
-                connection.execute(
-                    """
-                    UPDATE holdings
-                    SET quantity = ?, updated_at = ?
-                    WHERE id = ?
-                    """,
-                    (remaining_qty, now, row["id"]),
+            eligible = [lot for lot in lots if str(lot["acquired"]) <= executed_on]
+            available = sum(float(lot["quantity_remaining"]) for lot in eligible)
+            if available + _QTY_EPS < quantity:
+                raise OrderValidationError(
+                    f"Cannot sell {quantity} shares of {ticker_clean} on {executed_on}: "
+                    f"only {available} held on that date"
                 )
+            to_sell = quantity
+            for lot in eligible:
+                if to_sell <= _QTY_EPS:
+                    break
+                remaining = float(lot["quantity_remaining"])
+                take = min(remaining, to_sell)
+                realized_pnl += (price - float(lot["cost_per_unit"])) * take
+                left = remaining - take
+                allocations.append((int(lot["id"]), take, 0.0 if left <= _QTY_EPS else left))
+                to_sell -= take
+            snapshot = json.dumps(_holding_metadata(holding))
 
         cursor = connection.execute(
             """
             INSERT INTO transactions (
                 portfolio_id, ticker, order_type, quantity, price,
-                realized_pnl, executed_at, notes, created_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                realized_pnl, executed_at, notes, created_at, holding_snapshot
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 portfolio_id,
@@ -951,9 +1178,33 @@ def place_order(
                 executed_at,
                 notes,
                 now,
+                snapshot,
             ),
         )
         tx_id = cursor.lastrowid
+
+        if order_type_clean == "BUY":
+            connection.execute(
+                """
+                INSERT INTO lots (
+                    portfolio_id, ticker, acquired, quantity_original, quantity_remaining,
+                    cost_per_unit, transaction_id, created_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (portfolio_id, ticker_clean, executed_on, quantity, quantity, price, tx_id, now),
+            )
+        else:
+            for lot_id, take, left in allocations:
+                connection.execute(
+                    "UPDATE lots SET quantity_remaining = ? WHERE id = ?", (left, lot_id)
+                )
+                connection.execute(
+                    "INSERT INTO sell_allocations (transaction_id, lot_id, quantity) "
+                    "VALUES (?, ?, ?)",
+                    (tx_id, lot_id, take),
+                )
+
+        _sync_holding(connection, portfolio_id, ticker_clean, holding, metadata)
         _bump_revision(connection)
 
         tx_row = connection.execute(
@@ -970,14 +1221,79 @@ def delete_transaction(
     settings: Settings = SETTINGS,
     portfolio_id: int = DEFAULT_PORTFOLIO_ID,
 ) -> None:
-    """Delete a recorded transaction."""
+    """Delete a recorded transaction and reverse its effect on the position.
+
+    Deleting a buy removes its lot, which is refused while a later sale has
+    consumed part of it. Deleting a sale returns the units to the lots it
+    took them from, reopening the position if the sale had closed it.
+
+    When the position has been edited by hand since the order (or the order
+    predates lot tracking), the edited position is kept as it is and only the
+    ledger record is removed.
+    """
     with connect(settings) as connection:
-        cursor = connection.execute(
-            "DELETE FROM transactions WHERE id = ? AND portfolio_id = ?",
+        tx = connection.execute(
+            "SELECT * FROM transactions WHERE id = ? AND portfolio_id = ?",
             (transaction_id, portfolio_id),
-        )
-        if cursor.rowcount == 0:
+        ).fetchone()
+        if tx is None:
             raise TransactionNotFound(f"no transaction with id {transaction_id}")
+
+        ticker = str(tx["ticker"])
+        holding = _holding_row(connection, portfolio_id, ticker)
+        in_step = _lots_match_holding(_open_lots(connection, portfolio_id, ticker), holding)
+        reversed_position = False
+        metadata: dict[str, Any] | None = None
+
+        if tx["order_type"] == "BUY":
+            lot = connection.execute(
+                "SELECT * FROM lots WHERE transaction_id = ?", (transaction_id,)
+            ).fetchone()
+            if in_step and lot is not None:
+                if float(lot["quantity_remaining"]) + _QTY_EPS < float(lot["quantity_original"]):
+                    raise TransactionConflict(
+                        f"units from this purchase of {ticker} were sold by a later order; "
+                        "delete that sale first"
+                    )
+                connection.execute("DELETE FROM lots WHERE id = ?", (lot["id"],))
+                reversed_position = True
+        else:
+            allocations = connection.execute(
+                "SELECT lot_id, quantity FROM sell_allocations WHERE transaction_id = ?",
+                (transaction_id,),
+            ).fetchall()
+            lot_ids = [int(a["lot_id"]) for a in allocations]
+            found = (
+                connection.execute(
+                    f"SELECT COUNT(*) FROM lots WHERE id IN ({','.join('?' * len(lot_ids))})",
+                    lot_ids,
+                ).fetchone()[0]
+                if lot_ids
+                else 0
+            )
+            if in_step and allocations and found == len(set(lot_ids)):
+                for allocation in allocations:
+                    connection.execute(
+                        "UPDATE lots SET quantity_remaining = quantity_remaining + ? WHERE id = ?",
+                        (float(allocation["quantity"]), int(allocation["lot_id"])),
+                    )
+                if holding is None and tx["holding_snapshot"]:
+                    metadata = json.loads(tx["holding_snapshot"])
+                reversed_position = True
+            connection.execute(
+                "DELETE FROM sell_allocations WHERE transaction_id = ?", (transaction_id,)
+            )
+
+        connection.execute("DELETE FROM transactions WHERE id = ?", (transaction_id,))
+        if reversed_position:
+            _sync_holding(connection, portfolio_id, ticker, holding, metadata)
+        else:
+            logger.info(
+                "Transaction %d removed from the ledger only: the %s position was "
+                "edited after it, so the edited position is kept",
+                transaction_id,
+                ticker,
+            )
         _bump_revision(connection)
 
 

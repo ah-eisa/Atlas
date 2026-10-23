@@ -48,6 +48,7 @@ export default function TransactionsView({
   const [filterType, setFilterType] = useState<'ALL' | 'BUY' | 'SELL'>('ALL')
   const [search, setSearch] = useState('')
   const [deletingId, setDeletingId] = useState<number | null>(null)
+  const [deleteError, setDeleteError] = useState<string | null>(null)
 
   const isLive = state.source === 'api'
   const currency = state.baseCurrency || 'USD'
@@ -77,12 +78,16 @@ export default function TransactionsView({
   }, [config, isLive])
 
   const handleDelete = async (id: number) => {
-    if (!confirm('Are you sure you want to delete this transaction record?')) return
+    if (!confirm('Delete this transaction? Its effect on the position is reversed as well.')) return
     setDeletingId(id)
+    setDeleteError(null)
     try {
       await deleteTransaction(config, id)
       await loadData()
       onReload()
+    } catch (err) {
+      // A purchase whose units a later sale used cannot be reversed (409).
+      setDeleteError(err instanceof Error ? err.message : 'The transaction could not be deleted.')
     } finally {
       setDeletingId(null)
     }
@@ -114,6 +119,13 @@ export default function TransactionsView({
 
   return (
     <main className="app__main">
+      {deleteError && (
+        <div className="banner banner--error" role="alert">
+          <span className="banner__label">Not deleted</span>
+          <span className="banner__message">{deleteError}</span>
+        </div>
+      )}
+
       {/* Realized Performance & Trade KPI Cards */}
       <section className="kpi-band" aria-label="Trade Performance KPI Strip">
         <div className="kpi__cell">

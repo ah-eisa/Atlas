@@ -620,7 +620,11 @@ def attribution_report(
 
     # Where the book holds nothing, its "return" is set to the benchmark's, so
     # an empty bucket contributes allocation only and never a phantom selection.
-    book_twr = float((1.0 + analytics.portfolio_returns).prod() - 1.0)
+    # The reference return covers the same window as the attribution: daily
+    # returns after the start date, up to and including the end date.
+    daily = analytics.portfolio_returns
+    in_window = daily[(daily.index > start) & (daily.index <= end)]
+    book_twr = float((1.0 + in_window).prod() - 1.0)
     return json_safe(
         {
             "as_of": analytics.as_of,

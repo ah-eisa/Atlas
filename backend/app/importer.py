@@ -202,6 +202,11 @@ def preview_csv_import(
         except Exception as exc:  # noqa: BLE001
             errors.append(f"Row {idx} ({ticker}): {exc}")
 
+    # Broker statements are often newest first. Trades are replayed in date
+    # order, buys before sells on the same day, so a sale never arrives before
+    # the purchase it closes. The sort is stable: same-day rows keep file order.
+    trades.sort(key=lambda trade: (trade["executed_at"], trade["order_type"] != "BUY"))
+
     return {
         "detected_format": detected_format,
         "delimiter": delimiter,
@@ -302,6 +307,9 @@ def commit_csv_import(
 # Watchlists & Smart Alerts Engine
 # ---------------------------------------------------------------------------
 
+# Static reference prices, used only for display when no live quote can be
+# fetched. They go stale the day they are written, so they never trigger an
+# alert and are always reported with ``price_source: "reference"``.
 FALLBACK_PRICES: dict[str, tuple[float, str, str]] = {
     "AAPL": (228.50, "USD", "Stock"),
     "MSFT": (445.20, "USD", "Stock"),
@@ -318,6 +326,42 @@ FALLBACK_PRICES: dict[str, tuple[float, str, str]] = {
     "BTC-USD": (89400.0, "USD", "Crypto"),
     "GLD": (254.20, "USD", "Commodity"),
 }
+
+
+LIVE_PRICE_SOURCES = frozenset({"portfolio", "live"})
+"""Price sources current enough to evaluate a target or an alert rule against."""
+
+
+def _resolve_quote(ticker: str, held_map: dict[str, Any]) -> dict[str, Any]:
+    """The best available price for a ticker, and where it came from.
+
+    In order: the priced portfolio, a live lookup, then the static reference
+    table. A reference price is labelled as such so it is never mistaken for
+    a quote; with none of the three the price is unknown.
+    """
+    held = held_map.get(ticker)
+    if held is not None:
+        return {
+            "price": float(held.price_native),
+            "currency": held.currency,
+            "asset_class": held.asset_class,
+            "source": "portfolio",
+        }
+    try:
+        info = instruments.lookup(ticker)
+        if info.last_price:
+            return {
+                "price": float(info.last_price),
+                "currency": info.currency,
+                "asset_class": info.asset_class,
+                "source": "live",
+            }
+    except Exception as exc:  # noqa: BLE001 - provider failure is an expected path
+        logger.info("No live price for watchlist ticker %s: %s", ticker, exc)
+    if ticker in FALLBACK_PRICES:
+        price, currency, asset_class = FALLBACK_PRICES[ticker]
+        return {"price": price, "currency": currency, "asset_class": asset_class, "source": "reference"}
+    return {"price": None, "currency": "USD", "asset_class": "Stock", "source": "unavailable"}
 
 
 def get_watchlist_and_alerts(
@@ -369,26 +413,15 @@ def get_watchlist_and_alerts(
     for item in raw_watchlist:
         ticker = item["ticker"].upper()
         held = held_map.get(ticker)
-        if held is not None:
-            last_price = float(held.price_native)
-            currency = held.currency
-            asset_class = held.asset_class
-            in_portfolio = True
-            weight_pct = float(held.allocation_pct)
-        elif ticker in FALLBACK_PRICES:
-            last_price, currency, asset_class = FALLBACK_PRICES[ticker]
-            in_portfolio = False
-            weight_pct = 0.0
-        else:
-            try:
-                info = instruments.lookup(ticker)
-                last_price = float(info.last_price or 100.0)
-                currency = info.currency
-                asset_class = info.asset_class
-            except Exception:  # noqa: BLE001
-                last_price, currency, asset_class = (100.0, "USD", "Stock")
-            in_portfolio = False
-            weight_pct = 0.0
+        quote = _resolve_quote(ticker, held_map)
+        last_price = quote["price"]
+        currency = quote["currency"]
+        asset_class = quote["asset_class"]
+        in_portfolio = held is not None
+        weight_pct = float(held.allocation_pct) if held is not None else 0.0
+        # Targets are only compared against a price that is current. A
+        # reference price is shown for orientation but never triggers.
+        priced = quote["source"] in LIVE_PRICE_SOURCES and last_price is not None
 
         t_buy = item["target_buy_price"]
         t_sell = item["target_sell_price"]
@@ -396,7 +429,7 @@ def get_watchlist_and_alerts(
         distance_to_buy_pct: float | None = None
         distance_to_sell_pct: float | None = None
 
-        if t_buy is not None and t_buy > 0 and last_price > 0:
+        if priced and t_buy is not None and t_buy > 0 and last_price > 0:
             distance_to_buy_pct = round((last_price - float(t_buy)) / float(t_buy), 4)
             if last_price <= float(t_buy):
                 status = "BUY_ZONE"
@@ -411,7 +444,7 @@ def get_watchlist_and_alerts(
                     }
                 )
 
-        if t_sell is not None and t_sell > 0 and last_price > 0:
+        if priced and t_sell is not None and t_sell > 0 and last_price > 0:
             distance_to_sell_pct = round((float(t_sell) - last_price) / last_price, 4)
             if last_price >= float(t_sell):
                 status = "TAKE_PROFIT"
@@ -429,7 +462,8 @@ def get_watchlist_and_alerts(
         enriched_watchlist.append(
             {
                 **item,
-                "last_price": round(last_price, 2),
+                "last_price": round(last_price, 2) if last_price is not None else None,
+                "price_source": quote["source"],
                 "currency": currency,
                 "asset_class": asset_class,
                 "in_portfolio": in_portfolio,
@@ -508,13 +542,10 @@ def get_watchlist_and_alerts(
         r_ticker = (rule["ticker"] or "").upper()
 
         if metric in {"price_above", "price_below"} and r_ticker:
-            # Find price from watchlist or holdings or fallback
-            wl_match = next((w for w in enriched_watchlist if w["ticker"].upper() == r_ticker), None)
-            price_val = (
-                float(wl_match["last_price"])
-                if wl_match
-                else float(FALLBACK_PRICES.get(r_ticker, (100.0, "USD", "Stock"))[0])
-            )
+            quote = _resolve_quote(r_ticker, held_map)
+            if quote["source"] not in LIVE_PRICE_SOURCES or quote["price"] is None:
+                continue
+            price_val = float(quote["price"])
             if metric == "price_above" and price_val >= threshold:
                 triggered_alerts.append(
                     {

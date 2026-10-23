@@ -380,6 +380,8 @@ class OptionChainResponse(BaseModel):
     selected_expiration: str
     calls: list[OptionContract]
     puts: list[OptionContract]
+    # "sample" means the provider had no chain and every figure is synthetic.
+    source: Literal["live", "sample"] = "live"
 
 
 class BlackScholesInput(BaseModel):
@@ -517,6 +519,8 @@ class MarketQuote(BaseModel):
 class MarketTickerResponse(BaseModel):
     as_of: str
     quotes: list[MarketQuote]
+    # "sample" means the provider was unreachable and the quotes are static.
+    source: Literal["live", "sample"] = "live"
 
 
 def is_finite(value: float) -> bool:

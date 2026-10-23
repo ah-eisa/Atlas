@@ -258,7 +258,8 @@ def test_place_order_buy_and_sell_with_fifo(temp_settings: Any) -> None:
     assert holdings[0]["quantity"] == 20.0
     assert holdings[0]["cost_basis_per_unit"] == 150.0
 
-    # 3. SELL 10 shares at $250 -> gain of (250 - 150) * 10 = +1000
+    # 3. SELL 10 shares at $250 consumes the oldest lot (bought at $100):
+    #    gain of (250 - 100) * 10 = +1500, and the $200 lot is what remains.
     sell1 = store.place_order(
         {
             "ticker": "AAPL",
@@ -270,13 +271,14 @@ def test_place_order_buy_and_sell_with_fifo(temp_settings: Any) -> None:
         temp_settings,
         portfolio_id=1,
     )
-    assert sell1["realized_pnl"] == 1000.0
+    assert sell1["realized_pnl"] == 1500.0
     holdings = store.list_holdings(temp_settings, portfolio_id=1)
     assert len(holdings) == 1
     assert holdings[0]["quantity"] == 10.0
-    assert holdings[0]["cost_basis_per_unit"] == 150.0
+    assert holdings[0]["cost_basis_per_unit"] == 200.0
+    assert holdings[0]["acquired"] == "2026-02-10"
 
-    # 4. SELL remaining 10 shares at $100 -> loss of (100 - 150) * 10 = -500
+    # 4. SELL remaining 10 shares at $100 -> loss of (100 - 200) * 10 = -1000
     sell2 = store.place_order(
         {
             "ticker": "AAPL",
@@ -288,7 +290,7 @@ def test_place_order_buy_and_sell_with_fifo(temp_settings: Any) -> None:
         temp_settings,
         portfolio_id=1,
     )
-    assert sell2["realized_pnl"] == -500.0
+    assert sell2["realized_pnl"] == -1000.0
     # Position should be closed / deleted
     holdings = store.list_holdings(temp_settings, portfolio_id=1)
     assert len(holdings) == 0

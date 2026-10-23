@@ -912,6 +912,7 @@ export async function getOptionChain(
       underlying_price: basePrice,
       expirations,
       selected_expiration: selExp,
+      source: 'sample',
       calls: strikes.map((k) => ({
         contract_symbol: `${clean}C${k}`,
         strike: k,
@@ -1682,6 +1683,7 @@ const SAMPLE_WATCHLIST: WatchlistResponse = {
       notes: 'AI datacenter GPU leader — watch Q3 10-Q margins',
       created_at: '2026-01-10T10:00:00Z',
       last_price: 138.4,
+      price_source: 'portfolio',
       currency: 'USD',
       asset_class: 'Stock',
       in_portfolio: true,
@@ -1700,6 +1702,7 @@ const SAMPLE_WATCHLIST: WatchlistResponse = {
       notes: 'Core enterprise cloud & software compounder',
       created_at: '2026-01-10T10:00:00Z',
       last_price: 445.2,
+      price_source: 'portfolio',
       currency: 'USD',
       asset_class: 'Stock',
       in_portfolio: true,
@@ -1718,6 +1721,7 @@ const SAMPLE_WATCHLIST: WatchlistResponse = {
       notes: 'Autonomous tech & energy storage catalysts',
       created_at: '2026-02-15T12:00:00Z',
       last_price: 258.3,
+      price_source: 'reference',
       currency: 'USD',
       asset_class: 'Stock',
       in_portfolio: false,
@@ -1807,7 +1811,8 @@ export async function addWatchlistItem(
       target_sell_price: item.target_sell_price ?? null,
       notes: item.notes || '',
       created_at: new Date().toISOString(),
-      last_price: 150.0,
+      last_price: null,
+      price_source: 'unavailable',
       currency: 'USD',
       asset_class: 'Stock',
       in_portfolio: false,
@@ -1871,6 +1876,7 @@ export async function deleteAlertRule(
 
 const DEFAULT_MARKET_TICKER: MarketTickerResponse = {
   as_of: '2026-10-22',
+  source: 'sample',
   quotes: [
     { symbol: 'S&P 500', name: 'US Large Cap', price: '7,645.18', change: '-110.93', pct: '-1.43%', isPositive: false },
     { symbol: 'NASDAQ', name: 'US Tech', price: '25,970.17', change: '-732.69', pct: '-2.74%', isPositive: false },

@@ -630,6 +630,8 @@ export interface OptionChainResponse {
   selected_expiration: string
   calls: OptionContract[]
   puts: OptionContract[]
+  /** 'sample' means no live chain was available and every figure is synthetic. */
+  source: 'live' | 'sample'
 }
 
 export interface BlackScholesInput {
@@ -947,7 +949,10 @@ export interface WatchlistItem {
   target_sell_price: number | null
   notes: string
   created_at: string
-  last_price: number
+  /** Null when no price could be found at all. */
+  last_price: number | null
+  /** Where the price came from. Only portfolio and live prices trigger alerts. */
+  price_source: 'portfolio' | 'live' | 'reference' | 'unavailable'
   currency: string
   asset_class: string
   in_portfolio: boolean
@@ -995,6 +1000,8 @@ export interface MarketQuote {
 export interface MarketTickerResponse {
   as_of: string
   quotes: MarketQuote[]
+  /** 'sample' means the provider was unreachable and the quotes are static. */
+  source: 'live' | 'sample'
 }
 
 

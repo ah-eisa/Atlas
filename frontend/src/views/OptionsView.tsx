@@ -200,6 +200,16 @@ export default function OptionsView({ state, config }: OptionsViewProps) {
             </div>
           )}
 
+          {chainData?.source === 'sample' && (
+            <div className="banner banner--warning">
+              <span className="banner__label">Sample chain</span>
+              <span className="banner__message">
+                No live option chain is available for {chainData.ticker}. Every price and Greek below
+                is synthetic, generated from a Black-Scholes model.
+              </span>
+            </div>
+          )}
+
           {/* Option Chain Control Bar */}
           <Panel
             title={`${selectedTicker} Options Chain`}

@@ -3,12 +3,13 @@ from __future__ import annotations
 
 import logging
 import math
-from datetime import datetime, timezone
+import time
+from datetime import date, datetime
 from typing import Any, Dict, List, Optional
 
-import numpy as np
 from scipy.stats import norm
 
+from .config import SETTINGS
 from .schemas import (
     BlackScholesInput,
     BlackScholesOutput,
@@ -125,20 +126,74 @@ def calculate_black_scholes(params: BlackScholesInput) -> BlackScholesOutput:
     )
 
 
+# Live chains are refreshed after this long; a process serving many tickers
+# keeps at most CHAIN_CACHE_SIZE of them.
+CHAIN_CACHE_TTL_SECONDS = 300.0
+CHAIN_CACHE_SIZE = 64
+
+
+def _days_to_expiry(expiry: str, today: date | None = None) -> float:
+    """Calendar days until an ISO expiry date, at least one."""
+    try:
+        expires = datetime.strptime(expiry, "%Y-%m-%d").date()
+    except ValueError:
+        return 30.0
+    return float(max(1, (expires - (today or date.today())).days))
+
+
+def _finite(value: Any) -> float | None:
+    """A float, or None for a missing or non-finite provider value."""
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return None
+    return number if math.isfinite(number) else None
+
+
+def _contract_greeks(
+    underlying: float, strike: float, dte: float, iv: float | None, is_call: bool
+) -> OptionGreeks | None:
+    """Black-Scholes Greeks of one contract at its own implied volatility.
+
+    Returns None when the inputs cannot price it (no underlying, strike or IV),
+    rather than inventing a number.
+    """
+    if underlying <= 0 or strike <= 0 or iv is None or iv <= 0:
+        return None
+    result = calculate_black_scholes(
+        BlackScholesInput(
+            underlying_price=underlying,
+            strike_price=strike,
+            dte=dte,
+            volatility_pct=min(iv * 100.0, 500.0),
+            risk_free_rate_pct=max(0.0, SETTINGS.risk_free_rate * 100.0),
+            dividend_yield_pct=0.0,
+        )
+    )
+    return result.call_greeks if is_call else result.put_greeks
+
+
 class OptionsService:
     """Manages real and simulated options chains and Black-Scholes analytics."""
 
     def __init__(self) -> None:
-        self._chain_cache: Dict[str, OptionChainResponse] = {}
+        self._chain_cache: Dict[str, tuple[float, OptionChainResponse]] = {}
 
     def get_option_chain(
         self, ticker: str, expiry: Optional[str] = None
     ) -> OptionChainResponse:
-        """Fetches options chain for ticker and expiration date."""
+        """Fetches options chain for ticker and expiration date.
+
+        Live chains are cached for a few minutes. When the provider has no
+        chain, a synthetic one is returned with ``source: "sample"`` and is
+        not cached, so the next request tries the provider again.
+        """
         clean = ticker.upper().strip()
         cache_key = f"{clean}_{expiry}"
-        if cache_key in self._chain_cache:
-            return self._chain_cache[cache_key]
+        now = time.monotonic()
+        cached = self._chain_cache.get(cache_key)
+        if cached is not None and now - cached[0] < CHAIN_CACHE_TTL_SECONDS:
+            return cached[1]
 
         try:
             import yfinance as yf
@@ -163,60 +218,22 @@ class OptionsService:
                     current_price = float(
                         info.get("regularMarketPrice")
                         or info.get("currentPrice")
-                        or 100.0
+                        or 0.0
                     )
             except Exception:
-                if not chain.calls.empty:
-                    current_price = float(chain.calls["strike"].median())
-                else:
-                    current_price = 100.0
+                current_price = 0.0
+            if current_price <= 0 and not chain.calls.empty:
+                current_price = float(chain.calls["strike"].median())
 
-            calls: List[OptionContract] = []
-            for _, row in chain.calls.iterrows():
-                strike = float(row.get("strike", 0))
-                iv = float(row.get("impliedVolatility", 0.25))
-                # Approximate delta
-                itm = bool(row.get("inTheMoney", strike < current_price))
-                calls.append(
-                    OptionContract(
-                        contract_symbol=str(row.get("contractSymbol", "")),
-                        strike=round(strike, 2),
-                        last_price=round(float(row.get("lastPrice", 0)), 2),
-                        bid=round(float(row.get("bid", 0)), 2) if row.get("bid") else None,
-                        ask=round(float(row.get("ask", 0)), 2) if row.get("ask") else None,
-                        volume=int(row.get("volume", 0)) if row.get("volume") and not np.isnan(row.get("volume")) else 0,
-                        open_interest=int(row.get("openInterest", 0)) if row.get("openInterest") and not np.isnan(row.get("openInterest")) else 0,
-                        implied_volatility=round(iv, 4),
-                        in_the_money=itm,
-                        delta=round(0.7 if itm else 0.3, 2),
-                        gamma=round(0.02, 4),
-                        vega=round(0.25, 4),
-                        theta=round(-0.05, 4),
-                    )
-                )
-
-            puts: List[OptionContract] = []
-            for _, row in chain.puts.iterrows():
-                strike = float(row.get("strike", 0))
-                iv = float(row.get("impliedVolatility", 0.25))
-                itm = bool(row.get("inTheMoney", strike > current_price))
-                puts.append(
-                    OptionContract(
-                        contract_symbol=str(row.get("contractSymbol", "")),
-                        strike=round(strike, 2),
-                        last_price=round(float(row.get("lastPrice", 0)), 2),
-                        bid=round(float(row.get("bid", 0)), 2) if row.get("bid") else None,
-                        ask=round(float(row.get("ask", 0)), 2) if row.get("ask") else None,
-                        volume=int(row.get("volume", 0)) if row.get("volume") and not np.isnan(row.get("volume")) else 0,
-                        open_interest=int(row.get("openInterest", 0)) if row.get("openInterest") and not np.isnan(row.get("openInterest")) else 0,
-                        implied_volatility=round(iv, 4),
-                        in_the_money=itm,
-                        delta=round(-0.3 if not itm else -0.7, 2),
-                        gamma=round(0.02, 4),
-                        vega=round(0.25, 4),
-                        theta=round(-0.04, 4),
-                    )
-                )
+            dte = _days_to_expiry(selected_exp)
+            calls = [
+                self._live_contract(row, current_price, dte, is_call=True)
+                for _, row in chain.calls.iterrows()
+            ]
+            puts = [
+                self._live_contract(row, current_price, dte, is_call=False)
+                for _, row in chain.puts.iterrows()
+            ]
 
             res = OptionChainResponse(
                 ticker=clean,
@@ -225,22 +242,65 @@ class OptionsService:
                 selected_expiration=selected_exp,
                 calls=calls,
                 puts=puts,
+                source="live",
             )
-            self._chain_cache[cache_key] = res
+            self._remember(cache_key, now, res)
             return res
 
         except Exception as exc:
             logger.warning("Failed to fetch live option chain for %s: %s", clean, exc)
             return self._generate_sample_chain(clean, expiry)
 
+    def _remember(self, key: str, now: float, response: OptionChainResponse) -> None:
+        self._chain_cache[key] = (now, response)
+        while len(self._chain_cache) > CHAIN_CACHE_SIZE:
+            oldest = min(self._chain_cache, key=lambda k: self._chain_cache[k][0])
+            del self._chain_cache[oldest]
+
+    @staticmethod
+    def _live_contract(
+        row: Any, underlying: float, dte: float, is_call: bool
+    ) -> OptionContract:
+        """One provider row, with Greeks priced from its own implied volatility."""
+        strike = _finite(row.get("strike")) or 0.0
+        iv = _finite(row.get("impliedVolatility"))
+        in_the_money = row.get("inTheMoney")
+        if in_the_money is None:
+            in_the_money = strike < underlying if is_call else strike > underlying
+        bid = _finite(row.get("bid"))
+        ask = _finite(row.get("ask"))
+        volume = _finite(row.get("volume"))
+        open_interest = _finite(row.get("openInterest"))
+        greeks = _contract_greeks(underlying, strike, dte, iv, is_call)
+        return OptionContract(
+            contract_symbol=str(row.get("contractSymbol", "")),
+            strike=round(strike, 2),
+            last_price=round(_finite(row.get("lastPrice")) or 0.0, 2),
+            bid=round(bid, 2) if bid else None,
+            ask=round(ask, 2) if ask else None,
+            volume=int(volume) if volume else 0,
+            open_interest=int(open_interest) if open_interest else 0,
+            implied_volatility=round(iv or 0.0, 4),
+            in_the_money=bool(in_the_money),
+            delta=greeks.delta if greeks else None,
+            gamma=greeks.gamma if greeks else None,
+            vega=greeks.vega if greeks else None,
+            theta=greeks.theta if greeks else None,
+        )
+
     def _generate_sample_chain(
         self, ticker: str, expiry: Optional[str] = None
     ) -> OptionChainResponse:
-        """Generates realistic synthetic options chain for offline / demo mode."""
+        """Generates a synthetic options chain for offline / demo mode.
+
+        Every price in it is a model output, not a quote, which the response
+        states with ``source: "sample"``.
+        """
         clean = ticker.upper().strip()
         base_price = 230.0 if clean == "AAPL" else 135.0 if clean == "NVDA" else 150.0
         expirations = SAMPLE_EXPIRATIONS
         selected_exp = expiry or expirations[0]
+        dte = _days_to_expiry(selected_exp)
 
         strikes = [round(base_price * (0.8 + 0.02 * i), 1) for i in range(21)]
         calls: List[OptionContract] = []
@@ -250,7 +310,7 @@ class OptionsService:
             c_inp = BlackScholesInput(
                 underlying_price=base_price,
                 strike_price=k,
-                dte=30,
+                dte=dte,
                 volatility_pct=25.0,
                 risk_free_rate_pct=4.5,
                 dividend_yield_pct=0.5,
@@ -300,6 +360,7 @@ class OptionsService:
             selected_expiration=selected_exp,
             calls=calls,
             puts=puts,
+            source="sample",
         )
 
 

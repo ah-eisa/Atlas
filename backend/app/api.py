@@ -733,6 +733,11 @@ def delete_transaction(
             status_code=404,
             detail={"code": "not_found", "message": str(exc)},
         ) from exc
+    except store.TransactionConflict as exc:
+        raise HTTPException(
+            status_code=409,
+            detail={"code": "transaction_conflict", "message": str(exc)},
+        ) from exc
 
 
 @app.get("/api/v1/portfolio/realized-pnl", response_model=RealizedPnlSummaryOut, tags=["transactions"])
@@ -870,7 +875,11 @@ def fetch_live_market_ticker() -> MarketTickerResponse:
     except Exception as exc:
         logger.warning("Failed to fetch live quotes from Yahoo: %s", exc)
 
-    fallback = MarketTickerResponse(as_of=datetime.now(timezone.utc).isoformat(), quotes=DEFAULT_FALLBACK_QUOTES)
+    fallback = MarketTickerResponse(
+        as_of=datetime.now(timezone.utc).isoformat(),
+        quotes=DEFAULT_FALLBACK_QUOTES,
+        source="sample",
+    )
     with _TICKER_LOCK:
         _TICKER_CACHE["quotes"] = (now, fallback)
     return fallback

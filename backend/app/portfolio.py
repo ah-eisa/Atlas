@@ -39,7 +39,7 @@ import pandas as pd
 
 from . import metrics, montecarlo
 from .config import SETTINGS, Settings
-from .data import MarketData, Portfolio, fx_rate_on, normalise_currency, to_iso_dates
+from .data import Holding, MarketData, Portfolio, fx_rate_on, normalise_currency, to_iso_dates
 from .serialize import iso, json_safe, money_series, ratio_series, round_money, round_ratio
 
 SPARKLINE_DAYS: int = 90
@@ -50,6 +50,13 @@ PERIODS: tuple[metrics.PeriodKey, ...] = ("day", "week", "month", "ytd", "all")
 
 class AnalyticsUnavailable(RuntimeError):
     """Raised when the loaded data cannot support the requested analytics."""
+
+
+def _holding_lots(holding: Holding) -> list[tuple[str, float]]:
+    """``(acquired, quantity)`` for each lot of a holding; one lot if it has none."""
+    if holding.lots:
+        return [(lot.acquired, lot.quantity) for lot in holding.lots]
+    return [(holding.acquired, holding.quantity)]
 
 
 @dataclass(frozen=True)
@@ -116,22 +123,32 @@ class PortfolioAnalytics:
     def quantity_frame(self) -> pd.DataFrame:
         """Units held per ticker on each trading day.
 
-        A holding contributes zero before its first trading day of ownership and
-        its full quantity afterwards. The demo/portfolio model is one lot per
-        ticker, so no partial disposal is represented here - positions are
-        edited, not traded, in this application.
+        Each open lot contributes zero before its first trading day of
+        ownership and its quantity afterwards, so units bought later are not
+        credited with returns that predate them. A holding without lots is a
+        single lot on its acquisition date. Units already sold are not
+        represented: the history describes the positions held today.
         """
         index = self.market.prices_base.index
         frame = pd.DataFrame(0.0, index=index, columns=list(self.portfolio.tickers))
         for holding in self.portfolio.holdings:
-            target = pd.Timestamp(holding.acquired).normalize()
-            position = int(index.searchsorted(target, side="left"))
-            # A position acquired after the last close (e.g. today, before the
-            # data provider publishes) is attached to the latest observation so
-            # it still appears in the priced portfolio.
-            position = min(position, len(index) - 1)
-            frame.iloc[position:, frame.columns.get_loc(holding.ticker)] = holding.quantity
+            column = frame.columns.get_loc(holding.ticker)
+            for acquired, quantity in _holding_lots(holding):
+                position = self._first_position(acquired)
+                frame.iloc[position:, column] += quantity
         return frame
+
+    def _first_position(self, acquired: str) -> int:
+        """Index of the first trading day on or after ``acquired``.
+
+        A lot acquired after the last close (e.g. today, before the data
+        provider publishes) is attached to the latest observation so it still
+        appears in the priced portfolio.
+        """
+        index = self.market.prices_base.index
+        target = pd.Timestamp(acquired).normalize()
+        position = int(index.searchsorted(target, side="left"))
+        return min(position, len(index) - 1)
 
     @cached_property
     def active_index(self) -> pd.DatetimeIndex:
@@ -202,15 +219,17 @@ class PortfolioAnalytics:
                 result.iloc[position] += flow.amount
             return result
 
+        prices = self.prices_base
         for holding in self.portfolio.holdings:
-            target = pd.Timestamp(holding.acquired).normalize()
-            position = int(index.searchsorted(target, side="left"))
-            position = min(position, len(index) - 1)
-            # Only positions acquired inside the observed window are flows. At
-            # position 0 the holding is the opening portfolio.
-            if position == 0:
-                continue
-            result.iloc[position] += float(self.value_frame[holding.ticker].iloc[position])
+            for acquired, quantity in _holding_lots(holding):
+                target = pd.Timestamp(acquired).normalize()
+                position = int(index.searchsorted(target, side="left"))
+                position = min(position, len(index) - 1)
+                # Only lots acquired inside the observed window are flows. At
+                # position 0 the lot is part of the opening portfolio.
+                if position == 0:
+                    continue
+                result.iloc[position] += float(prices[holding.ticker].iloc[position]) * quantity
         return result
 
     @property

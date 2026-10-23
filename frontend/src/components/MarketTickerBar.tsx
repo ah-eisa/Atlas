@@ -33,6 +33,9 @@ export const MarketTickerBar = memo(function MarketTickerBar({
   })
 
   const [quotes, setQuotes] = useState<MarketQuote[]>(INITIAL_2026_QUOTES)
+  // The initial quotes are static, so the bar only claims to be live once the
+  // backend has said its quotes came from the provider.
+  const [live, setLive] = useState(false)
 
   useEffect(() => {
     const handleToggle = () => {
@@ -57,6 +60,8 @@ export const MarketTickerBar = memo(function MarketTickerBar({
         const res = await getMarketTicker(config)
         if (active && res && res.quotes && res.quotes.length > 0) {
           setQuotes(res.quotes)
+          // An API older than the source field only ever sent live quotes.
+          setLive(res.source !== 'sample')
         }
       } catch {
         // Fallback quotes remain active
@@ -76,10 +81,13 @@ export const MarketTickerBar = memo(function MarketTickerBar({
   }
 
   return (
-    <div className="market-ticker" aria-label="Live Market Quotes">
-      <div className="market-ticker__badge">
-        <span className="market-ticker__pulse" />
-        <span className="market-ticker__label">MARKETS LIVE</span>
+    <div className="market-ticker" aria-label={live ? 'Live Market Quotes' : 'Sample Market Quotes'}>
+      <div
+        className="market-ticker__badge"
+        title={live ? undefined : 'Live quotes are unavailable. These are static sample values.'}
+      >
+        {live && <span className="market-ticker__pulse" />}
+        <span className="market-ticker__label">{live ? 'MARKETS LIVE' : 'SAMPLE DATA'}</span>
       </div>
       <div className="market-ticker__track">
         {quotes.map((item) => (

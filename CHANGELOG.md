@@ -9,6 +9,36 @@ frontend ships against it.
 
 ## [Unreleased]
 
+### Fixed — trade ledger and data sources
+
+- **Sales are matched FIFO.** Each purchase is now its own lot (schema
+  version 6), and a sale consumes the oldest lots held on its date. Realized
+  P&L was previously measured against the average cost, which misstated it
+  whenever lots were bought at different prices.
+- **Each lot enters the history on its own date.** Buying more of a held
+  position no longer credits the new units with returns from before they
+  were bought.
+- **Deleting a transaction reverses it.** Deleting a sale returns its units
+  to the lots it took them from, and reopens a position it had closed.
+  Deleting a purchase removes its lot, and is refused with
+  `409 transaction_conflict` while a later sale has used those units. A
+  position edited by hand since the order is kept as edited.
+- **CSV imports replay trades in date order**, buys before sells on the
+  same day, so newest-first broker statements no longer drop their sales.
+- **Watchlist alerts only fire on current prices.** Prices come from the
+  portfolio, then a live lookup, then the static reference table, and each
+  item reports its `price_source`. Reference prices are shown but never
+  trigger, and an unknown ticker is unpriced rather than priced at 100.
+- **Synthetic data is labelled.** The option chain and the market ticker
+  report `source: "live" | "sample"`, and the UI says when it is showing
+  samples. Greeks on a live chain are priced from each contract's own
+  implied volatility instead of fixed placeholders, and live chains are
+  cached for five minutes rather than until restart.
+- **The attribution report's reference return covers the selected window**
+  instead of the whole history.
+- `scipy` and `pyarrow` are declared in `backend/requirements.txt`, and the
+  fixed income loader logs files it cannot read.
+
 ### Added — observability
 
 - **`GET /api/v1/metrics`** reports process uptime, request totals by status
