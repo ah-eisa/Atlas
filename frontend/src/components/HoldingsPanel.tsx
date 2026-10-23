@@ -139,25 +139,30 @@ export function HoldingsPanel({
           meta: { align: 'right' },
           cell: (info) => <Num>{formatQuantity(info.getValue())}</Num>,
         }),
-        column.accessor('price_base', {
+        // The price is shown as it is quoted (Bitcoin in USD), with the
+        // currency written beside it. Shown converted alone, a USD price in an
+        // AED portfolio read as if the asset cost 3.67 times as much.
+        column.accessor('price_native', {
           header: 'Price',
           sortFn: 'basic',
           meta: { align: 'right' },
           cell: (info) => {
             const holding = info.row.original
-            const title =
-              holding.currency === currency
-                ? undefined
-                : `${formatPrice(holding.price_native, holding.currency)} native`
+            const converted = holding.currency !== currency
             return (
-              <span className="num" title={title}>
-                {formatMoney(info.getValue())}
+              <span className="grid__price">
+                <span className="num">{formatPrice(info.getValue(), holding.currency)}</span>
+                {converted ? (
+                  <span className="grid__price-base num" title={`Converted to ${currency} at today's rate`}>
+                    {formatPrice(holding.price_base, currency)}
+                  </span>
+                ) : null}
               </span>
             )
           },
         }),
         column.accessor('value_base', {
-          header: 'Value',
+          header: `Value (${currency})`,
           sortFn: 'basic',
           meta: { align: 'right' },
           cell: (info) => <Num tone="grid__strong">{formatMoney(info.getValue())}</Num>,
@@ -187,7 +192,7 @@ export function HoldingsPanel({
           },
         }),
         column.accessor('unrealized_pnl', {
-          header: 'Unreal. P&L',
+          header: `Unrealised (${currency})`,
           sortFn: 'basic',
           meta: { align: 'right' },
           cell: (info) => (
