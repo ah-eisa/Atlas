@@ -5,6 +5,7 @@ and bond pricing / duration / convexity calculations.
 """
 from __future__ import annotations
 
+import logging
 import math
 import os
 from datetime import date, datetime, timedelta
@@ -22,6 +23,8 @@ from .schemas import (
     YieldCurveSnapshot,
     YieldPoint,
 )
+
+logger = logging.getLogger(__name__)
 
 # Standard Treasury Tenors in ascending maturity order
 TREASURY_TENORS: List[Tuple[str, str, float]] = [
@@ -84,7 +87,7 @@ class FixedIncomeService:
                         df.index = pd.to_datetime(df.index)
                     self._series_cache[key] = df.sort_index()
                 except Exception:
-                    pass
+                    logger.exception("Could not read fixed income series %s", file_path)
 
     def get_series(self, series_id: str) -> pd.DataFrame:
         """Returns the date-indexed DataFrame for a series."""
@@ -102,6 +105,7 @@ class FixedIncomeService:
                 self._series_cache[sid] = sorted_df
                 return sorted_df
             except Exception:
+                logger.exception("Could not read fixed income series %s", file_path)
                 return pd.DataFrame()
         return pd.DataFrame()
 
