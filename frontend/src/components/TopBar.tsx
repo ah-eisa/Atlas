@@ -1,11 +1,10 @@
 /**
- * Application chrome: wordmark, primary navigation, data controls, and the
- * headline portfolio readout.
+ * Application chrome: the market ticker, one toolbar row (wordmark,
+ * portfolio switcher, search, actions), the grouped primary navigation, and
+ * the headline readout of the portfolio's value.
  *
- * Professional Two-Tier Architecture:
- *   - Tier 1: Global Chrome Bar (Logo, Book Switcher, Command Search, Global Actions)
- *   - Tier 2: Dedicated Navigation Tabs Bar (Full-width, all 11 views spacious and visible)
- *   - Masthead: Crisp typography with clean inline deltas and sparkline
+ * Actions that do not fit on narrower screens move into a More menu rather
+ * than disappearing.
  */
 
 import {
@@ -20,32 +19,12 @@ import type { DataConfig } from '../lib/api'
 import { useTheme } from '../lib/theme'
 import type { DataSource, Health, Portfolio, SummaryPayload } from '../lib/types'
 import type { ViewKey } from '../lib/useHashRoute'
+import { ActionMenu, type ActionMenuItem } from './ActionMenu'
 import { AnimatedNumber } from './AnimatedNumber'
 import { AtlasLogo } from './AtlasLogo'
 import { MarketTickerBar } from './MarketTickerBar'
+import { PrimaryNav } from './PrimaryNav'
 import { Sparkline } from './Sparkline'
-
-interface ViewDefinition {
-  key: ViewKey
-  label: string
-  /** Views that need an analytics payload are disabled when none exists. */
-  needsAnalytics: boolean
-}
-
-const VIEWS: ViewDefinition[] = [
-  { key: 'overview', label: 'Overview', needsAnalytics: true },
-  { key: 'performance', label: 'Performance', needsAnalytics: true },
-  { key: 'risk', label: 'Risk', needsAnalytics: true },
-  { key: 'xray', label: 'X-Ray & Lab', needsAnalytics: true },
-  { key: 'holdings', label: 'Holdings', needsAnalytics: false },
-  { key: 'trades', label: 'Trades', needsAnalytics: false },
-  { key: 'bonds', label: 'Fixed Income', needsAnalytics: false },
-  { key: 'macro', label: 'Macro & SEC', needsAnalytics: false },
-  { key: 'options', label: 'Options & Greeks', needsAnalytics: false },
-  { key: 'projection', label: 'Projection', needsAnalytics: true },
-  { key: 'data', label: 'Data', needsAnalytics: false },
-]
-
 interface TopBarProps {
   summary: SummaryPayload | null
   health: Health | null
@@ -153,147 +132,137 @@ export function TopBar({
   const analyticsReady = summary !== null
   const { theme, toggle } = useTheme()
 
+  const menuItems: ActionMenuItem[] = [
+    onOpenWatchlist && { key: 'watchlist', label: 'Watchlist and alerts', onSelect: onOpenWatchlist },
+    onOpenCsvImport && { key: 'import', label: 'Import a file', onSelect: onOpenCsvImport },
+    editable && onAddPosition && { key: 'add', label: 'Add a position', onSelect: onAddPosition },
+    live && onCreatePortfolio && { key: 'new', label: 'New portfolio', onSelect: onCreatePortfolio },
+    {
+      key: 'refresh',
+      label: live ? 'Refresh prices' : 'Reload the snapshot',
+      onSelect: onRefresh,
+      phoneOnly: true,
+    },
+    onSwitchSource && {
+      key: 'source',
+      label: live ? 'Use the demo snapshot' : 'Use the live API',
+      onSelect: () => onSwitchSource(live ? 'snapshot' : 'api'),
+      phoneOnly: true,
+    },
+  ].filter(Boolean) as ActionMenuItem[]
+
   return (
     <header className={analyticsReady ? 'topbar' : 'topbar topbar--compact'}>
-      {/* Tier 0: Real-time Global Market Ticker Banner */}
       <MarketTickerBar config={config} />
 
-      {/* Tier 1: Main Global Chrome Header */}
       <div className="topbar__chrome">
         <div className="topbar__brand-group">
-          <a className="topbar__brand" href="#/overview" aria-label="Atlas portfolio analytics home">
-            <AtlasLogo size={24} className="topbar__logo-icon" />
+          <a className="topbar__brand" href="#/overview" aria-label="ATLAS, go to the overview">
+            <AtlasLogo size={22} className="topbar__logo-icon" />
             <span className="topbar__wordmark">ATLAS</span>
-            <span className="topbar__product">Terminal</span>
-            <span className="topbar__badge-pill">PRO</span>
           </a>
 
           {live && portfolios.length > 0 && onSelectPortfolio && (
-            <div className="portfolio-select-pill">
-              <span className="portfolio-select-label">BOOK:</span>
+            <label className="book-switch" title="Switch portfolio">
+              <span className="visually-hidden">Portfolio</span>
               <select
-                className="portfolio-select"
+                className="book-switch__select"
                 value={activePortfolioId}
                 onChange={(e) => onSelectPortfolio(Number(e.target.value))}
-                title="Switch active portfolio"
               >
                 {portfolios.map((p) => (
                   <option key={p.id} value={p.id}>
-                    {p.name} ({p.base_currency})
+                    {p.name} · {p.base_currency}
                   </option>
                 ))}
               </select>
-            </div>
+            </label>
           )}
 
           {live && onCreatePortfolio && (
             <button
               type="button"
-              className="button button--quiet button--mini topbar__new-portfolio-btn"
+              className="icon-button topbar__wide-only"
               onClick={onCreatePortfolio}
-              title="Create a new portfolio"
+              aria-label="New portfolio"
+              title="New portfolio"
             >
-              + New
+              <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true">
+                <path d="M7 2v10M2 7h10" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+              </svg>
             </button>
           )}
         </div>
 
-        {/* Center: Expansive Command Search Bar */}
         {onOpenCommandPalette && (
-          <div className="topbar__search-wrap">
-            <button
-              type="button"
-              className="topbar__search-trigger"
-              onClick={onOpenCommandPalette}
-              title="Open Command Palette & Unified Search (Ctrl+K)"
-              aria-label="Open Command Palette"
-            >
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ opacity: 0.7 }}>
-                <circle cx="11" cy="11" r="8" />
-                <line x1="21" y1="21" x2="16.65" y2="16.65" />
-              </svg>
-              <span className="topbar__search-placeholder">
-                Search symbols, filings, macro, risk lab...
-              </span>
-              <kbd className="topbar__search-kbd">Ctrl+K</kbd>
-            </button>
-          </div>
+          <button
+            type="button"
+            className="topbar__search"
+            onClick={onOpenCommandPalette}
+            aria-label="Search and commands"
+            aria-keyshortcuts="Control+K"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true">
+              <circle cx="11" cy="11" r="7.5" />
+              <path d="M20.5 20.5 16.5 16.5" />
+            </svg>
+            <span className="topbar__search-text">Search or run a command</span>
+            <span className="topbar__search-keys" aria-hidden="true">
+              <kbd className="kbd">Ctrl</kbd>
+              <kbd className="kbd">K</kbd>
+            </span>
+          </button>
         )}
 
-        {/* Right: Primary & Utility Action Controls */}
         <div className="topbar__actions">
           {editable && onOpenTradeModal && (
-            <button
-              type="button"
-              className="button button--primary button--sm"
-              onClick={onOpenTradeModal}
-              title="Execute a Buy or Sell trade order"
-            >
-              + Trade
+            <button type="button" className="button button--primary button--sm" onClick={onOpenTradeModal}>
+              Trade
             </button>
           )}
 
           {onOpenWatchlist && (
-            <button
-              type="button"
-              className="button button--quiet button--sm topbar__btn--desktop-only"
-              onClick={onOpenWatchlist}
-              title="Open Watchlists & Smart Alerts"
-              aria-label="Open Watchlists"
-            >
-              <span>Watchlist</span>
+            <button type="button" className="button button--quiet button--sm topbar__wide-only" onClick={onOpenWatchlist}>
+              Watchlist
             </button>
           )}
 
           {onOpenCsvImport && (
-            <button
-              type="button"
-              className="button button--quiet button--sm topbar__btn--desktop-only"
-              onClick={onOpenCsvImport}
-              title="Import CSV or Broker Statement (IBKR)"
-              aria-label="Import CSV / Statement"
-            >
-              <span>Import</span>
+            <button type="button" className="button button--quiet button--sm topbar__wide-only" onClick={onOpenCsvImport}>
+              Import
             </button>
           )}
 
           {editable && onAddPosition && (
-            <button
-              type="button"
-              className="button button--quiet button--sm topbar__btn--desktop-only"
-              onClick={onAddPosition}
-              title="Add a position to current portfolio"
-            >
-              + Add Position
+            <button type="button" className="button button--quiet button--sm topbar__wide-only" onClick={onAddPosition}>
+              Add position
             </button>
           )}
 
+          <ActionMenu label="More actions" items={menuItems} className="topbar__narrow-only">
+            <span className="topbar__more-text">More</span>
+            <svg className="topbar__more-icon" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">
+              <circle cx="3.5" cy="8" r="1.4" fill="currentColor" />
+              <circle cx="8" cy="8" r="1.4" fill="currentColor" />
+              <circle cx="12.5" cy="8" r="1.4" fill="currentColor" />
+            </svg>
+          </ActionMenu>
+
+          <span className="topbar__divider" aria-hidden="true" />
+
           <button
             type="button"
-            className="topbar__source topbar__source--btn"
+            className="topbar__source topbar__source--btn topbar__phone-hidden"
             onClick={() => onSwitchSource?.(live ? 'snapshot' : 'api')}
-            title={
-              live
-                ? 'Running live against API. Click to switch to Demo Snapshot.'
-                : 'Running Demo snapshot. Click to switch to Live API mode.'
-            }
+            title={live ? 'Using the live API. Switch to the demo snapshot.' : 'Using the demo snapshot. Switch to the live API.'}
           >
-            <span
-              className={
-                live
-                  ? 'topbar__source-dot'
-                  : 'topbar__source-dot topbar__source-dot--snapshot'
-              }
-            />
+            <span className={live ? 'topbar__source-dot' : 'topbar__source-dot topbar__source-dot--snapshot'} />
             <span>{live ? 'Live API' : 'Demo snapshot'}</span>
-            <span className="topbar__source-toggle-hint" aria-hidden="true">
-              ⇄
-            </span>
           </button>
 
           <button
             type="button"
-            className="button button--quiet topbar__theme"
+            className="icon-button topbar__theme"
             onClick={toggle}
             title={theme === 'dark' ? 'Switch to the light theme' : 'Switch to the dark theme'}
             aria-label={theme === 'dark' ? 'Switch to the light theme' : 'Switch to the dark theme'}
@@ -303,51 +272,25 @@ export function TopBar({
 
           <button
             type="button"
-            className="button button--quiet"
+            className="icon-button topbar__phone-hidden"
             onClick={onRefresh}
             disabled={refreshing}
-            title={live ? 'Refetch prices and rebuild analytics' : 'Reload the committed snapshot'}
+            title={live ? 'Fetch prices again and rebuild the analytics' : 'Reload the snapshot'}
+            aria-label={refreshing ? 'Refreshing' : 'Refresh'}
           >
-            <span className={refreshing ? 'spinner spinner--on' : 'spinner'} aria-hidden="true" />
-            {refreshing ? 'Refreshing' : 'Refresh'}
+            {refreshing ? (
+              <span className="spinner spinner--on" aria-hidden="true" />
+            ) : (
+              <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M13.5 8a5.5 5.5 0 1 1-1.6-3.9" />
+                <path d="M13.5 2.5v3.2h-3.2" />
+              </svg>
+            )}
           </button>
         </div>
       </div>
 
-      {/* Tier 2: Dedicated Navigation Tabs Bar */}
-      <div className="topbar__nav-bar">
-        <nav className="nav" aria-label="Primary">
-          {VIEWS.map((item) => {
-            const disabled = item.needsAnalytics && !analyticsReady
-            const active = item.key === view
-            if (disabled) {
-              return (
-                <span
-                  key={item.key}
-                  className="nav__link nav__link--disabled"
-                  aria-disabled="true"
-                  title="Add a position to unlock analytics"
-                >
-                  {item.label}
-                </span>
-              )
-            }
-            return (
-              <a
-                key={item.key}
-                className={active ? 'nav__link nav__link--active' : 'nav__link'}
-                href={`#/${item.key}`}
-                aria-current={active ? 'page' : undefined}
-              >
-                {item.label}
-                {item.key === 'holdings' ? (
-                  <span className="nav__count num">{holdingsCount}</span>
-                ) : null}
-              </a>
-            )
-          })}
-        </nav>
-      </div>
+      <PrimaryNav view={view} analyticsReady={analyticsReady} holdingsCount={holdingsCount} />
 
       {/* Masthead: Headline Readout */}
       {summary ? (

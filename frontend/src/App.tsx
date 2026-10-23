@@ -15,6 +15,7 @@ import { CsvImportModal } from './components/CsvImportModal'
 import { NewPortfolioModal } from './components/NewPortfolioModal'
 import { OrderModal } from './components/OrderModal'
 import { PositionModal } from './components/PositionModal'
+import { NAV_ORDER } from './lib/navigation'
 import { TopBar } from './components/TopBar'
 import { WatchlistModal } from './components/WatchlistModal'
 import { ApiError, deletePosition, type DataConfig } from './lib/api'
@@ -447,16 +448,36 @@ export default function App() {
   const [isCsvImportOpen, setIsCsvImportOpen] = useState(false)
   const [isWatchlistOpen, setIsWatchlistOpen] = useState(false)
 
+  const analyticsReady = Boolean(data?.analytics)
+
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
         e.preventDefault()
         setIsCommandPaletteOpen((prev) => !prev)
+        return
+      }
+
+      // [ and ] step through the views in navigation order. They are
+      // ignored while typing, with a modifier held, or while a window is open.
+      if (e.key !== '[' && e.key !== ']') return
+      if (e.ctrlKey || e.metaKey || e.altKey) return
+      const target = e.target as HTMLElement | null
+      if (target?.closest('input, textarea, select, [contenteditable="true"]')) return
+      if (document.body.classList.contains('has-modal')) return
+
+      const available = NAV_ORDER.filter((item) => analyticsReady || !item.needsAnalytics)
+      const index = available.findIndex((item) => item.key === view)
+      const step = e.key === ']' ? 1 : -1
+      const next = available[(index + step + available.length) % available.length]
+      if (next) {
+        e.preventDefault()
+        navigate(next.key)
       }
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [])
+  }, [analyticsReady, navigate, view])
   const [positionModal, setPositionModal] = useState<{
     isOpen: boolean
     position: Position | null

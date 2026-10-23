@@ -9,6 +9,39 @@ frontend ships against it.
 
 ## [Unreleased]
 
+### Changed — navigation and windows
+
+- **The views are grouped**: Portfolio (overview, performance, risk, lab,
+  projection), Book (holdings, trades), Markets (bonds, macro and filings,
+  options) and Sources (data). An indicator slides to the current view, the
+  bar scrolls the current view into sight on narrow screens, and Left/Right
+  move between views inside it. `[` and `]` step to the previous or next
+  view from anywhere outside a field.
+- **One toolbar row.** Watchlist, Import and Add position move into a More
+  menu below 1240px instead of disappearing on small screens; on phones the
+  data-source switch and refresh join them, so the row fits at 360px.
+- **Every window is built from one `Dialog`.** Escape closes the topmost
+  window, Tab stays inside it, focus moves into it on open and returns to
+  the button that opened it, and the page behind does not scroll. Forms no
+  longer close on a stray click outside. On a phone a window is a bottom
+  sheet with full-width actions.
+- **The trade, position, portfolio, import and watchlist windows were
+  rewritten in plain language**, with sentence-case labels, errors that say
+  what to do, and a note that the gain shown before a sale is estimated at
+  the average cost while the ledger records the FIFO figure. The import
+  window takes a dropped file, and the watchlist uses real, keyboard-operable
+  tabs.
+- **The command palette** is a proper combobox: the highlighted result is
+  announced and kept in view while moving with the arrow keys.
+- Buttons are sentence case at a readable size, without the hover lift and
+  glow; the primary button is a solid accent rather than a gradient.
+- Data tables (`.table`) now have a base style: padding, sticky headers,
+  right-aligned figures.
+- The overview's nine headline figures sit in a 9- or 3-column grid, so no
+  figure is left alone on a row.
+- The market ticker treats a response without a `source` field as live, so
+  it does not mislabel quotes from an older API.
+
 ### Fixed — trade ledger and data sources
 
 - **Sales are matched FIFO.** Each purchase is now its own lot (schema

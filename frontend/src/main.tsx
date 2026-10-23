@@ -14,6 +14,8 @@ import './styles/base.css'
 import './styles/layout.css'
 import './styles/panels.css'
 import './styles/forms.css'
+import './styles/dialog.css'
+import './styles/navigation.css'
 
 import App from './App'
 import { applyTheme, getTheme, watchSystemTheme } from './lib/theme'

@@ -1,0 +1,515 @@
+/**
+ * Toolbar and primary navigation.
+ *
+ * The toolbar is one quiet row. The navigation below it reads as four
+ * labelled groups; the only accent in either is the indicator under the
+ * current view, which slides there when you move. Labels are sentence case
+ * throughout, so the bar reads as words rather than as a row of codes.
+ */
+
+/* ------------------------------------------------------------------ *
+ * Toolbar                                                             *
+ * ------------------------------------------------------------------ */
+
+.topbar__chrome {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-5);
+  min-height: 52px;
+  padding: 0 var(--space-6);
+  border-bottom: 1px solid var(--line);
+  background: var(--surface-panel);
+}
+
+.topbar__brand-group {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.topbar__brand {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin-right: var(--space-2);
+  padding: var(--space-2) var(--space-1);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  text-decoration: none;
+}
+
+.topbar__brand:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.topbar__logo-icon {
+  display: block;
+  flex-shrink: 0;
+}
+
+.topbar__wordmark {
+  font-family: var(--font-sans);
+  font-size: var(--size-data);
+  font-weight: var(--weight-semibold);
+  letter-spacing: 0.16em;
+}
+
+.book-switch {
+  position: relative;
+  display: inline-flex;
+  min-width: 0;
+}
+
+.book-switch::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  right: 11px;
+  width: 6px;
+  height: 6px;
+  margin-top: -5px;
+  border-right: 1.5px solid var(--text-tertiary);
+  border-bottom: 1.5px solid var(--text-tertiary);
+  transform: rotate(45deg);
+  pointer-events: none;
+}
+
+.book-switch__select {
+  max-width: 220px;
+  height: 32px;
+  padding: 0 30px 0 var(--space-4);
+  overflow: hidden;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  background: var(--surface-raised);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  font-size: var(--size-body);
+  font-weight: var(--weight-medium);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  appearance: none;
+  cursor: pointer;
+}
+
+.book-switch__select:hover {
+  border-color: var(--text-tertiary);
+}
+
+.book-switch__select:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.icon-button {
+  display: inline-grid;
+  flex-shrink: 0;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--text-tertiary);
+  cursor: pointer;
+  transition:
+    color var(--duration-fast) var(--easing),
+    background var(--duration-fast) var(--easing);
+}
+
+.icon-button:hover:not(:disabled) {
+  background: var(--surface-hover);
+  color: var(--text-primary);
+}
+
+.icon-button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.icon-button:disabled {
+  cursor: default;
+}
+
+.icon-button svg {
+  display: block;
+}
+
+.topbar__search {
+  display: flex;
+  justify-self: center;
+  align-items: center;
+  gap: var(--space-3);
+  width: 100%;
+  max-width: 440px;
+  height: 36px;
+  padding: 0 var(--space-3) 0 var(--space-4);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  background: var(--surface-page);
+  color: var(--text-tertiary);
+  font-family: var(--font-sans);
+  font-size: var(--size-body);
+  text-align: left;
+  cursor: text;
+  transition: border-color var(--duration-fast) var(--easing);
+}
+
+.topbar__search:hover {
+  border-color: var(--text-tertiary);
+}
+
+.topbar__search:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.topbar__search-text {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.topbar__search-keys {
+  display: inline-flex;
+  gap: 3px;
+}
+
+.topbar__actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-2);
+  white-space: nowrap;
+}
+
+.topbar__divider {
+  width: 1px;
+  height: 20px;
+  margin: 0 var(--space-2);
+  background: var(--line-strong);
+}
+
+.topbar__source {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  height: 32px;
+  padding: 0 var(--space-3);
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--text-secondary);
+  font-family: var(--font-sans);
+  font-size: var(--size-caption);
+  cursor: pointer;
+  transition: background var(--duration-fast) var(--easing);
+}
+
+.topbar__source:hover {
+  background: var(--surface-hover);
+  color: var(--text-primary);
+}
+
+.topbar__source:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.topbar__source-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--positive);
+}
+
+.topbar__source-dot--snapshot {
+  background: var(--warning);
+}
+
+.topbar__narrow-only {
+  display: none;
+}
+
+.topbar--compact .topbar__chrome {
+  border-bottom: 1px solid var(--line);
+}
+
+/* ------------------------------------------------------------------ *
+ * More menu                                                           *
+ * ------------------------------------------------------------------ */
+
+.menu {
+  position: relative;
+}
+
+.menu__list {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 900;
+  display: grid;
+  min-width: 210px;
+  padding: var(--space-2);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  background: var(--surface-panel);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.45);
+  animation: dialog-in var(--duration-fast) var(--easing);
+}
+
+.menu__item {
+  padding: var(--space-3) var(--space-4);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  font-size: var(--size-body);
+  text-align: left;
+  cursor: pointer;
+}
+
+.menu__item:hover,
+.menu__item:focus-visible {
+  background: var(--surface-hover);
+  outline: none;
+}
+
+/* ------------------------------------------------------------------ *
+ * Primary navigation                                                  *
+ * ------------------------------------------------------------------ */
+
+.nav {
+  position: relative;
+  border-bottom: 1px solid var(--line);
+  background: var(--surface-header);
+}
+
+.nav__scroller {
+  position: relative;
+  display: flex;
+  align-items: stretch;
+  gap: var(--space-8);
+  min-height: 44px;
+  padding: 0 var(--space-6);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.nav__scroller::-webkit-scrollbar {
+  display: none;
+}
+
+/* Fade the edge the bar can scroll towards, so a cut-off view reads as
+   "more this way" rather than as a broken layout. */
+.nav--fade-end .nav__scroller {
+  mask-image: linear-gradient(to right, #000 calc(100% - 48px), transparent);
+}
+
+.nav--fade-start .nav__scroller {
+  mask-image: linear-gradient(to left, #000 calc(100% - 48px), transparent);
+}
+
+.nav--fade-start.nav--fade-end .nav__scroller {
+  mask-image: linear-gradient(to right, transparent, #000 48px, #000 calc(100% - 48px), transparent);
+}
+
+.nav__group {
+  display: flex;
+  flex-shrink: 0;
+  align-items: stretch;
+  gap: var(--space-1);
+}
+
+.nav__group-label {
+  display: flex;
+  align-items: center;
+  margin-right: var(--space-3);
+  color: var(--text-disabled);
+  font-size: var(--size-caption);
+  white-space: nowrap;
+  transition: color var(--duration-base) var(--easing);
+}
+
+.nav__group--active .nav__group-label {
+  color: var(--text-tertiary);
+}
+
+.nav__link {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 0 var(--space-3);
+  color: var(--text-secondary);
+  font-size: var(--size-body);
+  font-weight: var(--weight-medium);
+  text-decoration: none;
+  white-space: nowrap;
+  transition: color var(--duration-fast) var(--easing);
+}
+
+.nav__link:hover {
+  color: var(--text-primary);
+}
+
+.nav__link:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -8px;
+  border-radius: var(--radius);
+}
+
+.nav__link--active {
+  color: var(--text-primary);
+}
+
+.nav__link--disabled,
+.nav__link--disabled:hover {
+  color: var(--text-disabled);
+  cursor: not-allowed;
+}
+
+.nav__count {
+  min-width: 20px;
+  padding: 0 6px;
+  border-radius: var(--radius-full);
+  background: var(--surface-raised);
+  color: var(--text-tertiary);
+  font-size: var(--size-label);
+  line-height: 18px;
+  text-align: center;
+}
+
+.nav__link--active .nav__count {
+  color: var(--text-secondary);
+}
+
+.nav__indicator {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  height: 2px;
+  border-radius: 2px 2px 0 0;
+  background: var(--accent);
+  pointer-events: none;
+  transition:
+    transform 260ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    width 260ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nav__indicator {
+    transition: none;
+  }
+}
+
+/* ------------------------------------------------------------------ *
+ * Responsive                                                          *
+ * ------------------------------------------------------------------ */
+
+@media (max-width: 1240px) {
+  .topbar__wide-only {
+    display: none;
+  }
+
+  .topbar__narrow-only {
+    display: block;
+  }
+}
+
+@media (max-width: 860px) {
+  .topbar__search {
+    justify-self: end;
+    width: 36px;
+    padding: 0;
+    justify-content: center;
+    cursor: pointer;
+  }
+
+  .topbar__search-text,
+  .topbar__search-keys {
+    display: none;
+  }
+}
+
+@media (max-width: 720px) {
+  .topbar__chrome {
+    gap: var(--space-2);
+    min-height: 48px;
+    padding: 0 var(--space-4);
+  }
+
+  .topbar__brand {
+    margin-right: 0;
+  }
+
+  .topbar__wordmark,
+  .topbar__divider {
+    display: none;
+  }
+
+  .book-switch__select {
+    max-width: 150px;
+  }
+
+  /* The dot alone says which source is in use; the Data view explains it. */
+  .topbar__source {
+    width: 32px;
+    padding: 0;
+    justify-content: center;
+    font-size: 0;
+  }
+
+  .nav__scroller {
+    gap: var(--space-5);
+    padding: 0 var(--space-4);
+  }
+
+  .nav__group-label {
+    display: none;
+  }
+}
+
+/* Phones: the source switch and refresh move into the More menu, which
+   shrinks to an icon, so the toolbar still fits on one row at 360px. */
+.topbar__more-icon,
+.menu__item--phone-only {
+  display: none;
+}
+
+@media (max-width: 720px) {
+  .topbar__actions {
+    gap: 6px;
+  }
+
+  .topbar__phone-hidden,
+  .topbar__more-text {
+    display: none;
+  }
+
+  .topbar__more-icon {
+    display: block;
+  }
+
+  .menu__item--phone-only {
+    display: block;
+  }
+
+  .book-switch__select {
+    max-width: 112px;
+  }
+}
+
+@media (max-width: 720px) {
+  .topbar__narrow-only > .button {
+    width: 32px;
+    height: 32px;
+    padding: 0;
+  }
+}

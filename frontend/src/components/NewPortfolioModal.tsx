@@ -1,11 +1,10 @@
 /**
- * New Portfolio Creation Modal.
- *
- * Allows users to easily create a new tracked portfolio with a custom name
- * and reporting base currency.
+ * New portfolio window: a name and the currency it reports in.
  */
 
 import { useEffect, useRef, useState } from 'react'
+
+import { Dialog } from './Dialog'
 
 interface NewPortfolioModalProps {
   isOpen: boolean
@@ -41,7 +40,6 @@ export function NewPortfolioModal({ isOpen, onClose, onSubmit }: NewPortfolioMod
       setCustomCurrency('')
       setError(null)
       setSaving(false)
-      setTimeout(() => inputRef.current?.focus(), 50)
     }
   }, [isOpen])
 
@@ -51,13 +49,13 @@ export function NewPortfolioModal({ isOpen, onClose, onSubmit }: NewPortfolioMod
     e.preventDefault()
     const trimmed = name.trim()
     if (!trimmed) {
-      setError('Please provide a portfolio name.')
+      setError('Give the portfolio a name.')
       return
     }
 
     const finalCurrency = currency === 'OTHER' ? customCurrency.trim().toUpperCase() : currency
     if (!/^[A-Z]{3}$/.test(finalCurrency)) {
-      setError('Currency must be a 3-letter code (e.g. USD, EUR, SAR).')
+      setError('Enter a three-letter currency code, such as USD or SAR.')
       return
     }
 
@@ -67,105 +65,85 @@ export function NewPortfolioModal({ isOpen, onClose, onSubmit }: NewPortfolioMod
       await onSubmit(trimmed, finalCurrency)
       onClose()
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to create portfolio.')
+      setError(err instanceof Error ? err.message : 'The portfolio was not created. Try again.')
     } finally {
       setSaving(false)
     }
   }
 
   return (
-    <div className="modal-backdrop" onClick={onClose} role="presentation">
-      <div
-        className="modal-card"
-        onClick={(e) => e.stopPropagation()}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="modal-title"
-      >
-        <div className="modal-card__header">
-          <div>
-            <h2 id="modal-title" className="modal-card__title">
-              Create New Portfolio
-            </h2>
-            <p className="modal-card__subtitle">
-              Configure a dedicated tracking portfolio with its own positions and reporting currency.
-            </p>
-          </div>
-          <button
-            type="button"
-            className="modal-card__close"
-            onClick={onClose}
-            aria-label="Close dialog"
-          >
-            &times;
+    <Dialog
+      open={isOpen}
+      onClose={onClose}
+      size="sm"
+      title="New portfolio"
+      description="A separate set of positions, reported in its own currency."
+      onSubmit={handleSubmit}
+      initialFocusRef={inputRef}
+      footer={
+        <>
+          <button type="button" className="button button--quiet" onClick={onClose} disabled={saving}>
+            Cancel
           </button>
+          <button type="submit" className="button button--primary" disabled={saving}>
+            {saving ? 'Creating…' : 'Create portfolio'}
+          </button>
+        </>
+      }
+    >
+      <label className="field">
+        <span className="field__label">Name</span>
+        <input
+          ref={inputRef}
+          className="input"
+          type="text"
+          placeholder="Retirement, Dividends, Crypto"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          disabled={saving}
+          required
+        />
+      </label>
+
+      <label className="field">
+        <span className="field__label">Reporting currency</span>
+        <select
+          className="input"
+          value={currency}
+          onChange={(e) => setCurrency(e.target.value)}
+          disabled={saving}
+        >
+          {COMMON_CURRENCIES.map((curr) => (
+            <option key={curr.code} value={curr.code}>
+              {curr.name}
+            </option>
+          ))}
+          <option value="OTHER">Another currency…</option>
+        </select>
+      </label>
+
+      {currency === 'OTHER' && (
+        <label className="field">
+          <span className="field__label">Currency code</span>
+          <input
+            className="input num"
+            type="text"
+            maxLength={3}
+            placeholder="KWD, QAR, SGD"
+            value={customCurrency}
+            onChange={(e) => setCustomCurrency(e.target.value.toUpperCase())}
+            disabled={saving}
+            autoComplete="off"
+            required
+          />
+        </label>
+      )}
+
+      {error && (
+        <div className="dialog__error" role="alert">
+          {error}
         </div>
-
-        <form onSubmit={handleSubmit} className="modal-card__form">
-          <label className="field">
-            <span className="field__label">Portfolio Name</span>
-            <input
-              ref={inputRef}
-              className="input"
-              type="text"
-              placeholder="e.g. US Tech & Dividend, Retirement, Crypto"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              disabled={saving}
-              required
-            />
-          </label>
-
-          <label className="field">
-            <span className="field__label">Reporting Base Currency</span>
-            <select
-              className="input"
-              value={currency}
-              onChange={(e) => setCurrency(e.target.value)}
-              disabled={saving}
-            >
-              {COMMON_CURRENCIES.map((curr) => (
-                <option key={curr.code} value={curr.code}>
-                  {curr.name}
-                </option>
-              ))}
-              <option value="OTHER">Other (Custom 3-letter Code)...</option>
-            </select>
-          </label>
-
-          {currency === 'OTHER' && (
-            <label className="field">
-              <span className="field__label">Custom Currency Code</span>
-              <input
-                className="input num"
-                type="text"
-                maxLength={3}
-                placeholder="e.g. KWD, QAR, SGD"
-                value={customCurrency}
-                onChange={(e) => setCustomCurrency(e.target.value.toUpperCase())}
-                disabled={saving}
-                required
-              />
-            </label>
-          )}
-
-          {error && <div className="modal-card__error">{error}</div>}
-
-          <div className="modal-card__actions">
-            <button
-              type="button"
-              className="button button--quiet"
-              onClick={onClose}
-              disabled={saving}
-            >
-              Cancel
-            </button>
-            <button type="submit" className="button button--primary" disabled={saving}>
-              {saving ? 'Creating...' : 'Create Portfolio'}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
+      )}
+    </Dialog>
   )
 }

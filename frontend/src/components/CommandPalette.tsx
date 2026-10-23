@@ -1,4 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
+
+import { useModalBehaviour } from '../lib/useModalBehaviour'
 import { type DataConfig, downloadExport } from '../lib/api'
 import { dispatchCommandIntent } from '../lib/commandBus'
 import { formatMoney, formatPercent } from '../lib/format'
@@ -75,13 +78,13 @@ export function CommandPalette({
   const [query, setQuery] = useState('')
   const [selectedIndex, setSelectedIndex] = useState(0)
   const inputRef = useRef<HTMLInputElement | null>(null)
+  const panelRef = useRef<HTMLDivElement | null>(null)
   const { theme, toggle: toggleTheme } = useTheme()
 
   useEffect(() => {
     if (isOpen) {
       setQuery('')
       setSelectedIndex(0)
-      window.setTimeout(() => inputRef.current?.focus(), 10)
     }
   }, [isOpen])
 
@@ -591,6 +594,16 @@ export function CommandPalette({
     setSelectedIndex(0)
   }, [query])
 
+  // Keep the highlighted option in view while moving with the arrow keys.
+  useEffect(() => {
+    if (!isOpen) return
+    document
+      .getElementById(`palette-option-${selectedIndex}`)
+      ?.scrollIntoView({ block: 'nearest' })
+  }, [isOpen, selectedIndex])
+
+  useModalBehaviour(isOpen, panelRef, onClose, inputRef)
+
   if (!isOpen) return null
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -605,107 +618,54 @@ export function CommandPalette({
     } else if (e.key === 'Enter' && items[selectedIndex]) {
       e.preventDefault()
       items[selectedIndex].action()
-    } else if (e.key === 'Escape') {
-      e.preventDefault()
-      onClose()
     }
   }
 
-  return (
+  return createPortal(
     <div
-      className="modal-backdrop"
-      role="dialog"
-      aria-modal="true"
-      aria-label="Command Palette"
-      onClick={(e) => {
+      className="dialog-backdrop palette-backdrop"
+      role="presentation"
+      onMouseDown={(e) => {
         if (e.target === e.currentTarget) onClose()
-      }}
-      style={{
-        position: 'fixed',
-        inset: 0,
-        background: 'rgba(0, 0, 0, 0.65)',
-        zIndex: 1200,
-        display: 'flex',
-        alignItems: 'flex-start',
-        justifyContent: 'center',
-        paddingTop: '10vh',
       }}
     >
       <div
+        ref={panelRef}
+        className="palette"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Search and commands"
+        tabIndex={-1}
         onKeyDown={handleKeyDown}
-        style={{
-          width: 'min(720px, 94vw)',
-          background: 'var(--surface-panel)',
-          border: '1px solid rgba(0, 210, 255, 0.4)',
-          borderRadius: 'var(--radius-lg)',
-          boxShadow: '0 30px 80px rgba(0, 0, 0, 0.85), 0 0 35px rgba(0, 210, 255, 0.2)',
-          display: 'flex',
-          flexDirection: 'column',
-          maxHeight: '76vh',
-          overflow: 'hidden',
-        }}
       >
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '0.75rem',
-            padding: '1rem 1.25rem',
-            borderBottom: '1px solid var(--line)',
-            background: 'var(--surface-header)',
-          }}
-        >
-          <span
-            className="num"
-            style={{
-              fontSize: '0.78rem',
-              padding: '0.15rem 0.45rem',
-              background: 'var(--bg-surface)',
-              border: '1px solid var(--border-subtle)',
-              color: 'var(--text-secondary)',
-              fontWeight: 600,
-            }}
-          >
-            ⌘K
-          </span>
+        <div className="palette__search">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
+            <circle cx="11" cy="11" r="7.5" />
+            <path d="M20.5 20.5 16.5 16.5" />
+          </svg>
           <input
             ref={inputRef}
             type="text"
+            className="palette__input"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder='Type a command or search: "AAPL", "NVDA 10-K", "10Y curve", "2008 stress", "attribution"…'
-            aria-label="Command palette search"
-            style={{
-              flex: 1,
-              background: 'transparent',
-              border: 'none',
-              outline: 'none',
-              color: 'var(--text-primary)',
-              fontSize: '0.95rem',
-              fontFamily: 'inherit',
-            }}
+            placeholder="Search holdings, symbols and views, or type a command"
+            aria-label="Search holdings, symbols and commands"
+            role="combobox"
+            aria-expanded="true"
+            aria-controls="palette-listbox"
+            aria-activedescendant={items[selectedIndex] ? `palette-option-${selectedIndex}` : undefined}
+            autoComplete="off"
+            spellCheck={false}
           />
-          <button
-            type="button"
-            className="button button--quiet button--mini"
-            onClick={onClose}
-            title="Close (Esc)"
-          >
-            ESC
-          </button>
+          <kbd className="kbd">Esc</kbd>
         </div>
 
-        <div
-          style={{
-            overflowY: 'auto',
-            padding: '0.4rem 0',
-            flex: 1,
-          }}
-        >
+        <div className="palette__results" id="palette-listbox" role="listbox" aria-label="Results">
           {items.length === 0 ? (
-            <div style={{ padding: '1.5rem', textAlign: 'center', color: 'var(--text-secondary)' }}>
-              No matching commands, holdings, or instruments for "{query}".
-            </div>
+            <p className="palette__empty">
+              Nothing matches “{query}”. Try a symbol such as AAPL, or a view such as risk.
+            </p>
           ) : (
             items.map((item, idx) => {
               const active = idx === selectedIndex
@@ -713,81 +673,27 @@ export function CommandPalette({
               const showCategory = item.category !== prevCategory
 
               return (
-                <div key={item.id}>
+                <div key={item.id} role="presentation">
                   {showCategory && (
-                    <div
-                      style={{
-                        padding: '0.45rem 1rem 0.2rem',
-                        fontSize: '0.7rem',
-                        textTransform: 'uppercase',
-                        letterSpacing: '0.06em',
-                        color: 'var(--text-secondary)',
-                        fontWeight: 600,
-                      }}
-                    >
+                    <div className="palette__group" role="presentation">
                       {item.category}
                     </div>
                   )}
                   <div
+                    id={`palette-option-${idx}`}
                     role="option"
                     aria-selected={active}
-                    onMouseEnter={() => setSelectedIndex(idx)}
-                    onClick={() => item.action()}
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                      gap: '1rem',
-                      padding: '0.65rem 1.25rem',
-                      cursor: 'pointer',
-                      background: active ? 'var(--accent-faint)' : 'transparent',
-                      borderLeft: active
-                        ? '3px solid var(--accent)'
-                        : '3px solid transparent',
-                      boxShadow: active ? 'inset 0 0 12px rgba(0, 210, 255, 0.08)' : 'none',
-                      transition: 'all 120ms ease',
+                    className={active ? 'palette__option palette__option--active' : 'palette__option'}
+                    onMouseMove={() => {
+                      if (!active) setSelectedIndex(idx)
                     }}
+                    onClick={() => item.action()}
                   >
-                    <div style={{ minWidth: 0 }}>
-                      <div
-                        style={{
-                          fontSize: '0.88rem',
-                          fontWeight: 500,
-                          color: 'var(--text-primary)',
-                          whiteSpace: 'nowrap',
-                          overflow: 'hidden',
-                          textOverflow: 'ellipsis',
-                        }}
-                      >
-                        {item.title}
-                      </div>
-                      <div
-                        style={{
-                          fontSize: '0.76rem',
-                          color: 'var(--text-secondary)',
-                          whiteSpace: 'nowrap',
-                          overflow: 'hidden',
-                          textOverflow: 'ellipsis',
-                        }}
-                      >
-                        {item.subtitle}
-                      </div>
+                    <div className="palette__option-text">
+                      <span className="palette__option-title">{item.title}</span>
+                      <span className="palette__option-subtitle">{item.subtitle}</span>
                     </div>
-                    {item.badge && (
-                      <span
-                        className="num"
-                        style={{
-                          fontSize: '0.7rem',
-                          padding: '0.15rem 0.45rem',
-                          border: '1px solid var(--border-subtle)',
-                          background: 'var(--bg-surface)',
-                          color: 'var(--text-secondary)',
-                          flexShrink: 0,
-                        }}
-                      >
-                        {item.badge}
-                      </span>
-                    )}
+                    {item.badge && <span className="palette__badge num">{item.badge}</span>}
                   </div>
                 </div>
               )
@@ -795,22 +701,19 @@ export function CommandPalette({
           )}
         </div>
 
-        <div
-          style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            padding: '0.45rem 1rem',
-            borderTop: '1px solid var(--border-subtle)',
-            background: 'var(--bg-elevated)',
-            fontSize: '0.72rem',
-            color: 'var(--text-secondary)',
-          }}
-        >
-          <span>↑↓ Navigate · ↵ Execute · ESC Close</span>
-          <span className="num">ATLAS Command Terminal (Ctrl+K)</span>
+        <div className="palette__footer" aria-hidden="true">
+          <span>
+            <kbd className="kbd">↑</kbd> <kbd className="kbd">↓</kbd> to move
+          </span>
+          <span>
+            <kbd className="kbd">Enter</kbd> to open
+          </span>
+          <span className="palette__footer-end">
+            <kbd className="kbd">[</kbd> <kbd className="kbd">]</kbd> previous or next view
+          </span>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   )
 }

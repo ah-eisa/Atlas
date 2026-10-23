@@ -435,12 +435,11 @@ body {
   background: var(--surface-raised);
   color: var(--text-secondary);
   font-family: var(--font-sans);
-  font-size: var(--size-micro);
+  /* Buttons say what they do in plain words: sentence case, readable size. */
+  font-size: var(--size-caption);
   font-weight: var(--weight-medium);
-  letter-spacing: var(--tracking-wide);
   line-height: 1.4;
   text-decoration: none;
-  text-transform: uppercase;
   white-space: nowrap;
   cursor: pointer;
   box-shadow: var(--shadow-sm);
@@ -455,9 +454,7 @@ body {
 .button:hover:not(:disabled) {
   color: var(--text-primary);
   background: var(--surface-hover);
-  border-color: var(--accent);
-  box-shadow: 0 0 10px rgba(0, 210, 255, 0.25);
-  transform: translateY(-1px);
+  border-color: var(--text-tertiary);
 }
 
 .button:focus-visible {
@@ -479,19 +476,17 @@ body {
 }
 
 .button--primary {
-  border: 1px solid rgba(0, 210, 255, 0.6);
-  background: var(--accent-gradient);
-  color: #06090f;
+  border: 1px solid var(--accent);
+  background: var(--accent);
+  color: var(--text-inverse);
   font-weight: var(--weight-semibold);
-  box-shadow: 0 2px 10px rgba(0, 210, 255, 0.35);
+  box-shadow: none;
 }
 
 .button--primary:hover:not(:disabled) {
-  border-color: var(--accent);
-  background: linear-gradient(135deg, #38d9ff 0%, #4f8cf5 100%);
-  color: #06090f;
-  box-shadow: 0 4px 18px rgba(0, 210, 255, 0.55);
-  transform: translateY(-1px);
+  border-color: color-mix(in srgb, var(--accent) 80%, white);
+  background: color-mix(in srgb, var(--accent) 80%, white);
+  color: var(--text-inverse);
 }
 
 .text-button {
@@ -797,4 +792,67 @@ select.input {
     flex-wrap: wrap;
     row-gap: var(--space-1);
   }
+}
+
+/* ------------------------------------------------------------------ *
+ * Table - plain data tables in views and windows                      *
+ * ------------------------------------------------------------------ */
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--size-body);
+}
+
+.table th,
+.table td {
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+  vertical-align: top;
+}
+
+.table th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--surface-panel);
+  color: var(--text-tertiary);
+  font-family: var(--font-sans);
+  font-size: var(--size-caption);
+  font-weight: var(--weight-medium);
+  white-space: nowrap;
+}
+
+.table td {
+  color: var(--text-primary);
+}
+
+.table th.num,
+.table td.num {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.table th.num {
+  text-align: right;
+}
+
+.table td.num {
+  font-family: var(--font-mono);
+  text-align: right;
+}
+
+/* A symbol is an identifier, not a quantity: keep it left-aligned. */
+.table td.num:first-child,
+.table th.num:first-child {
+  text-align: left;
+}
+
+.table tbody tr:hover td {
+  background: var(--surface-hover);
+}
+
+.table tbody tr:last-child td {
+  border-bottom: 0;
 }

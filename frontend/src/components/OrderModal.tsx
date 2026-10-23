@@ -1,12 +1,13 @@
 /**
- * Order Execution Modal - Buy & Sell trades with FIFO lot-matching.
+ * Trade window: record a buy or a sale.
  *
- * Merged from PortfolioManager: provides an institutional trade entry
- * dialog supporting market order execution, real-time position checking,
- * rolling average cost tracking on BUY, and realized P&L calculation on SELL.
+ * The backend matches sales against the oldest lots first; the gain shown
+ * here before submitting is an estimate at the average cost, and says so.
  */
 
 import { useEffect, useState } from 'react'
+
+import { Dialog } from './Dialog'
 
 import {
   ApiError,
@@ -114,26 +115,24 @@ export function OrderModal({
     e.preventDefault()
     const sym = ticker.trim().toUpperCase()
     if (!sym) {
-      setError('Please provide a symbol/ticker.')
+      setError('Enter the symbol you are trading.')
       return
     }
     if (numQty <= 0) {
-      setError('Quantity must be greater than zero.')
+      setError('Enter a quantity above zero.')
       return
     }
     if (numPrice < 0) {
-      setError('Price cannot be negative.')
+      setError('The price cannot be negative.')
       return
     }
     if (orderType === 'SELL') {
       if (!ownedPosition) {
-        setError(`Cannot sell ${sym}: you do not hold this asset in this portfolio.`)
+        setError(`${sym} is not in this portfolio, so there is nothing to sell.`)
         return
       }
       if (ownedPosition.quantity < numQty) {
-        setError(
-          `Insufficient shares: portfolio holds ${ownedPosition.quantity} units, cannot sell ${numQty}.`,
-        )
+        setError(`You hold ${ownedPosition.quantity} ${sym}. Enter ${ownedPosition.quantity} or less.`)
         return
       }
     }
@@ -156,200 +155,183 @@ export function OrderModal({
       if (err instanceof ApiError) {
         setError(err.message)
       } else {
-        setError(err instanceof Error ? err.message : 'Failed to execute order.')
+        setError(err instanceof Error ? err.message : 'The order was not recorded. Try again.')
       }
     } finally {
       setSaving(false)
     }
   }
 
+  const currency = ownedPosition?.currency || baseCurrency
+  const side = orderType === 'BUY' ? 'Buy' : 'Sell'
+  const submitLabel = saving
+    ? orderType === 'BUY'
+      ? 'Buying…'
+      : 'Selling…'
+    : `${side}${numQty > 0 ? ` ${numQty}` : ''}${ticker.trim() ? ` ${ticker.trim()}` : ''}`
+
   return (
-    <div className="modal-backdrop" onClick={onClose} role="presentation">
-      <div
-        className="modal-card modal-card--wide"
-        onClick={(e) => e.stopPropagation()}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="order-modal-title"
-      >
-        <div className="modal-card__header">
-          <div>
-            <h2 id="order-modal-title" className="modal-card__title">
-              Execute Trade Order
-            </h2>
-            <p className="modal-card__subtitle">
-              Place a BUY or SELL order with automatic FIFO lot matching and rolling cost recalculation.
-            </p>
-          </div>
-          <button
-            type="button"
-            className="modal-card__close"
-            onClick={onClose}
-            aria-label="Close dialog"
-          >
-            &times;
+    <Dialog
+      open={isOpen}
+      onClose={onClose}
+      size="lg"
+      title="Trade"
+      description="Record a buy or a sale. A sale is matched against your oldest units first."
+      onSubmit={handleSubmit}
+      footer={
+        <>
+          <button type="button" className="button button--quiet" onClick={onClose} disabled={saving}>
+            Cancel
           </button>
+          <button
+            type="submit"
+            className={`button ${orderType === 'BUY' ? 'button--primary' : 'button--danger'}`}
+            disabled={saving || numQty <= 0}
+          >
+            {submitLabel}
+          </button>
+        </>
+      }
+    >
+      <div className="choice" role="radiogroup" aria-label="Order side">
+        {(['BUY', 'SELL'] as const).map((value) => (
+          <button
+            key={value}
+            type="button"
+            role="radio"
+            aria-checked={orderType === value}
+            className={`choice__option choice__option--${value === 'BUY' ? 'buy' : 'sell'}`}
+            onClick={() => {
+              setOrderType(value)
+              setError(null)
+            }}
+          >
+            {value === 'BUY' ? 'Buy' : 'Sell'}
+          </button>
+        ))}
+      </div>
+
+      <div className="dialog__grid">
+        <div className="field">
+          <label className="field__label" htmlFor="order-ticker">
+            Symbol
+          </label>
+          <div className="field__inline">
+            <input
+              id="order-ticker"
+              className="input num"
+              type="text"
+              placeholder="AAPL, VWCE.DE, BTC-USD"
+              value={ticker}
+              onChange={(e) => setTicker(e.target.value.toUpperCase())}
+              onBlur={handleLookup}
+              disabled={saving}
+              autoComplete="off"
+              spellCheck={false}
+              required
+              data-autofocus={initialTicker ? undefined : true}
+            />
+            <button
+              type="button"
+              className="button"
+              onClick={handleLookup}
+              disabled={lookupLoading || !ticker.trim()}
+            >
+              {lookupLoading ? 'Looking up…' : 'Look up'}
+            </button>
+          </div>
+          {instrumentName && <span className="field__hint">{instrumentName}</span>}
         </div>
 
-        <form onSubmit={handleSubmit} className="modal-card__form">
-          {/* Order Side Selector: BUY / SELL */}
-          <div className="trade-side-selector">
-            <button
-              type="button"
-              className={`trade-side-btn trade-side-btn--buy ${
-                orderType === 'BUY' ? 'trade-side-btn--active' : ''
-              }`}
-              onClick={() => {
-                setOrderType('BUY')
-                setError(null)
-              }}
-            >
-              ▲ BUY (شراء)
-            </button>
-            <button
-              type="button"
-              className={`trade-side-btn trade-side-btn--sell ${
-                orderType === 'SELL' ? 'trade-side-btn--active' : ''
-              }`}
-              onClick={() => {
-                setOrderType('SELL')
-                setError(null)
-              }}
-            >
-              ▼ SELL (بيع)
-            </button>
-          </div>
+        <label className="field">
+          <span className="field__label">Date</span>
+          <input
+            className="input num"
+            type="date"
+            max={todayIso()}
+            value={executedAt}
+            onChange={(e) => setExecutedAt(e.target.value)}
+            disabled={saving}
+            required
+          />
+        </label>
 
-          <div className="modal-card__grid">
-            <div className="field">
-              <span className="field__label">Symbol / Ticker</span>
-              <div className="field__inline">
-                <input
-                  className="input num"
-                  type="text"
-                  placeholder="e.g. AAPL, NVDA, BTC-USD"
-                  value={ticker}
-                  onChange={(e) => setTicker(e.target.value.toUpperCase())}
-                  onBlur={handleLookup}
-                  disabled={saving || lookupLoading}
-                  required
-                />
-                <button
-                  type="button"
-                  className="button"
-                  onClick={handleLookup}
-                  disabled={lookupLoading || !ticker.trim()}
-                >
-                  {lookupLoading ? '...' : 'Lookup'}
-                </button>
-              </div>
-              {instrumentName && (
-                <span className="panel__subtitle" style={{ marginTop: '2px', display: 'block' }}>
-                  {instrumentName}
-                </span>
-              )}
-            </div>
+        <label className="field">
+          <span className="field__label">Quantity</span>
+          <input
+            className="input num"
+            type="text"
+            inputMode="decimal"
+            placeholder="10 or 0.5"
+            value={quantity}
+            onChange={(e) => setQuantity(e.target.value)}
+            disabled={saving}
+            required
+            data-autofocus={initialTicker ? true : undefined}
+          />
+          {ownedPosition && (
+            <span className="field__hint">
+              You hold {ownedPosition.quantity} at an average of{' '}
+              {formatMoney(ownedPosition.cost_basis_per_unit)} {ownedPosition.currency}
+            </span>
+          )}
+        </label>
 
-            <label className="field">
-              <span className="field__label">Execution Date</span>
-              <input
-                className="input num"
-                type="date"
-                max={todayIso()}
-                value={executedAt}
-                onChange={(e) => setExecutedAt(e.target.value)}
-                disabled={saving}
-                required
-              />
-            </label>
+        <label className="field">
+          <span className="field__label">Price per unit</span>
+          <input
+            className="input num"
+            type="text"
+            inputMode="decimal"
+            placeholder="182.50"
+            value={price}
+            onChange={(e) => setPrice(e.target.value)}
+            disabled={saving}
+            required
+          />
+        </label>
 
-            <label className="field">
-              <span className="field__label">Quantity (Shares / Units)</span>
-              <input
-                className="input num"
-                type="text"
-                placeholder="e.g. 10 or 0.5"
-                value={quantity}
-                onChange={(e) => setQuantity(e.target.value)}
-                disabled={saving}
-                required
-              />
-              {ownedPosition && (
-                <span className="field__hint">
-                  Owned: {ownedPosition.quantity} units (Avg: {formatMoney(ownedPosition.cost_basis_per_unit)})
-                </span>
-              )}
-            </label>
+        <label className="field dialog__span">
+          <span className="field__label">Note (optional)</span>
+          <input
+            className="input"
+            type="text"
+            placeholder="Broker reference, reason for the trade"
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            disabled={saving}
+          />
+        </label>
+      </div>
 
-            <label className="field">
-              <span className="field__label">Execution Price (per unit)</span>
-              <input
-                className="input num"
-                type="text"
-                placeholder="e.g. 182.50"
-                value={price}
-                onChange={(e) => setPrice(e.target.value)}
-                disabled={saving}
-                required
-              />
-            </label>
-          </div>
-
-          <label className="field">
-            <span className="field__label">Order Notes / Broker Reference (Optional)</span>
-            <input
-              className="input"
-              type="text"
-              placeholder="e.g. IBKR limit fill, DCA monthly allocation"
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              disabled={saving}
-            />
-          </label>
-
-          {/* Trade Summary Strip */}
-          <div className="trade-preview-card">
-            <div className="trade-preview-row">
-              <span className="trade-preview-label">Estimated Notional Value:</span>
-              <span className="trade-preview-value num">
-                {formatMoney(totalNotional)} {ownedPosition?.currency || baseCurrency}
+      <div className="dialog__summary" aria-live="polite">
+        <div className="dialog__summary-row">
+          <span>Total</span>
+          <span className="dialog__summary-value">
+            {formatMoney(totalNotional)} {currency}
+          </span>
+        </div>
+        {orderType === 'SELL' && estimatedRealizedPnl !== null && (
+          <>
+            <div className="dialog__summary-row">
+              <span>Estimated gain or loss</span>
+              <span className={`dialog__summary-value ${signClass(estimatedRealizedPnl)}`}>
+                {formatMoneySigned(estimatedRealizedPnl)} {currency}
               </span>
             </div>
-            {orderType === 'SELL' && estimatedRealizedPnl !== null && (
-              <div className="trade-preview-row">
-                <span className="trade-preview-label">Estimated Realized P&L:</span>
-                <span className={`trade-preview-value num ${signClass(estimatedRealizedPnl)}`}>
-                  {formatMoneySigned(estimatedRealizedPnl)} {ownedPosition?.currency || baseCurrency}
-                </span>
-              </div>
-            )}
-          </div>
-
-          {error && <div className="modal-card__error">{error}</div>}
-
-          <div className="modal-card__actions">
-            <button
-              type="button"
-              className="button button--quiet"
-              onClick={onClose}
-              disabled={saving}
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              className={`button ${orderType === 'BUY' ? 'button--primary' : 'button--danger'}`}
-              disabled={saving || numQty <= 0}
-            >
-              {saving
-                ? 'Executing...'
-                : orderType === 'BUY'
-                ? `Confirm BUY ${numQty > 0 ? numQty : ''} ${ticker}`
-                : `Confirm SELL ${numQty > 0 ? numQty : ''} ${ticker}`}
-            </button>
-          </div>
-        </form>
+            <span className="dialog__summary-note">
+              Estimated at your average cost. The recorded figure uses the cost of the oldest
+              units sold, so it can differ.
+            </span>
+          </>
+        )}
       </div>
-    </div>
+
+      {error && (
+        <div className="dialog__error" role="alert">
+          {error}
+        </div>
+      )}
+    </Dialog>
   )
 }

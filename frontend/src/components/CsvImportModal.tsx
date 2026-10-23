@@ -1,7 +1,18 @@
-import { useState } from 'react'
+/**
+ * Import window: positions, trades and cash flows from a CSV file or a
+ * broker statement.
+ *
+ * Nothing is written until the preview has been reviewed and Import is
+ * pressed. The backend detects the format (ATLAS columns, Interactive
+ * Brokers, or a generic broker export) and replays trades in date order.
+ */
+
+import { useState, type DragEvent } from 'react'
+
 import { commitCsvImport, type DataConfig, previewCsvImport } from '../lib/api'
 import { formatMoney } from '../lib/format'
 import type { CsvImportPreview } from '../lib/types'
+import { Dialog } from './Dialog'
 
 interface CsvImportModalProps {
   isOpen: boolean
@@ -23,6 +34,17 @@ AMZN,AMAZON.COM INC,STK,20,185.40,USD,20250210
 GOOGL,ALPHABET INC-CL A,STK,15,172.50,USD,20250212
 TSLA,TESLA INC,STK,10,240.00,USD,20250215`
 
+const FORMAT_LABELS: Record<string, string> = {
+  atlas_combined: 'An ATLAS file',
+  ibkr_statement: 'An Interactive Brokers statement',
+  broker_trades: 'A broker trade export',
+  generic_positions: 'A list of positions',
+}
+
+function plural(count: number, one: string, many: string): string {
+  return `${count} ${count === 1 ? one : many}`
+}
+
 export function CsvImportModal({
   isOpen,
   onClose,
@@ -31,19 +53,21 @@ export function CsvImportModal({
   onImportSuccess,
 }: CsvImportModalProps) {
   const [csvText, setCsvText] = useState('')
+  const [fileName, setFileName] = useState<string | null>(null)
   const [preview, setPreview] = useState<CsvImportPreview | null>(null)
   const [loading, setLoading] = useState(false)
   const [committing, setCommitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [successMsg, setSuccessMsg] = useState<string | null>(null)
   const [mode, setMode] = useState<'merge' | 'replace'>('merge')
+  const [dragging, setDragging] = useState(false)
 
   if (!isOpen) return null
 
   const handlePreview = async (textToPreview?: string) => {
     const raw = textToPreview ?? csvText
     if (!raw.trim()) {
-      setError('Please paste or upload CSV text.')
+      setError('Choose a file, drop one here, or paste the rows first.')
       return
     }
     setLoading(true)
@@ -53,22 +77,35 @@ export function CsvImportModal({
       const data = await previewCsvImport(config, raw)
       setPreview(data)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to parse CSV.')
+      setPreview(null)
+      setError(err instanceof Error ? err.message : 'The file could not be read as CSV.')
     } finally {
       setLoading(false)
     }
   }
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (!file) return
+  const readFile = (file: File) => {
     const reader = new FileReader()
     reader.onload = (event) => {
       const content = String(event.target?.result ?? '')
       setCsvText(content)
+      setFileName(file.name)
       void handlePreview(content)
     }
     reader.readAsText(file)
+  }
+
+  const handleDrop = (event: DragEvent<HTMLLabelElement>) => {
+    event.preventDefault()
+    setDragging(false)
+    const file = event.dataTransfer.files?.[0]
+    if (file) readFile(file)
+  }
+
+  const loadSample = (text: string, name: string) => {
+    setCsvText(text)
+    setFileName(name)
+    void handlePreview(text)
   }
 
   const handleCommit = async () => {
@@ -78,388 +115,290 @@ export function CsvImportModal({
     try {
       const result = await commitCsvImport(config, csvText, mode)
       setSuccessMsg(
-        `Successfully imported ${result.imported_positions} positions, ${result.imported_trades} trades, and ${result.imported_cash_flows} cash flows.`,
+        `Imported ${plural(result.imported_positions, 'position', 'positions')}, ` +
+          `${plural(result.imported_trades, 'trade', 'trades')} and ` +
+          `${plural(result.imported_cash_flows, 'cash flow', 'cash flows')}.`,
       )
       onImportSuccess()
       window.setTimeout(() => {
         onClose()
         setPreview(null)
         setCsvText('')
+        setFileName(null)
         setSuccessMsg(null)
       }, 1500)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Import failed.')
+      setError(err instanceof Error ? err.message : 'Nothing was imported. Try again.')
     } finally {
       setCommitting(false)
     }
   }
 
+  const rowsToImport = preview
+    ? preview.positions.length + preview.trades.length + preview.cash_flows.length
+    : 0
+
   return (
-    <div
-      className="modal-backdrop"
-      role="dialog"
-      aria-modal="true"
-      aria-label="CSV and Broker Statement Import Wizard"
-      onClick={(e) => {
-        if (e.target === e.currentTarget) onClose()
-      }}
-      style={{
-        position: 'fixed',
-        inset: 0,
-        background: 'rgba(0, 0, 0, 0.65)',
-        zIndex: 1100,
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        padding: '1rem',
-      }}
-    >
-      <div
-        style={{
-          width: 'min(820px, 96vw)',
-          background: 'var(--surface-panel)',
-          border: '1px solid rgba(0, 210, 255, 0.35)',
-          borderRadius: 'var(--radius-lg)',
-          boxShadow: '0 24px 60px rgba(0, 0, 0, 0.8), 0 0 30px rgba(0, 210, 255, 0.15)',
-          maxHeight: '88vh',
-          display: 'flex',
-          flexDirection: 'column',
-          overflow: 'hidden',
-        }}
-      >
-        <div
-          style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            padding: '1rem 1.4rem',
-            borderBottom: '1px solid var(--line)',
-            background: 'var(--surface-header)',
-          }}
-        >
-          <div style={{ flex: '1 1 auto', minWidth: 0, paddingRight: '0.5rem' }}>
-            <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 600 }}>
-              Broker Statement & CSV Import Wizard
-            </h3>
-            <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-              Auto-detects Interactive Brokers (IBKR), ATLAS standard, or custom broker statements (Base: {baseCurrency})
+    <Dialog
+      open={isOpen}
+      onClose={onClose}
+      size="xl"
+      title="Import positions and trades"
+      description={`From an ATLAS file, an Interactive Brokers statement or another broker's CSV export. Amounts without a currency are read as ${baseCurrency}.`}
+      closeOnBackdrop={!csvText.trim()}
+      footer={
+        <>
+          <div className="dialog__footer-start import__mode">
+            <span className="import__mode-label" id="import-mode-label">
+              Existing positions
+            </span>
+            <div className="choice" role="radiogroup" aria-labelledby="import-mode-label">
+              <button
+                type="button"
+                role="radio"
+                aria-checked={mode === 'merge'}
+                className="choice__option"
+                onClick={() => setMode('merge')}
+              >
+                Keep and add
+              </button>
+              <button
+                type="button"
+                role="radio"
+                aria-checked={mode === 'replace'}
+                className="choice__option"
+                onClick={() => setMode('replace')}
+              >
+                Replace
+              </button>
             </div>
           </div>
+          <button type="button" className="button button--quiet" onClick={onClose}>
+            Cancel
+          </button>
           <button
             type="button"
-            className="button button--quiet button--mini"
-            onClick={onClose}
-            aria-label="Close modal"
-            style={{ flexShrink: 0, position: 'relative', zIndex: 10 }}
+            className="button button--primary"
+            onClick={() => void handleCommit()}
+            disabled={committing || rowsToImport === 0}
           >
-            ✕
+            {committing ? 'Importing…' : rowsToImport > 0 ? `Import ${plural(rowsToImport, 'row', 'rows')}` : 'Import'}
+          </button>
+        </>
+      }
+    >
+      {successMsg && (
+        <div className="dialog__notice dialog__notice--success" role="status">
+          {successMsg}
+        </div>
+      )}
+
+      <section className="import__source" aria-label="File to import">
+        <label
+          className={dragging ? 'dropzone dropzone--active' : 'dropzone'}
+          onDragOver={(event) => {
+            event.preventDefault()
+            setDragging(true)
+          }}
+          onDragLeave={() => setDragging(false)}
+          onDrop={handleDrop}
+        >
+          <input
+            type="file"
+            accept=".csv,.txt"
+            className="dropzone__input"
+            onChange={(event) => {
+              const file = event.target.files?.[0]
+              if (file) readFile(file)
+            }}
+          />
+          <span className="dropzone__title">
+            {fileName ? fileName : 'Choose a CSV file, or drop it here'}
+          </span>
+          <span className="dropzone__hint">Comma- or semicolon-separated, with a header row.</span>
+        </label>
+
+        <div className="import__samples">
+          <span>Or try a sample:</span>
+          <button
+            type="button"
+            className="button button--quiet button--sm"
+            onClick={() => loadSample(SAMPLE_ATLAS_CSV, 'ATLAS sample')}
+          >
+            ATLAS sample
+          </button>
+          <button
+            type="button"
+            className="button button--quiet button--sm"
+            onClick={() => loadSample(SAMPLE_IBKR_CSV, 'Interactive Brokers sample')}
+          >
+            Interactive Brokers sample
           </button>
         </div>
 
-        <div style={{ padding: '1rem 1.25rem', overflowY: 'auto', flex: 1 }}>
-          {error && (
-            <div
-              style={{
-                padding: '0.65rem 0.85rem',
-                background: 'rgba(218, 30, 40, 0.1)',
-                borderLeft: '3px solid var(--negative)',
-                marginBottom: '1rem',
-                fontSize: '0.85rem',
-                color: 'var(--negative)',
-              }}
-            >
-              {error}
+        <details className="import__paste" open={Boolean(csvText) && !fileName}>
+          <summary>Paste rows instead</summary>
+          <textarea
+            className="input num import__textarea"
+            rows={6}
+            value={csvText}
+            onChange={(e) => {
+              setCsvText(e.target.value)
+              setFileName(null)
+            }}
+            placeholder="ticker,quantity,cost_basis_per_unit,acquired"
+            spellCheck={false}
+          />
+          <button
+            type="button"
+            className="button"
+            onClick={() => void handlePreview()}
+            disabled={loading || !csvText.trim()}
+          >
+            {loading ? 'Reading…' : 'Preview'}
+          </button>
+        </details>
+      </section>
+
+      {error && (
+        <div className="dialog__error" role="alert">
+          {error}
+        </div>
+      )}
+
+      {loading && !preview && (
+        <p className="import__status" role="status">
+          Reading the file…
+        </p>
+      )}
+
+      {preview && (
+        <section className="import__preview" aria-label="What will be imported">
+          <p className="import__detected">
+            {FORMAT_LABELS[preview.detected_format] ?? preview.detected_format} with{' '}
+            {plural(preview.summary.positions_count, 'position', 'positions')},{' '}
+            {plural(preview.summary.trades_count, 'trade', 'trades')} and{' '}
+            {plural(preview.summary.cash_flows_count, 'cash flow', 'cash flows')}.
+          </p>
+
+          {preview.warnings.length > 0 && (
+            <div className="dialog__notice dialog__notice--warning">
+              <strong>
+                {plural(preview.warnings.length, 'row needs', 'rows need')} attention
+              </strong>
+              <ul>
+                {preview.warnings.map((w, idx) => (
+                  <li key={idx}>{w}</li>
+                ))}
+              </ul>
             </div>
           )}
 
-          {successMsg && (
-            <div
-              style={{
-                padding: '0.65rem 0.85rem',
-                background: 'rgba(36, 161, 72, 0.1)',
-                borderLeft: '3px solid var(--positive)',
-                marginBottom: '1rem',
-                fontSize: '0.85rem',
-                color: 'var(--positive)',
-              }}
-            >
-              {successMsg}
-            </div>
-          )}
-
-          <div style={{ marginBottom: '1rem' }}>
-            <div
-              style={{
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                marginBottom: '0.4rem',
-              }}
-            >
-              <label className="field__label" style={{ margin: 0 }}>
-                Upload CSV File or Paste Raw Text:
-              </label>
-              <div style={{ display: 'flex', gap: '0.5rem' }}>
-                <button
-                  type="button"
-                  className="button button--quiet button--mini"
-                  onClick={() => {
-                    setCsvText(SAMPLE_ATLAS_CSV)
-                    void handlePreview(SAMPLE_ATLAS_CSV)
-                  }}
-                >
-                  Load Sample ATLAS CSV
-                </button>
-                <button
-                  type="button"
-                  className="button button--quiet button--mini"
-                  onClick={() => {
-                    setCsvText(SAMPLE_IBKR_CSV)
-                    void handlePreview(SAMPLE_IBKR_CSV)
-                  }}
-                >
-                  Load Sample IBKR CSV
-                </button>
+          {preview.positions.length > 0 && (
+            <div className="import__table">
+              <h3>Positions</h3>
+              <div className="grid__scroll">
+                <table className="table">
+                  <thead>
+                    <tr>
+                      <th>Symbol</th>
+                      <th>Name</th>
+                      <th>Class</th>
+                      <th>Region</th>
+                      <th>Currency</th>
+                      <th className="num">Quantity</th>
+                      <th className="num">Cost per unit</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {preview.positions.map((p, idx) => (
+                      <tr key={idx}>
+                        <td className="num">
+                          <strong>{p.ticker}</strong>
+                        </td>
+                        <td>{p.name}</td>
+                        <td>{p.asset_class}</td>
+                        <td>{p.region}</td>
+                        <td>{p.currency}</td>
+                        <td className="num">{p.quantity}</td>
+                        <td className="num">{formatMoney(p.cost_basis_per_unit)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
             </div>
+          )}
 
-            <input
-              type="file"
-              accept=".csv,.txt"
-              onChange={handleFileUpload}
-              style={{
-                marginBottom: '0.5rem',
-                fontSize: '0.8rem',
-                display: 'block',
-              }}
-            />
-
-            <textarea
-              className="input num"
-              rows={6}
-              value={csvText}
-              onChange={(e) => setCsvText(e.target.value)}
-              placeholder="Paste comma- or semicolon-separated rows here..."
-              style={{
-                width: '100%',
-                fontFamily: 'monospace',
-                fontSize: '0.78rem',
-                resize: 'vertical',
-              }}
-            />
-          </div>
-
-          <div
-            style={{
-              display: 'flex',
-              gap: '0.75rem',
-              alignItems: 'center',
-              marginBottom: '1rem',
-            }}
-          >
-            <button
-              type="button"
-              className="button button--sm"
-              onClick={() => void handlePreview()}
-              disabled={loading}
-            >
-              {loading ? 'Analyzing…' : 'Parse & Preview CSV'}
-            </button>
-            {preview && (
-              <span
-                className="num"
-                style={{
-                  fontSize: '0.75rem',
-                  padding: '0.2rem 0.5rem',
-                  background: 'var(--bg-elevated)',
-                  border: '1px solid var(--border-subtle)',
-                }}
-              >
-                Format: <strong>{preview.detected_format}</strong> · {preview.summary.positions_count} positions · {preview.summary.trades_count} trades
-              </span>
-            )}
-          </div>
-
-          {preview && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-              {preview.warnings.length > 0 && (
-                <div
-                  style={{
-                    padding: '0.65rem 0.85rem',
-                    background: 'rgba(210, 153, 34, 0.1)',
-                    borderLeft: '3px solid #d29922',
-                    fontSize: '0.8rem',
-                  }}
-                >
-                  <strong>Warnings:</strong>
-                  <ul style={{ margin: '0.25rem 0 0', paddingLeft: '1.25rem' }}>
-                    {preview.warnings.map((w, idx) => (
-                      <li key={idx}>{w}</li>
+          {preview.trades.length > 0 && (
+            <div className="import__table">
+              <h3>Trades, in the order they will be recorded</h3>
+              <div className="grid__scroll">
+                <table className="table">
+                  <thead>
+                    <tr>
+                      <th>Date</th>
+                      <th>Symbol</th>
+                      <th>Side</th>
+                      <th className="num">Quantity</th>
+                      <th className="num">Price</th>
+                      <th>Note</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {preview.trades.map((t, idx) => (
+                      <tr key={idx}>
+                        <td className="num">{t.executed_at}</td>
+                        <td className="num">
+                          <strong>{t.ticker}</strong>
+                        </td>
+                        <td className={t.order_type === 'BUY' ? 'pos' : 'neg'}>
+                          {t.order_type === 'BUY' ? 'Buy' : 'Sell'}
+                        </td>
+                        <td className="num">{t.quantity}</td>
+                        <td className="num">{formatMoney(t.price)}</td>
+                        <td>{t.notes}</td>
+                      </tr>
                     ))}
-                  </ul>
-                </div>
-              )}
-
-              {preview.positions.length > 0 && (
-                <div>
-                  <h4 style={{ margin: '0 0 0.4rem', fontSize: '0.85rem' }}>
-                    Positions to Import ({preview.positions.length}):
-                  </h4>
-                  <div className="grid__scroll" style={{ maxHeight: '180px' }}>
-                    <table className="table">
-                      <thead>
-                        <tr>
-                          <th>Ticker</th>
-                          <th>Name</th>
-                          <th>Class</th>
-                          <th>Region</th>
-                          <th>CCY</th>
-                          <th className="num">Quantity</th>
-                          <th className="num">Cost / Unit</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {preview.positions.map((p, idx) => (
-                          <tr key={idx}>
-                            <td className="num">
-                              <strong>{p.ticker}</strong>
-                            </td>
-                            <td>{p.name}</td>
-                            <td>{p.asset_class}</td>
-                            <td>{p.region}</td>
-                            <td className="num">{p.currency}</td>
-                            <td className="num">{p.quantity}</td>
-                            <td className="num">{formatMoney(p.cost_basis_per_unit)}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              )}
-
-              {preview.trades.length > 0 && (
-                <div>
-                  <h4 style={{ margin: '0 0 0.4rem', fontSize: '0.85rem' }}>
-                    Trades to Record ({preview.trades.length}):
-                  </h4>
-                  <div className="grid__scroll" style={{ maxHeight: '140px' }}>
-                    <table className="table">
-                      <thead>
-                        <tr>
-                          <th>Ticker</th>
-                          <th>Side</th>
-                          <th className="num">Quantity</th>
-                          <th className="num">Price</th>
-                          <th>Date</th>
-                          <th>Notes</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {preview.trades.map((t, idx) => (
-                          <tr key={idx}>
-                            <td className="num">
-                              <strong>{t.ticker}</strong>
-                            </td>
-                            <td className={t.order_type === 'BUY' ? 'pos' : 'neg'}>
-                              {t.order_type}
-                            </td>
-                            <td className="num">{t.quantity}</td>
-                            <td className="num">{formatMoney(t.price)}</td>
-                            <td className="num">{t.executed_at}</td>
-                            <td>{t.notes}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              )}
-
-              {preview.cash_flows.length > 0 && (
-                <div>
-                  <h4 style={{ margin: '0 0 0.4rem', fontSize: '0.85rem' }}>
-                    Cash Flows ({preview.cash_flows.length}):
-                  </h4>
-                  <div className="grid__scroll" style={{ maxHeight: '120px' }}>
-                    <table className="table">
-                      <thead>
-                        <tr>
-                          <th>Date</th>
-                          <th className="num">Amount</th>
-                          <th>Note</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {preview.cash_flows.map((f, idx) => (
-                          <tr key={idx}>
-                            <td className="num">{f.occurred_on}</td>
-                            <td className="num">{formatMoney(f.amount)}</td>
-                            <td>{f.note}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              )}
+                  </tbody>
+                </table>
+              </div>
             </div>
           )}
-        </div>
 
-        <div
-          style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            padding: '0.85rem 1.25rem',
-            borderTop: '1px solid var(--border-subtle)',
-            background: 'var(--bg-elevated)',
-          }}
-        >
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.82rem' }}>
-            <span>Import Mode:</span>
-            <label style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', cursor: 'pointer' }}>
-              <input
-                type="radio"
-                name="importMode"
-                value="merge"
-                checked={mode === 'merge'}
-                onChange={() => setMode('merge')}
-              />
-              <span>Merge & Update</span>
-            </label>
-            <label style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', cursor: 'pointer' }}>
-              <input
-                type="radio"
-                name="importMode"
-                value="replace"
-                checked={mode === 'replace'}
-                onChange={() => setMode('replace')}
-              />
-              <span>Replace All</span>
-            </label>
-          </div>
+          {preview.cash_flows.length > 0 && (
+            <div className="import__table">
+              <h3>Cash flows</h3>
+              <div className="grid__scroll">
+                <table className="table">
+                  <thead>
+                    <tr>
+                      <th>Date</th>
+                      <th className="num">Amount</th>
+                      <th>Note</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {preview.cash_flows.map((f, idx) => (
+                      <tr key={idx}>
+                        <td className="num">{f.occurred_on}</td>
+                        <td className="num">{formatMoney(f.amount)}</td>
+                        <td>{f.note}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
 
-          <div style={{ display: 'flex', gap: '0.5rem' }}>
-            <button
-              type="button"
-              className="button button--quiet button--sm"
-              onClick={onClose}
-            >
-              Cancel
-            </button>
-            <button
-              type="button"
-              className="button button--primary button--sm"
-              onClick={() => void handleCommit()}
-              disabled={committing || !preview || (preview.positions.length === 0 && preview.trades.length === 0 && preview.cash_flows.length === 0)}
-            >
-              {committing ? 'Committing…' : 'Commit & Import Data'}
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
+          {mode === 'replace' && preview.positions.length > 0 && (
+            <div className="dialog__notice dialog__notice--warning">
+              Replace removes every position in this portfolio before importing these.
+            </div>
+          )}
+        </section>
+      )}
+    </Dialog>
   )
 }

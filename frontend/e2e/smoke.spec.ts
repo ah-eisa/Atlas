@@ -156,12 +156,12 @@ test('the holdings grid scrolls rather than breaking the layout', async ({ page 
 
 test('command palette opens on Ctrl+K and executes deep-link search', async ({ page }) => {
   await page.goto('/?source=snapshot#/overview')
-  await page.getByRole('button', { name: 'Open Command Palette' }).click()
+  await page.getByRole('button', { name: 'Search and commands' }).click()
 
-  const dialog = page.getByRole('dialog', { name: 'Command Palette' })
+  const dialog = page.getByRole('dialog', { name: 'Search and commands' })
   await expect(dialog).toBeVisible()
 
-  const searchInput = page.getByLabel('Command palette search')
+  const searchInput = page.getByLabel('Search holdings, symbols and commands')
   await searchInput.fill('NVDA 10-K')
   await expect(dialog.getByRole('option').first()).toContainText('NVDA')
   await searchInput.press('Enter')
@@ -172,19 +172,19 @@ test('command palette opens on Ctrl+K and executes deep-link search', async ({ p
 test('watchlist modal opens and shows watchlist items', async ({ page, isMobile }) => {
   await page.goto('/?source=snapshot#/overview')
   if (isMobile) {
-    await page.getByRole('button', { name: 'Open Command Palette' }).click()
-    const cp = page.getByRole('dialog', { name: 'Command Palette' })
+    await page.getByRole('button', { name: 'Search and commands' }).click()
+    const cp = page.getByRole('dialog', { name: 'Search and commands' })
     await expect(cp).toBeVisible()
-    await page.getByLabel('Command palette search').fill('Watchlist')
+    await page.getByLabel('Search holdings, symbols and commands').fill('Watchlist')
     await cp.getByRole('option', { name: /Open Watchlists/i }).click()
   } else {
-    await page.getByRole('button', { name: 'Open Watchlists' }).click()
+    await page.getByRole('button', { name: 'Watchlist', exact: true }).click()
   }
 
-  const dialog = page.getByRole('dialog', { name: 'Watchlists and Smart Alerts' })
+  const dialog = page.getByRole('dialog', { name: 'Watchlist and alerts' })
   await expect(dialog).toBeVisible()
   await expect(dialog.getByText('NVDA')).toBeVisible()
-  await dialog.getByRole('button', { name: 'Close modal' }).click()
+  await dialog.getByRole('button', { name: 'Close', exact: true }).click()
   await expect(dialog).not.toBeVisible()
 })
 
@@ -192,10 +192,44 @@ test('csv import modal opens and previews sample statement', async ({ page }) =>
   await page.goto('/?source=snapshot#/data')
   await page.getByRole('button', { name: 'Import CSV / Statement' }).click()
 
-  const dialog = page.getByRole('dialog', { name: 'CSV and Broker Statement Import Wizard' })
+  const dialog = page.getByRole('dialog', { name: 'Import positions and trades' })
   await expect(dialog).toBeVisible()
-  await dialog.getByRole('button', { name: 'Load Sample ATLAS CSV' }).click()
-  await expect(dialog.getByText('AAPL')).toBeVisible()
-  await dialog.getByRole('button', { name: 'Close modal' }).click()
+  await dialog.getByRole('button', { name: 'ATLAS sample' }).click()
+  // The preview lists what would be imported before anything is written.
+  await expect(dialog.getByRole('heading', { name: 'Positions', exact: true })).toBeVisible()
+  await expect(dialog.getByRole('button', { name: /^Import \d+ rows?$/ })).toBeEnabled()
+  await dialog.getByRole('button', { name: 'Close', exact: true }).click()
   await expect(dialog).not.toBeVisible()
+})
+
+test('a window closes on Escape and gives focus back to what opened it', async ({ page }) => {
+  await page.goto('/?source=snapshot#/data')
+  const opener = page.getByRole('button', { name: 'Import CSV / Statement' })
+  await opener.click()
+
+  const dialog = page.getByRole('dialog', { name: 'Import positions and trades' })
+  await expect(dialog).toBeVisible()
+  // The page behind a window does not scroll.
+  await expect(page.locator('body')).toHaveClass(/has-modal/)
+
+  await page.keyboard.press('Escape')
+  await expect(dialog).not.toBeVisible()
+  await expect(opener).toBeFocused()
+  await expect(page.locator('body')).not.toHaveClass(/has-modal/)
+})
+
+test('the navigation is grouped and [ ] step between views', async ({ page }) => {
+  await page.goto('/?source=snapshot#/overview')
+  const nav = page.getByRole('navigation', { name: 'Primary' })
+  for (const group of ['Portfolio', 'Book', 'Markets', 'Sources']) {
+    await expect(nav.getByRole('group', { name: group })).toBeAttached()
+  }
+  await expect(nav.getByRole('link', { name: 'Overview' })).toHaveAttribute('aria-current', 'page')
+
+  await page.locator('body').press(']')
+  await expect(page).toHaveURL(/#\/performance/)
+  await expect(nav.getByRole('link', { name: 'Performance' })).toHaveAttribute('aria-current', 'page')
+
+  await page.locator('body').press('[')
+  await expect(page).toHaveURL(/#\/overview/)
 })

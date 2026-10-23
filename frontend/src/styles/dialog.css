@@ -1,0 +1,858 @@
+/**
+ * Windows.
+ *
+ * One panel style for every modal: a quiet hairline edge rather than a neon
+ * one, a header that names the task in sentence case, a body that scrolls on
+ * its own, and a footer whose actions never scroll away. Below 600px the
+ * window docks to the bottom of the screen as a sheet.
+ */
+
+body.has-modal {
+  overflow: hidden;
+}
+
+.dialog-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: clamp(16px, 9vh, 96px) var(--space-5) var(--space-5);
+  background: rgba(4, 7, 12, 0.72);
+  backdrop-filter: blur(3px);
+  animation: dialog-backdrop-in var(--duration-base) var(--easing);
+}
+
+[data-theme='light'] .dialog-backdrop {
+  background: rgba(15, 23, 42, 0.38);
+}
+
+.dialog {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-height: min(820px, calc(100vh - clamp(16px, 9vh, 96px) - var(--space-5)));
+  overflow: hidden;
+  background: var(--surface-panel);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.55);
+  outline: none;
+  animation: dialog-in var(--duration-base) var(--easing);
+}
+
+.dialog--sm { max-width: 440px; }
+.dialog--md { max-width: 560px; }
+.dialog--lg { max-width: 720px; }
+.dialog--xl { max-width: 1000px; }
+
+@keyframes dialog-backdrop-in {
+  from { opacity: 0; }
+}
+
+@keyframes dialog-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.99);
+  }
+}
+
+.dialog__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-5);
+  padding: var(--space-6) var(--space-6) var(--space-5);
+}
+
+.dialog__heading {
+  min-width: 0;
+}
+
+.dialog__title {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: var(--size-large);
+  font-weight: var(--weight-semibold);
+  line-height: var(--leading-tight);
+  letter-spacing: -0.01em;
+}
+
+.dialog__description {
+  max-width: 60ch;
+  margin: var(--space-2) 0 0;
+  color: var(--text-secondary);
+  font-size: var(--size-body);
+  line-height: var(--leading-normal);
+}
+
+.dialog__close {
+  display: inline-grid;
+  flex-shrink: 0;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  margin: -6px -8px 0 0;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--text-tertiary);
+  cursor: pointer;
+  transition:
+    color var(--duration-fast) var(--easing),
+    background var(--duration-fast) var(--easing);
+}
+
+.dialog__close:hover {
+  color: var(--text-primary);
+  background: var(--surface-hover);
+}
+
+.dialog__close:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.dialog__body {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: var(--space-5);
+  min-height: 0;
+  overflow-y: auto;
+  padding: 0 var(--space-6) var(--space-6);
+  overscroll-behavior: contain;
+}
+
+.dialog__footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-3);
+  padding: var(--space-4) var(--space-6);
+  border-top: 1px solid var(--line);
+  background: var(--surface-header);
+}
+
+/* Something on the left of the footer (a delete, a count) pushes the rest right. */
+.dialog__footer-start {
+  margin-right: auto;
+}
+
+.dialog__grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-5) var(--space-4);
+}
+
+.dialog__grid--3 {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.dialog__span {
+  grid-column: 1 / -1;
+}
+
+/* Inside a window, labels are read, not scanned: sentence case, full size. */
+.dialog .field__label {
+  color: var(--text-secondary);
+  font-size: var(--size-caption);
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.dialog .field__hint {
+  color: var(--text-tertiary);
+  font-size: var(--size-caption);
+}
+
+.dialog .input {
+  min-height: 36px;
+  font-size: var(--size-body);
+}
+
+.dialog__error {
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid color-mix(in srgb, var(--negative) 40%, transparent);
+  border-radius: var(--radius);
+  background: var(--negative-bg);
+  color: var(--text-primary);
+  font-size: var(--size-body);
+  line-height: var(--leading-snug);
+}
+
+/* A short read-out of what an action will do, before it is done. */
+.dialog__summary {
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--space-4);
+  border-radius: var(--radius);
+  background: var(--surface-raised);
+}
+
+.dialog__summary-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-4);
+  color: var(--text-secondary);
+  font-size: var(--size-body);
+}
+
+.dialog__summary-value {
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: var(--size-data);
+  font-variant-numeric: tabular-nums;
+}
+
+.dialog__summary-note {
+  color: var(--text-tertiary);
+  font-size: var(--size-caption);
+}
+
+/* Two-way choice inside a window, drawn as one control (buy / sell, merge / replace). */
+.choice {
+  display: grid;
+  grid-auto-columns: 1fr;
+  grid-auto-flow: column;
+  padding: 3px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  background: var(--surface-page);
+}
+
+.choice__option {
+  min-height: 34px;
+  border: 0;
+  border-radius: calc(var(--radius) - 3px);
+  background: transparent;
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: var(--size-body);
+  font-weight: var(--weight-medium);
+  cursor: pointer;
+  transition:
+    background var(--duration-fast) var(--easing),
+    color var(--duration-fast) var(--easing);
+}
+
+.choice__option:hover {
+  color: var(--text-primary);
+}
+
+.choice__option:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.choice__option[aria-checked='true'] {
+  background: var(--surface-active);
+  color: var(--text-primary);
+}
+
+.choice__option--buy[aria-checked='true'] {
+  background: var(--positive-bg);
+  color: var(--positive);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--positive) 45%, transparent);
+}
+
+.choice__option--sell[aria-checked='true'] {
+  background: var(--negative-bg);
+  color: var(--negative);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--negative) 45%, transparent);
+}
+
+@media (max-width: 600px) {
+  .dialog-backdrop {
+    align-items: flex-end;
+    padding: var(--space-6) 0 0;
+  }
+
+  .dialog,
+  .dialog--sm,
+  .dialog--md,
+  .dialog--lg,
+  .dialog--xl {
+    max-width: none;
+    max-height: 92vh;
+    border-bottom: 0;
+    border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+    animation-name: dialog-sheet-in;
+  }
+
+  .dialog__header {
+    padding: var(--space-5) var(--space-5) var(--space-4);
+  }
+
+  .dialog__body {
+    padding: 0 var(--space-5) var(--space-5);
+  }
+
+  .dialog__footer {
+    padding: var(--space-4) var(--space-5) calc(var(--space-4) + env(safe-area-inset-bottom));
+  }
+
+  .dialog__footer .button {
+    flex: 1 1 auto;
+    min-height: 40px;
+  }
+
+  .dialog__grid,
+  .dialog__grid--3 {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@keyframes dialog-sheet-in {
+  from { transform: translateY(24px); opacity: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dialog,
+  .dialog-backdrop {
+    animation: none;
+  }
+}
+
+/* ------------------------------------------------------------------ *
+ * Pieces used inside windows                                          *
+ * ------------------------------------------------------------------ */
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.dialog__notice {
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius);
+  font-size: var(--size-body);
+  line-height: var(--leading-snug);
+  color: var(--text-primary);
+}
+
+.dialog__notice ul {
+  margin: var(--space-2) 0 0;
+  padding-left: var(--space-6);
+  color: var(--text-secondary);
+}
+
+.dialog__notice--row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+}
+
+.dialog__notice--warning {
+  border: 1px solid color-mix(in srgb, var(--warning) 35%, transparent);
+  background: var(--warning-bg);
+}
+
+.dialog__notice--success {
+  border: 1px solid color-mix(in srgb, var(--positive) 35%, transparent);
+  background: var(--positive-bg);
+}
+
+.empty {
+  display: grid;
+  justify-items: start;
+  gap: var(--space-4);
+  padding: var(--space-8) var(--space-2);
+  color: var(--text-secondary);
+  font-size: var(--size-body);
+}
+
+.empty p {
+  max-width: 52ch;
+  margin: 0;
+}
+
+/* Tabs inside a window. */
+.tabs {
+  display: flex;
+  align-items: center;
+  gap: var(--space-5);
+  border-bottom: 1px solid var(--line);
+  margin-top: calc(-1 * var(--space-2));
+}
+
+.tabs__tab {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-3) 0;
+  border: 0;
+  background: transparent;
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: var(--size-body);
+  font-weight: var(--weight-medium);
+  cursor: pointer;
+}
+
+.tabs__tab::after {
+  content: '';
+  position: absolute;
+  right: 0;
+  bottom: -1px;
+  left: 0;
+  height: 2px;
+  border-radius: 2px;
+  background: transparent;
+}
+
+.tabs__tab:hover {
+  color: var(--text-primary);
+}
+
+.tabs__tab[aria-selected='true'] {
+  color: var(--text-primary);
+}
+
+.tabs__tab[aria-selected='true']::after {
+  background: var(--accent);
+}
+
+.tabs__tab:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: var(--radius-xs);
+}
+
+.tabs__count {
+  min-width: 20px;
+  padding: 0 6px;
+  border-radius: var(--radius-full);
+  background: var(--surface-raised);
+  color: var(--text-secondary);
+  font-size: var(--size-label);
+  line-height: 18px;
+  text-align: center;
+}
+
+.tabs__spinner {
+  margin-left: auto;
+}
+
+.tabs__panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  min-height: 0;
+}
+
+/* Watchlist */
+.watchlist__note,
+.watchlist__sub {
+  display: block;
+  margin-top: 2px;
+  color: var(--text-tertiary);
+  font-family: var(--font-sans);
+  font-size: var(--size-caption);
+}
+
+.watchlist__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-2);
+}
+
+.watchlist__heading {
+  margin: 0 0 var(--space-3);
+  color: var(--text-primary);
+  font-size: var(--size-heading);
+  font-weight: var(--weight-semibold);
+}
+
+.watchlist__alerts {
+  display: grid;
+  gap: var(--space-7);
+}
+
+.watchlist__forms {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-8);
+}
+
+.watchlist__form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.watchlist__form > .button {
+  align-self: flex-start;
+}
+
+.status {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: var(--radius-full);
+  background: var(--surface-raised);
+  color: var(--text-secondary);
+  font-size: var(--size-caption);
+  white-space: nowrap;
+}
+
+.status--buy-zone {
+  background: var(--positive-bg);
+  color: var(--positive);
+}
+
+.status--take-profit {
+  background: var(--warning-bg);
+  color: var(--warning);
+}
+
+.alert-list {
+  display: grid;
+  gap: var(--space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.alert-list__item {
+  padding: var(--space-4);
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--warning);
+  border-radius: var(--radius);
+  background: var(--surface-raised);
+}
+
+.alert-list__item--high {
+  border-left-color: var(--negative);
+}
+
+.alert-list__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-4);
+}
+
+.alert-list__title {
+  color: var(--text-primary);
+  font-size: var(--size-body);
+  font-weight: var(--weight-semibold);
+}
+
+.alert-list__category {
+  flex-shrink: 0;
+  color: var(--text-tertiary);
+  font-size: var(--size-caption);
+}
+
+.alert-list__message {
+  max-width: 72ch;
+  margin: var(--space-2) 0 0;
+  color: var(--text-secondary);
+  font-size: var(--size-body);
+  line-height: var(--leading-normal);
+}
+
+/* Import */
+.import__source {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.dropzone {
+  position: relative;
+  display: grid;
+  gap: var(--space-2);
+  justify-items: center;
+  padding: var(--space-8) var(--space-5);
+  border: 1px dashed var(--line-strong);
+  border-radius: var(--radius-lg);
+  background: var(--surface-page);
+  text-align: center;
+  cursor: pointer;
+  transition:
+    border-color var(--duration-fast) var(--easing),
+    background var(--duration-fast) var(--easing);
+}
+
+.dropzone:hover,
+.dropzone--active {
+  border-color: var(--accent);
+  background: var(--accent-faint);
+}
+
+/* An inset ring: the drop zone sits at the top of a scrolling body, which
+   would clip an outline drawn outside it. */
+.dropzone:has(:focus-visible) {
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+
+.dropzone__input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.dropzone__title {
+  color: var(--text-primary);
+  font-size: var(--size-data);
+  font-weight: var(--weight-medium);
+}
+
+.dropzone__hint {
+  color: var(--text-tertiary);
+  font-size: var(--size-caption);
+}
+
+.import__samples {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+  color: var(--text-tertiary);
+  font-size: var(--size-caption);
+}
+
+.import__paste summary {
+  width: fit-content;
+  color: var(--text-secondary);
+  font-size: var(--size-body);
+  cursor: pointer;
+}
+
+.import__paste[open] {
+  display: grid;
+  gap: var(--space-3);
+  justify-items: start;
+}
+
+.import__textarea {
+  width: 100%;
+  font-size: var(--size-caption);
+  resize: vertical;
+}
+
+.import__status,
+.import__detected {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: var(--size-body);
+}
+
+.import__preview {
+  display: grid;
+  gap: var(--space-5);
+}
+
+.import__table h3 {
+  margin: 0 0 var(--space-2);
+  color: var(--text-primary);
+  font-size: var(--size-body);
+  font-weight: var(--weight-semibold);
+}
+
+.import__table .grid__scroll {
+  max-height: 220px;
+}
+
+.import__mode {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.import__mode-label {
+  color: var(--text-tertiary);
+  font-size: var(--size-caption);
+}
+
+@media (max-width: 720px) {
+  .watchlist__forms {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .import__mode {
+    width: 100%;
+    justify-content: space-between;
+  }
+}
+
+/* ------------------------------------------------------------------ *
+ * Command palette                                                     *
+ * ------------------------------------------------------------------ */
+
+.kbd {
+  display: inline-block;
+  min-width: 20px;
+  padding: 0 5px;
+  border: 1px solid var(--line-strong);
+  border-bottom-width: 2px;
+  border-radius: var(--radius-xs);
+  background: var(--surface-raised);
+  color: var(--text-secondary);
+  font-family: var(--font-sans);
+  font-size: var(--size-label);
+  line-height: 17px;
+  text-align: center;
+}
+
+.palette-backdrop {
+  padding-top: clamp(16px, 12vh, 120px);
+}
+
+.palette {
+  display: flex;
+  flex-direction: column;
+  width: min(680px, 100%);
+  max-height: min(600px, 76vh);
+  overflow: hidden;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-lg);
+  background: var(--surface-panel);
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.55);
+  outline: none;
+  animation: dialog-in var(--duration-base) var(--easing);
+}
+
+.palette__search {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  padding: var(--space-4) var(--space-5);
+  border-bottom: 1px solid var(--line);
+  color: var(--text-tertiary);
+}
+
+.palette__input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  outline: none;
+  background: transparent;
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  font-size: var(--size-data);
+}
+
+.palette__input::placeholder {
+  color: var(--text-tertiary);
+}
+
+.palette__results {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--space-2) var(--space-2) var(--space-3);
+  overscroll-behavior: contain;
+}
+
+.palette__group {
+  padding: var(--space-4) var(--space-4) var(--space-2);
+  color: var(--text-tertiary);
+  font-size: var(--size-caption);
+  font-weight: var(--weight-medium);
+}
+
+.palette__option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius);
+  cursor: pointer;
+}
+
+.palette__option--active {
+  background: var(--surface-hover);
+  box-shadow: inset 2px 0 0 var(--accent);
+}
+
+.palette__option-text {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.palette__option-title,
+.palette__option-subtitle {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.palette__option-title {
+  color: var(--text-primary);
+  font-size: var(--size-body);
+  font-weight: var(--weight-medium);
+}
+
+.palette__option-subtitle {
+  color: var(--text-tertiary);
+  font-size: var(--size-caption);
+}
+
+.palette__badge {
+  flex-shrink: 0;
+  color: var(--text-secondary);
+  font-size: var(--size-caption);
+}
+
+.palette__empty {
+  margin: 0;
+  padding: var(--space-7) var(--space-5);
+  color: var(--text-secondary);
+  font-size: var(--size-body);
+  text-align: center;
+}
+
+.palette__footer {
+  display: flex;
+  gap: var(--space-5);
+  padding: var(--space-3) var(--space-5);
+  border-top: 1px solid var(--line);
+  background: var(--surface-header);
+  color: var(--text-tertiary);
+  font-size: var(--size-caption);
+}
+
+.palette__footer-end {
+  margin-left: auto;
+}
+
+@media (max-width: 600px) {
+  .palette-backdrop {
+    align-items: flex-start;
+    padding: var(--space-3);
+  }
+
+  .palette {
+    max-height: 82vh;
+    border-radius: var(--radius-lg);
+    animation-name: dialog-in;
+  }
+
+  .palette__footer {
+    display: none;
+  }
+}
+
+/* In the footer a choice sits beside buttons, so it takes their height. */
+.dialog__footer .choice {
+  padding: 2px;
+}
+
+.dialog__footer .choice__option {
+  min-height: 26px;
+  padding: 0 var(--space-4);
+  font-size: var(--size-caption);
+}
