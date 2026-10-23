@@ -1,43 +1,38 @@
 /**
- * Application chrome: the market ticker, one toolbar row (wordmark,
- * portfolio switcher, search, actions), the grouped primary navigation, and
- * the headline readout of the portfolio's value.
+ * The top of the content column: the market ticker, a slim toolbar (search,
+ * the actions, theme and refresh), and the portfolio's headline.
+ *
+ * Navigation and the portfolio switcher live in the sidebar. On the overview
+ * the headline is the page's one large thing - the value in Newsreader, a
+ * sentence that says what it means, and the four changes that matter beside
+ * it. On every other view it shrinks to one line.
  *
  * Actions that do not fit on narrower screens move into a More menu rather
  * than disappearing.
  */
 
-import {
-  formatDate,
-  formatMoneyCompact,
-  formatMoneySigned,
-  formatPercentSigned,
-  formatTimestamp,
-  signClass,
-} from '../lib/format'
+import { formatMoneyCompact, formatMoneySigned, formatPercentSigned, signClass } from '../lib/format'
 import type { DataConfig } from '../lib/api'
 import { useTheme } from '../lib/theme'
-import type { DataSource, Health, Portfolio, SummaryPayload } from '../lib/types'
+import type { DataSource, Health, SummaryPayload } from '../lib/types'
 import type { ViewKey } from '../lib/useHashRoute'
 import { ActionMenu, type ActionMenuItem } from './ActionMenu'
 import { AnimatedNumber } from './AnimatedNumber'
-import { AtlasLogo } from './AtlasLogo'
 import { MarketTickerBar } from './MarketTickerBar'
-import { PrimaryNav } from './PrimaryNav'
-import { Sparkline } from './Sparkline'
+
 interface TopBarProps {
   summary: SummaryPayload | null
   health: Health | null
   config: DataConfig
   view: ViewKey
   baseCurrency: string
-  holdingsCount: number
   refreshing: boolean
   onRefresh: () => void
   portfolioName?: string
-  portfolios?: Portfolio[]
-  activePortfolioId?: number
-  onSelectPortfolio?: (id: number) => void
+  /** How many holdings stand above their cost, for the headline sentence. */
+  holdingsInProfit?: number
+  /** The median of next year's simulated outcomes, for the headline sentence. */
+  medianNextYear?: number
   onCreatePortfolio?: () => void
   onAddPosition?: () => void
   onOpenTradeModal?: () => void
@@ -45,6 +40,7 @@ interface TopBarProps {
   onOpenWatchlist?: () => void
   onOpenCsvImport?: () => void
   onSwitchSource?: (source: DataSource) => void
+  onOpenMenu?: () => void
   editable?: boolean
 }
 
@@ -53,25 +49,22 @@ interface DeltaProps {
   absolute: number | null
   percent: number | null
   delay: number
+  /** The categorical colour that keys this row. */
+  mark: string
 }
 
-/** One signed change readout: value, percentage, semantic colour. */
-function Delta({ label, absolute, percent, delay }: DeltaProps) {
+/** One signed change: a coloured key, the label, the figure and its percentage. */
+function Delta({ label, absolute, percent, delay, mark }: DeltaProps) {
   const tone = signClass(absolute)
   return (
     <div className="topbar__delta">
+      <i className="topbar__delta-mark" style={{ background: mark }} aria-hidden="true" />
       <span className="topbar__delta-label">{label}</span>
-      <span className={`num ${tone}`}>
-        <AnimatedNumber
-          value={absolute}
-          format={formatMoneySigned}
-          delay={delay}
-          className={`num ${tone}`}
-        />
-        {' '}
-        <span className="topbar__delta-pct">
-          (<AnimatedNumber value={percent} format={formatPercentSigned} delay={delay} />)
-        </span>
+      <span className={`topbar__delta-value num ${tone}`}>
+        <AnimatedNumber value={absolute} format={formatMoneySigned} delay={delay} className={`num ${tone}`} />
+      </span>
+      <span className="topbar__delta-pct num">
+        <AnimatedNumber value={percent} format={formatPercentSigned} delay={delay} />
       </span>
     </div>
   )
@@ -81,29 +74,23 @@ function Delta({ label, absolute, percent, delay }: DeltaProps) {
 function ThemeIcon({ theme }: { theme: 'dark' | 'light' }) {
   if (theme === 'dark') {
     return (
-      <svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true">
-        <circle cx="8" cy="8" r="3.1" fill="currentColor" />
-        <g stroke="currentColor" strokeWidth="1.2" strokeLinecap="square">
-          <path d="M8 0.8 V2.6" />
-          <path d="M8 13.4 V15.2" />
-          <path d="M0.8 8 H2.6" />
-          <path d="M13.4 8 H15.2" />
-          <path d="M2.9 2.9 L4.1 4.1" />
-          <path d="M11.9 11.9 L13.1 13.1" />
-          <path d="M13.1 2.9 L11.9 4.1" />
-          <path d="M4.1 11.9 L2.9 13.1" />
-        </g>
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true">
+        <circle cx="12" cy="12" r="4" />
+        <path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" />
       </svg>
     )
   }
   return (
-    <svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true">
-      <path
-        d="M13.4 9.6A5.8 5.8 0 0 1 6.4 2.6a5.9 5.9 0 1 0 7 7Z"
-        fill="currentColor"
-      />
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true">
+      <path d="M20 14.5A8.5 8.5 0 0 1 9.5 4 8.5 8.5 0 1 0 20 14.5z" />
     </svg>
   )
+}
+
+function longDate(iso: string): string {
+  const date = new Date(iso)
+  if (Number.isNaN(date.getTime())) return iso
+  return date.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' })
 }
 
 export function TopBar({
@@ -112,13 +99,11 @@ export function TopBar({
   config,
   view,
   baseCurrency,
-  holdingsCount,
   refreshing,
   onRefresh,
   portfolioName,
-  portfolios = [],
-  activePortfolioId = 1,
-  onSelectPortfolio,
+  holdingsInProfit,
+  medianNextYear,
   onCreatePortfolio,
   onAddPosition,
   onOpenTradeModal,
@@ -126,6 +111,7 @@ export function TopBar({
   onOpenWatchlist,
   onOpenCsvImport,
   onSwitchSource,
+  onOpenMenu,
   editable = false,
 }: TopBarProps) {
   const live = config.source === 'api'
@@ -151,48 +137,22 @@ export function TopBar({
     },
   ].filter(Boolean) as ActionMenuItem[]
 
+  const overview = view === 'overview'
+  const unrealised = summary?.total_unrealized_pnl ?? null
+  const unrealisedTone = signClass(unrealised)
+
   return (
     <header className={analyticsReady ? 'topbar' : 'topbar topbar--compact'}>
       <MarketTickerBar config={config} />
 
       <div className="topbar__chrome">
-        <div className="topbar__brand-group">
-          <a className="topbar__brand" href="#/overview" aria-label="ATLAS, go to the overview">
-            <AtlasLogo size={22} className="topbar__logo-icon" />
-            <span className="topbar__wordmark">ATLAS</span>
-          </a>
-
-          {live && portfolios.length > 0 && onSelectPortfolio && (
-            <label className="book-switch" title="Switch portfolio">
-              <span className="visually-hidden">Portfolio</span>
-              <select
-                className="book-switch__select"
-                value={activePortfolioId}
-                onChange={(e) => onSelectPortfolio(Number(e.target.value))}
-              >
-                {portfolios.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.name} · {p.base_currency}
-                  </option>
-                ))}
-              </select>
-            </label>
-          )}
-
-          {live && onCreatePortfolio && (
-            <button
-              type="button"
-              className="icon-button topbar__wide-only"
-              onClick={onCreatePortfolio}
-              aria-label="New portfolio"
-              title="New portfolio"
-            >
-              <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true">
-                <path d="M7 2v10M2 7h10" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
-              </svg>
-            </button>
-          )}
-        </div>
+        {onOpenMenu ? (
+          <button type="button" className="icon-button topbar__menu" onClick={onOpenMenu} aria-label="Open the menu">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true">
+              <path d="M4 7h16M4 12h16M4 17h16" />
+            </svg>
+          </button>
+        ) : null}
 
         {onOpenCommandPalette && (
           <button
@@ -202,11 +162,11 @@ export function TopBar({
             aria-label="Search and commands"
             aria-keyshortcuts="Control+K"
           >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
               <circle cx="11" cy="11" r="7.5" />
               <path d="M20.5 20.5 16.5 16.5" />
             </svg>
-            <span className="topbar__search-text">Search or run a command</span>
+            <span className="topbar__search-text">Search holdings, symbols or commands</span>
             <span className="topbar__search-keys" aria-hidden="true">
               <kbd className="kbd">Ctrl</kbd>
               <kbd className="kbd">K</kbd>
@@ -215,27 +175,27 @@ export function TopBar({
         )}
 
         <div className="topbar__actions">
-          {editable && onOpenTradeModal && (
-            <button type="button" className="button button--primary button--sm" onClick={onOpenTradeModal}>
-              Trade
-            </button>
-          )}
-
-          {onOpenWatchlist && (
-            <button type="button" className="button button--quiet button--sm topbar__wide-only" onClick={onOpenWatchlist}>
-              Watchlist
-            </button>
-          )}
-
           {onOpenCsvImport && (
-            <button type="button" className="button button--quiet button--sm topbar__wide-only" onClick={onOpenCsvImport}>
+            <button type="button" className="button button--sm topbar__wide-only" onClick={onOpenCsvImport}>
               Import
             </button>
           )}
 
+          {onOpenWatchlist && (
+            <button type="button" className="button button--sm topbar__wide-only" onClick={onOpenWatchlist}>
+              Watchlist
+            </button>
+          )}
+
           {editable && onAddPosition && (
-            <button type="button" className="button button--quiet button--sm topbar__wide-only" onClick={onAddPosition}>
+            <button type="button" className="button button--sm topbar__wide-only" onClick={onAddPosition}>
               Add position
+            </button>
+          )}
+
+          {editable && onOpenTradeModal && (
+            <button type="button" className="button button--primary button--sm" onClick={onOpenTradeModal}>
+              Trade
             </button>
           )}
 
@@ -247,18 +207,6 @@ export function TopBar({
               <circle cx="12.5" cy="8" r="1.4" fill="currentColor" />
             </svg>
           </ActionMenu>
-
-          <span className="topbar__divider" aria-hidden="true" />
-
-          <button
-            type="button"
-            className="topbar__source topbar__source--btn topbar__phone-hidden"
-            onClick={() => onSwitchSource?.(live ? 'snapshot' : 'api')}
-            title={live ? 'Using the live API. Switch to the demo snapshot.' : 'Using the demo snapshot. Switch to the live API.'}
-          >
-            <span className={live ? 'topbar__source-dot' : 'topbar__source-dot topbar__source-dot--snapshot'} />
-            <span>{live ? 'Live API' : 'Demo snapshot'}</span>
-          </button>
 
           <button
             type="button"
@@ -290,77 +238,52 @@ export function TopBar({
         </div>
       </div>
 
-      <PrimaryNav view={view} analyticsReady={analyticsReady} holdingsCount={holdingsCount} />
-
-      {/* Masthead: the portfolio's value. Full on the overview, one line elsewhere. */}
       {summary ? (
-        <div
-          className={
-            view === 'overview' ? 'topbar__masthead' : 'topbar__masthead topbar__masthead--compact'
-          }
-        >
+        <div className={overview ? 'topbar__masthead' : 'topbar__masthead topbar__masthead--compact'}>
           <div className="topbar__identity">
             <div className="topbar__eyebrow">
-              <span className="eyebrow">{portfolioName ?? 'Portfolio overview'}</span>
-              <span className="panel__subtitle">
-                {summary.holdings_count} holdings, measured against {health?.benchmark ?? 'the benchmark'}
+              <span className="eyebrow">{overview ? longDate(summary.as_of) : portfolioName ?? 'Portfolio'}</span>
+              <span className={`topbar__chip num ${signClass(summary.changes.day.pct)}`}>
+                {formatPercentSigned(summary.changes.day.pct)} today
               </span>
             </div>
 
             <div className="topbar__value">
-              <AnimatedNumber
-                value={summary.total_value}
-                format={formatMoneyCompact}
-                className="num topbar__amount"
-              />
+              <AnimatedNumber value={summary.total_value} format={formatMoneyCompact} className="num topbar__amount" />
               <span className="topbar__currency">{baseCurrency}</span>
             </div>
 
-            <div className="topbar__deltas">
-              <Delta
-                label="Today"
-                absolute={summary.changes.day.absolute}
-                percent={summary.changes.day.pct}
-                delay={90}
-              />
-              <Delta
-                label="Since inception"
-                absolute={summary.changes.all.absolute}
-                percent={summary.changes.all.pct}
-                delay={150}
-              />
-              <Delta
-                label="Unrealised P&L"
-                absolute={summary.total_unrealized_pnl}
-                percent={summary.total_unrealized_pnl_pct}
-                delay={210}
-              />
-            </div>
+            {overview ? (
+              <p className="topbar__story">
+                Against what you paid, {portfolioName ? `the ${portfolioName} portfolio` : 'the portfolio'} is{' '}
+                <b className={`num ${unrealisedTone}`}>
+                  {formatMoneySigned(unrealised)} {baseCurrency}
+                </b>{' '}
+                ({formatPercentSigned(summary.total_unrealized_pnl_pct)}).
+                {holdingsInProfit !== undefined
+                  ? ` ${holdingsInProfit} of your ${summary.holdings_count} holdings are in profit`
+                  : ''}
+                {medianNextYear !== undefined ? (
+                  <>
+                    {holdingsInProfit !== undefined ? ', and the' : ' The'} middle of next year's simulated outcomes is{' '}
+                    <b className="num">
+                      {formatMoneyCompact(medianNextYear)} {baseCurrency}
+                    </b>
+                    .
+                  </>
+                ) : holdingsInProfit !== undefined ? (
+                  '.'
+                ) : null}{' '}
+                It is measured against {health?.benchmark ?? 'its benchmark'}.
+              </p>
+            ) : null}
           </div>
 
-          <div className="topbar__aside">
-            <Sparkline
-              values={summary.sparkline.values}
-              width={320}
-              height={64}
-              showEndpoint
-              ariaLabel={`Portfolio value over the last ${summary.sparkline.values.length} trading days`}
-            />
-            <div className="topbar__meta">
-              <span>
-                Base <span className="topbar__meta-value num">{baseCurrency}</span>
-              </span>
-              <span>
-                As of{' '}
-                <span className="topbar__meta-value num">{formatDate(summary.as_of)}</span>
-              </span>
-              <span>
-                Prices{' '}
-                <span className="topbar__meta-value num">
-                  {formatTimestamp(health?.prices_fetched_at ?? summary.generated_at)}
-                </span>
-              </span>
-            </div>
+          <div className="topbar__deltas">
+            <Delta label="Today" absolute={summary.changes.day.absolute} percent={summary.changes.day.pct} delay={90} mark="var(--viz-cat-1)" />
+            <Delta label="This year" absolute={summary.changes.ytd.absolute} percent={summary.changes.ytd.pct} delay={150} mark="var(--viz-cat-4)" />
+            <Delta label="Since the start" absolute={summary.changes.all.absolute} percent={summary.changes.all.pct} delay={210} mark="var(--viz-cat-6)" />
+            <Delta label="Unrealised" absolute={summary.total_unrealized_pnl} percent={summary.total_unrealized_pnl_pct} delay={270} mark="var(--viz-cat-3)" />
           </div>
         </div>
       ) : null}

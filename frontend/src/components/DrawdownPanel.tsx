@@ -11,7 +11,7 @@
 import { useMemo, useState } from 'react'
 
 import { toLineData } from '../charts/series'
-import { chartTheme } from '../charts/theme'
+import { useChartTheme } from '../charts/theme'
 import { TimeSeriesChart, type CrosshairState } from '../charts/TimeSeriesChart'
 import { formatDate, formatPercent } from '../lib/format'
 import { MOTION } from '../lib/motion'
@@ -24,7 +24,7 @@ interface DrawdownPanelProps {
 }
 
 export function DrawdownPanel({ history, risk }: DrawdownPanelProps) {
-  const theme = chartTheme()
+  const theme = useChartTheme()
   const [crosshair, setCrosshair] = useState<CrosshairState | null>(null)
 
   const series = useMemo(

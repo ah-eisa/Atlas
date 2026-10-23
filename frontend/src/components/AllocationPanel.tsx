@@ -11,7 +11,8 @@ import { useMemo } from 'react'
 import type { EChartsOption } from 'echarts'
 
 import { EChart } from '../charts/EChart'
-import { chartTheme, tooltipStyle } from '../charts/theme'
+import { chartTheme, tooltipStyle, useChartTheme } from '../charts/theme'
+import { assetClassSlot } from '../lib/assetColors'
 import { formatMoneyCompact, formatPercent } from '../lib/format'
 import type { AllocationBucket } from '../lib/types'
 import { Panel } from './Panel'
@@ -25,14 +26,31 @@ interface AllocationPanelProps {
 
 interface BreakdownProps {
   title: string
+  /** Colour each bucket by its asset class rather than by its position. */
+  byAssetClass?: boolean
   buckets: AllocationBucket[]
   currency: string
+}
+
+/**
+ * A bucket's colour. Asset classes keep their own colour wherever they
+ * appear; other breakdowns (region, currency) take palette slots in order.
+ */
+function bucketColor(
+  key: string,
+  index: number,
+  theme: ReturnType<typeof chartTheme>,
+  byAssetClass?: boolean,
+): string {
+  const slot = byAssetClass ? assetClassSlot(key) : null
+  return slot ? theme.categorical[slot - 1] : theme.categorical[index % theme.categorical.length]
 }
 
 function donutOption(
   buckets: AllocationBucket[],
   currency: string,
   theme: ReturnType<typeof chartTheme>,
+  byAssetClass?: boolean,
 ): EChartsOption {
   return {
     // 'expansion' sweeps each ring open around its centre rather than fading
@@ -67,18 +85,21 @@ function donutOption(
         data: buckets.map((bucket, index) => ({
           name: bucket.key,
           value: bucket.value,
-          itemStyle: { color: theme.categorical[index % theme.categorical.length] },
+          itemStyle: { color: bucketColor(bucket.key, index, theme, byAssetClass) },
         })),
       },
     ],
   }
 }
 
-function Breakdown({ title, buckets, currency }: BreakdownProps) {
-  const theme = chartTheme()
+function Breakdown({ title, buckets, currency, byAssetClass }: BreakdownProps) {
+  const theme = useChartTheme()
   // The theme is a dependency: the segment colours are baked into the option,
   // so switching the palette has to rebuild it.
-  const option = useMemo(() => donutOption(buckets, currency, theme), [buckets, currency, theme])
+  const option = useMemo(
+    () => donutOption(buckets, currency, theme, byAssetClass),
+    [buckets, currency, theme, byAssetClass],
+  )
 
   return (
     <div className="allocation__group">
@@ -96,7 +117,7 @@ function Breakdown({ title, buckets, currency }: BreakdownProps) {
               <td className="allocation__swatch-cell">
                 <span
                   className="allocation__swatch"
-                  style={{ background: theme.categorical[index % theme.categorical.length] }}
+                  style={{ background: bucketColor(bucket.key, index, theme, byAssetClass) }}
                 />
               </td>
               <td className="allocation__key">{bucket.key}</td>
@@ -114,7 +135,7 @@ export function AllocationPanel({ byClass, byRegion, byCurrency, currency }: All
   return (
     <Panel title="Allocation" subtitle={`${currency} · share of market value`}>
       <div className={byCurrency ? 'allocation allocation--three' : 'allocation'}>
-        <Breakdown title="Asset class" buckets={byClass} currency={currency} />
+        <Breakdown title="Asset class" buckets={byClass} currency={currency} byAssetClass />
         <Breakdown title="Region" buckets={byRegion} currency={currency} />
         {byCurrency ? (
           <Breakdown title="Currency" buckets={byCurrency} currency={currency} />

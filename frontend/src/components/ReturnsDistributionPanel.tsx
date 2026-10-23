@@ -10,7 +10,7 @@ import { useMemo } from 'react'
 import type { EChartsOption } from 'echarts'
 
 import { EChart } from '../charts/EChart'
-import { axisLabelStyle, chartTheme, tooltipStyle } from '../charts/theme'
+import { axisLabelStyle, chartTheme, tooltipStyle, useChartTheme } from '../charts/theme'
 import {
   formatDateShort,
   formatPercent,
@@ -94,7 +94,7 @@ function histogramOption(
 }
 
 export function ReturnsDistributionPanel({ returns }: ReturnsDistributionPanelProps) {
-  const theme = chartTheme()
+  const theme = useChartTheme()
   const option = useMemo(() => histogramOption(returns, theme), [returns, theme])
   const payoff =
     returns.average_gain_pct !== null &&

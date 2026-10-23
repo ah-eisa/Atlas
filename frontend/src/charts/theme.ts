@@ -11,7 +11,7 @@
  * palette change invalidates it and the charts repaint in the new colours.
  */
 
-import { themeVersion } from '../lib/theme'
+import { themeVersion, useTheme } from '../lib/theme'
 
 interface ChartTheme {
   surface: string
@@ -93,11 +93,24 @@ export function chartTheme(): ChartTheme {
       token('--viz-seq-7', '#8cc3e8'),
     ],
     vizNegative: token('--viz-negative', '#7a4a52'),
-    fontSans: token('--font-sans', "'IBM Plex Sans', Arial, sans-serif"),
+    fontSans: token('--font-sans', "'Instrument Sans', Arial, sans-serif"),
     fontMono: token('--font-mono', "'IBM Plex Mono', monospace"),
   }
   cachedVersion = version
   return cached
+}
+
+/**
+ * The chart theme, for a component that colours a chart from it.
+ *
+ * Subscribing to the theme is what makes the component re-render when the
+ * theme changes; reading `chartTheme()` alone only picks up a new palette
+ * when something else happens to re-render it, which could leave light-theme
+ * series on a dark page after a switch.
+ */
+export function useChartTheme(): ChartTheme {
+  useTheme()
+  return chartTheme()
 }
 
 /**

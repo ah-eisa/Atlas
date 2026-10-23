@@ -27,6 +27,7 @@ import {
   formatQuantity,
   signClass,
 } from '../lib/format'
+import { assetClassColor } from '../lib/assetColors'
 import type { Holding } from '../lib/types'
 import { Panel } from './Panel'
 import { Sparkline } from './Sparkline'
@@ -99,7 +100,18 @@ export function HoldingsPanel({
         column.accessor('ticker', {
           header: 'Ticker',
           sortFn: 'text',
-          cell: (info) => <span className="num grid__ticker">{info.getValue()}</span>,
+          cell: (info) => (
+            <span className="grid__ticker-cell">
+              <span
+                className="grid__mark"
+                style={{ background: assetClassColor(info.row.original.asset_class) }}
+                aria-hidden="true"
+              >
+                {info.getValue().replace(/[.-].*$/, '').slice(0, 4)}
+              </span>
+              <span className="num grid__ticker">{info.getValue()}</span>
+            </span>
+          ),
         }),
         column.accessor('name', {
           header: 'Name',
@@ -164,7 +176,12 @@ export function HoldingsPanel({
             return (
               <span className="grid__weight">
                 <span className="num">{formatPercent(weight, 1)}</span>
-                <span className="grid__weight-bar" style={{ width: `${share}%` }} />
+                <span className="grid__weight-track" aria-hidden="true">
+                  <span
+                    className="grid__weight-bar"
+                    style={{ width: `${share}%`, background: assetClassColor(info.row.original.asset_class) }}
+                  />
+                </span>
               </span>
             )
           },

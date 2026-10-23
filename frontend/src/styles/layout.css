@@ -1,41 +1,33 @@
 /**
- * Application shell, primary navigation, and the responsive panel grid.
+ * Content layout: the page, its rows of cards, the headline and the KPI band.
  *
- * The hairline technique: every grid uses `gap: 1px` over a `--line`
- * background, so the gap itself *is* the rule. Panels stay borderless and no
- * rule is ever doubled.
+ * Content sits on cards on a quiet page, separated by space rather than
+ * rules. Each row is a grid of cards; a card is a panel (see base.css). The
+ * shell itself - the navigation rail beside this column - is in
+ * navigation.css.
  */
 
-.app {
-  display: flex;
-  flex-direction: column;
-  max-width: var(--max-width);
-  min-height: 100%;
-  margin: 0 auto;
-  border-left: 1px solid var(--line);
-  border-right: 1px solid var(--line);
-}
-
 /**
- * Stack of full-width rows, hairline-separated.
- *
- * Deliberately not `flex: 1`: the 1px gaps are painted by this element's
- * background, so stretching it would flood any leftover viewport height with
- * the hairline colour. The footer takes the slack instead (`margin-top: auto`).
+ * Stack of rows. The footer takes any leftover height (`margin-top: auto`).
  */
 .app__main,
 .data-view {
   display: flex;
   flex-direction: column;
-  gap: 1px;
-  background: var(--line);
-  border-top: 1px solid var(--line);
+  gap: var(--card-gap);
+  width: 100%;
+  max-width: var(--max-width);
+  margin: 0 auto;
+  padding: 0 var(--page-gutter) var(--space-8);
+}
+
+.data-view {
+  padding: 0;
 }
 
 .row {
   display: grid;
-  gap: 1px;
-  background: var(--line);
+  gap: var(--card-gap);
 }
 
 /* Equity curve with the allocation rail alongside it. */
@@ -64,165 +56,226 @@
 }
 
 /* ------------------------------------------------------------------ *
- * Primary chrome                                                      *
+ * Top of the column                                                   *
  * ------------------------------------------------------------------ */
 
 .topbar {
-  background: var(--surface-panel);
-  backdrop-filter: var(--backdrop-blur);
+  width: 100%;
+  max-width: var(--max-width);
+  margin: 0 auto;
 }
 
 /* ------------------------------------------------------------------ *
- * Masthead                                                            *
+ * Headline                                                            *
  *                                                                     *
  * The portfolio's value is the one large thing in the product. On the *
- * overview it leads the page; everywhere else it shrinks to one line, *
- * so the view's own content starts near the top.                      *
+ * overview it leads the page in Newsreader, with a sentence that says *
+ * what it means and the four changes that matter in a card beside it. *
+ * Everywhere else it shrinks to one line.                             *
  * ------------------------------------------------------------------ */
 
 .topbar__masthead {
-  display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 380px;
+  align-items: stretch;
   gap: var(--space-9);
-  padding: var(--space-8) var(--space-7) var(--space-7);
-  border-bottom: 1px solid var(--line);
+  padding: var(--space-4) var(--page-gutter) var(--space-8);
 }
 
 .topbar__identity {
   display: flex;
   flex-direction: column;
-  gap: var(--space-4);
+  justify-content: center;
   min-width: 0;
 }
 
 .topbar__eyebrow {
   display: flex;
   flex-wrap: wrap;
-  align-items: baseline;
-  gap: var(--space-2) var(--space-4);
+  align-items: center;
+  gap: var(--space-3) var(--space-4);
 }
 
 .eyebrow {
-  color: var(--text-secondary);
+  color: var(--text-tertiary);
   font-size: var(--size-body);
+}
+
+.topbar__chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 10px;
+  border-radius: var(--radius-full);
+  background: var(--surface-raised);
+  font-size: var(--size-label);
   font-weight: var(--weight-medium);
+}
+
+.topbar__chip.pos {
+  background: var(--positive-bg);
+}
+
+.topbar__chip.neg {
+  background: var(--negative-bg);
 }
 
 .topbar__value {
   display: flex;
   align-items: baseline;
-  gap: var(--space-3);
+  gap: var(--space-4);
+  margin: var(--space-4) 0 var(--space-5);
 }
 
 .topbar__amount {
   color: var(--text-primary);
+  font-family: var(--font-display);
   font-size: var(--size-display);
-  font-weight: var(--weight-semibold);
-  line-height: 1;
-  letter-spacing: -0.03em;
+  font-weight: var(--weight-regular);
+  line-height: 0.95;
+  letter-spacing: -0.025em;
 }
 
 .topbar__currency {
   color: var(--text-tertiary);
-  font-size: var(--size-heading);
-  font-weight: var(--weight-medium);
+  font-family: var(--font-display);
+  font-size: 28px;
 }
 
-/* Three changes, each a label over its figure. */
+.topbar__story {
+  max-width: 62ch;
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 17px;
+  line-height: 1.65;
+}
+
+.topbar__story b {
+  font-weight: var(--weight-semibold);
+}
+
+.topbar__story b:not(.pos):not(.neg) {
+  color: var(--text-primary);
+}
+
+/* The four changes, in a card. */
 .topbar__deltas {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-4) var(--space-8);
-  margin-top: var(--space-2);
+  display: grid;
+  align-content: center;
+  padding: var(--space-2) var(--space-6);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-xl);
+  background: var(--surface-panel);
+  box-shadow: var(--shadow-sm);
 }
 
 .topbar__delta {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  font-size: var(--size-data);
-  font-weight: var(--weight-medium);
+  display: grid;
+  grid-template-columns: 10px 1fr auto;
+  grid-template-rows: auto auto;
+  align-items: center;
+  column-gap: var(--space-4);
+  padding: var(--space-4) 0;
+  border-bottom: 1px solid var(--line-faint);
+}
+
+.topbar__delta:last-child {
+  border-bottom: 0;
+}
+
+.topbar__delta-mark {
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
 }
 
 .topbar__delta-label {
-  color: var(--text-tertiary);
-  font-size: var(--size-caption);
-  font-weight: var(--weight-regular);
+  color: var(--text-secondary);
+  font-size: var(--size-body);
+}
+
+.topbar__delta-value {
+  font-family: var(--font-display);
+  font-size: 26px;
+  font-weight: var(--weight-medium);
+  line-height: 1.1;
+  text-align: right;
 }
 
 .topbar__delta-pct {
-  font-size: var(--size-body);
-  font-weight: var(--weight-regular);
-  opacity: 0.85;
-}
-
-/* Right side: the value's recent path over the as-of metadata. */
-.topbar__aside {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  justify-content: flex-end;
-  gap: var(--space-4);
-  flex-shrink: 0;
-}
-
-.topbar__meta {
-  display: flex;
-  align-items: center;
-  gap: var(--space-5);
+  grid-column: 2 / 4;
   color: var(--text-tertiary);
-  font-size: var(--size-caption);
-}
-
-.topbar__meta-value {
-  color: var(--text-secondary);
+  font-size: var(--size-label);
 }
 
 /* Compact: one line on every view but the overview. */
 .topbar__masthead--compact {
-  align-items: center;
-  padding: var(--space-4) var(--space-7);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-3) var(--space-7);
+  padding: var(--space-2) var(--page-gutter) var(--space-7);
 }
 
 .topbar__masthead--compact .topbar__identity {
   flex-direction: row;
   flex-wrap: wrap;
   align-items: baseline;
-  gap: var(--space-2) var(--space-6);
+  gap: var(--space-3) var(--space-5);
 }
 
-.topbar__masthead--compact .topbar__eyebrow .panel__subtitle,
-.topbar__masthead--compact .topbar__aside,
-.topbar__masthead--compact .topbar__delta:not(:first-child) {
-  display: none;
+.topbar__masthead--compact .eyebrow {
+  color: var(--text-secondary);
+  font-weight: var(--weight-medium);
+}
+
+.topbar__masthead--compact .topbar__value {
+  margin: 0;
 }
 
 .topbar__masthead--compact .topbar__amount {
-  font-size: var(--size-large);
-  letter-spacing: -0.02em;
+  font-size: 40px;
 }
 
 .topbar__masthead--compact .topbar__currency {
-  font-size: var(--size-caption);
+  font-size: var(--size-heading);
+}
+
+.topbar__masthead--compact .topbar__eyebrow {
+  order: 2;
 }
 
 .topbar__masthead--compact .topbar__deltas {
-  margin-top: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-6);
+  padding: 0;
+  border: 0;
+  background: none;
+  box-shadow: none;
 }
 
 .topbar__masthead--compact .topbar__delta {
-  flex-direction: row;
+  display: flex;
   align-items: baseline;
   gap: var(--space-3);
-  font-size: var(--size-body);
+  padding: 0;
+  border: 0;
+}
+
+.topbar__masthead--compact .topbar__delta:not(:first-child):not(:last-child) {
+  display: none;
+}
+
+.topbar__masthead--compact .topbar__delta-value {
+  font-family: var(--font-sans);
+  font-size: var(--size-data);
 }
 
 .topbar__empty {
   display: flex;
   align-items: baseline;
   gap: var(--space-4);
-  padding: var(--space-4) var(--space-7);
+  padding: var(--space-4) var(--page-gutter);
   color: var(--text-secondary);
   font-size: var(--size-caption);
 }
@@ -230,17 +283,20 @@
 /* ------------------------------------------------------------------ *
  * KPI band                                                            *
  *                                                                     *
- * Column counts are explicit divisors of the nine cells (9 -> 3)      *
- * rather than `auto-fit`, which would settle on counts like four and  *
- * strand a lone cell on a last row. On a phone two columns are all    *
- * that fit, so the ninth cell spans the row instead.                  *
+ * One card of nine figures with hairlines between them. Column counts *
+ * are divisors of nine (9 -> 3) so no figure is left alone on a row;  *
+ * on a phone the ninth spans the last row.                            *
  * ------------------------------------------------------------------ */
 
 .kpi {
   display: grid;
   grid-template-columns: repeat(9, minmax(0, 1fr));
   gap: 1px;
-  background: var(--line);
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-xl);
+  background: var(--line-faint);
+  box-shadow: var(--shadow-sm);
 }
 
 .kpi__cell {
@@ -248,8 +304,13 @@
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
-  padding: var(--space-5) var(--space-6) var(--space-6);
+  padding: var(--space-6) var(--space-6) var(--space-6);
   background: var(--surface-panel);
+  transition: background-color var(--duration-fast) var(--easing);
+}
+
+.kpi__cell:hover {
+  background: var(--surface-header);
 }
 
 .kpi__label {
@@ -263,10 +324,11 @@
 
 .kpi__value {
   color: var(--text-primary);
-  font-size: var(--size-large);
-  font-weight: var(--weight-semibold);
-  line-height: var(--leading-tight);
-  letter-spacing: -0.015em;
+  font-family: var(--font-display);
+  font-size: 32px;
+  font-weight: var(--weight-medium);
+  line-height: 1.1;
+  letter-spacing: -0.01em;
 }
 
 .kpi__context {
@@ -283,10 +345,11 @@
   display: flex;
   align-items: baseline;
   gap: var(--space-4);
-  padding: var(--space-2) var(--space-7);
-  border-bottom: 1px solid var(--line);
-  background: var(--surface-header);
-  font-size: var(--size-caption);
+  padding: var(--space-4) var(--space-6);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: var(--surface-panel);
+  font-size: var(--size-body);
 }
 
 .banner--warning {
@@ -388,18 +451,17 @@
 
 .footer {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: var(--space-5);
-  flex-wrap: wrap;
-  /* Absorbs leftover viewport height so the shell stays bottom-anchored. */
-  margin-top: auto;
-  padding: var(--space-4) var(--space-7);
-  border-top: 1px solid var(--line);
-  background: var(--surface-panel);
-  font-size: var(--size-micro);
-  letter-spacing: var(--tracking-wide);
+  gap: var(--space-3) var(--space-5);
+  width: 100%;
+  max-width: var(--max-width);
+  /* Absorbs leftover viewport height so the footer stays at the bottom. */
+  margin: auto auto 0;
+  padding: var(--space-6) var(--page-gutter);
   color: var(--text-tertiary);
+  font-size: var(--size-label);
 }
 
 /* ------------------------------------------------------------------ *
@@ -421,28 +483,33 @@
     grid-template-columns: minmax(0, 1fr);
   }
 
-  
-}
-
-@media (max-width: 1080px) {
-  
-
   .topbar__masthead {
-    flex-direction: column;
-    gap: var(--space-5);
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--space-6);
   }
 
-  .topbar__aside {
-    align-items: flex-start;
-    width: 100%;
-    gap: var(--space-2);
+  .topbar__deltas {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    column-gap: var(--space-7);
+  }
+
+  .topbar__delta:nth-last-child(2) {
+    border-bottom: 0;
+  }
+}
+
+@media (max-width: 900px) {
+  :root {
+    --page-gutter: var(--space-5);
+    --card-gap: var(--space-5);
   }
 }
 
 @media (max-width: 720px) {
-  .app {
-    border-left: 0;
-    border-right: 0;
+  :root {
+    --page-gutter: var(--space-4);
+    --card-gap: var(--space-4);
+    --size-display: 56px;
   }
 
   .kpi {
@@ -453,67 +520,51 @@
     grid-column: 1 / -1;
   }
 
-  
-
-  
-
-  
-
-  
-
-  
-
-  
-
-  
-
-  
-
-  
-
-  
-
-  
-
-  
-
-  
-
-  .topbar__masthead {
+  .kpi__cell {
     padding: var(--space-5);
   }
 
+  .kpi__value {
+    font-size: 26px;
+  }
+
+  .topbar__masthead {
+    padding-bottom: var(--space-6);
+  }
+
+  .topbar__story {
+    font-size: var(--size-data);
+  }
+
+  .topbar__deltas {
+    grid-template-columns: minmax(0, 1fr);
+    padding: var(--space-1) var(--space-5);
+  }
+
+  .topbar__delta:nth-last-child(2) {
+    border-bottom: 1px solid var(--line-faint);
+  }
+
+  .topbar__delta-value {
+    font-size: 22px;
+  }
+
+  .topbar__masthead--compact .topbar__amount {
+    font-size: 32px;
+  }
+
   .topbar__empty {
-    padding: var(--space-4) var(--space-5);
     flex-direction: column;
     gap: var(--space-1);
   }
 
-  .topbar__amount {
-    font-size: var(--size-large);
-  }
-
-  .topbar__deltas {
-    gap: var(--space-3) var(--space-5);
-  }
-
-  .topbar__meta {
-    gap: var(--space-4);
-    flex-wrap: wrap;
-  }
-
   .banner {
-    padding: var(--space-2) var(--space-5);
     flex-wrap: wrap;
   }
 
   .banner__message {
     flex-basis: 100%;
     order: 3;
-  }
-
-  .footer {
-    padding: var(--space-4) var(--space-5);
   }
 }
 
@@ -738,4 +789,12 @@
 .button--danger:hover {
   background: #d12730;
   border-color: #d12730;
+}
+
+/* Banners that sit directly in the column (data warnings, failed updates)
+   line up with the cards. */
+.app__column > .banner {
+  width: calc(100% - 2 * var(--page-gutter));
+  max-width: calc(var(--max-width) - 2 * var(--page-gutter));
+  margin: 0 auto var(--card-gap);
 }

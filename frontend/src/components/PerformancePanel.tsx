@@ -11,7 +11,7 @@
 import { useMemo, useState } from 'react'
 
 import { toLineData } from '../charts/series'
-import { chartTheme } from '../charts/theme'
+import { useChartTheme } from '../charts/theme'
 import { TimeSeriesChart, type CrosshairState, type SeriesSpec } from '../charts/TimeSeriesChart'
 import {
   formatDate,
@@ -88,7 +88,7 @@ export function PerformancePanel({ history, summary, returns, currency }: Perfor
   const [range, setRange] = useState<Range>('all')
   const [view, setView] = useState<View>('growth')
   const [crosshair, setCrosshair] = useState<CrosshairState | null>(null)
-  const theme = chartTheme()
+  const theme = useChartTheme()
 
   const series = useMemo<SeriesSpec[]>(() => {
     const start = rangeStartIndex(history.dates, range)

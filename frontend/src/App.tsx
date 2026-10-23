@@ -15,6 +15,7 @@ import { CsvImportModal } from './components/CsvImportModal'
 import { NewPortfolioModal } from './components/NewPortfolioModal'
 import { OrderModal } from './components/OrderModal'
 import { PositionModal } from './components/PositionModal'
+import { Sidebar } from './components/Sidebar'
 import { NAV_ORDER } from './lib/navigation'
 import { TopBar } from './components/TopBar'
 import { WatchlistModal } from './components/WatchlistModal'
@@ -40,6 +41,16 @@ const FixedIncomeView = lazy(() => import('./views/FixedIncomeView'))
 const MacroSecView = lazy(() => import('./views/MacroSecView'))
 const OptionsView = lazy(() => import('./views/OptionsView'))
 const DataView = lazy(() => import('./views/DataView'))
+
+const SIDEBAR_KEY = 'atlas.sidebar.collapsed'
+
+function readCollapsed(): boolean {
+  try {
+    return window.localStorage.getItem(SIDEBAR_KEY) === '1'
+  } catch {
+    return false
+  }
+}
 
 function Shell({
   state,
@@ -75,47 +86,109 @@ function Shell({
   const summary = state?.analytics?.summary ?? null
   const health = state?.analytics?.health ?? null
   const { theme } = useTheme()
+  const live = config.source === 'api'
   const portfolioName =
     state?.source === 'api'
       ? state.portfolios.find((portfolio) => portfolio.id === state.portfolioId)?.name
       : undefined
+  const pricedHoldings = state?.analytics?.holdings?.holdings
+  const holdingsInProfit = pricedHoldings
+    ? pricedHoldings.filter((holding) => holding.unrealized_pnl >= 0).length
+    : undefined
+  const medianNextYear = state?.analytics?.montecarlo?.median_value
+
+  // The rail's collapsed state is remembered between visits; on a phone the
+  // rail is a drawer instead, closed until asked for.
+  const [collapsed, setCollapsed] = useState(readCollapsed)
+  const [drawerOpen, setDrawerOpen] = useState(false)
+
+  const toggleCollapsed = () => {
+    setCollapsed((value) => {
+      const next = !value
+      try {
+        window.localStorage.setItem(SIDEBAR_KEY, next ? '1' : '0')
+      } catch {
+        // Storage can be unavailable (private mode); the choice then lasts
+        // for this visit only.
+      }
+      return next
+    })
+  }
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if ((event.ctrlKey || event.metaKey) && event.key === '\\') {
+        event.preventDefault()
+        toggleCollapsed()
+      } else if (event.key === 'Escape' && drawerOpen) {
+        setDrawerOpen(false)
+      }
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [drawerOpen])
 
   return (
-    <div className="app" data-theme={theme}>
-      <TopBar
-        summary={summary}
-        health={health}
-        config={config}
+    <div
+      className={collapsed ? 'app app--rail' : 'app'}
+      data-theme={theme}
+      data-drawer={drawerOpen ? 'open' : undefined}
+    >
+      <Sidebar
         view={view}
-        baseCurrency={state?.baseCurrency ?? '—'}
+        analyticsReady={summary !== null}
         holdingsCount={state?.positions.length ?? 0}
-        refreshing={refreshing}
-        onRefresh={onRefresh}
-        portfolioName={portfolioName}
-        portfolios={state?.portfolios}
-        activePortfolioId={state?.portfolioId}
+        collapsed={collapsed}
+        onToggleCollapsed={toggleCollapsed}
+        drawerOpen={drawerOpen}
+        onCloseDrawer={() => setDrawerOpen(false)}
+        live={live}
+        portfolios={state?.portfolios ?? []}
+        activePortfolioId={state?.portfolioId ?? 1}
         onSelectPortfolio={onSelectPortfolio}
         onCreatePortfolio={onCreatePortfolio}
-        onAddPosition={onAddPosition}
-        onOpenTradeModal={onOpenTradeModal}
-        onOpenCommandPalette={onOpenCommandPalette}
-        onOpenWatchlist={onOpenWatchlist}
-        onOpenCsvImport={onOpenCsvImport}
-        onSwitchSource={onSwitchSource}
-        editable={state?.editable ?? false}
+        onSwitchSource={onSwitchSource ? () => onSwitchSource(live ? 'snapshot' : 'api') : undefined}
+        pricesAt={
+          health?.prices_fetched_at || summary?.generated_at
+            ? formatTimestamp(health?.prices_fetched_at ?? summary?.generated_at ?? '')
+            : undefined
+        }
       />
-      {children}
-      <footer className="footer">
-        <span>
-          {state?.source === 'snapshot' ? 'Demo portfolio (Snapshot)' : 'Self-hosted portfolio'} · not
-          investment advice · market data via Yahoo Finance
-        </span>
-        <span>
-          {state?.apiVersion ? `API ${state.apiVersion} · ` : ''}
-          {summary ? `as of ${formatDate(summary.as_of)} · ` : ''}
-          built {summary ? formatTimestamp(summary.generated_at) : '—'}
-        </span>
-      </footer>
+      <div className="app__column">
+        <TopBar
+          summary={summary}
+          health={health}
+          config={config}
+          view={view}
+          baseCurrency={state?.baseCurrency ?? '—'}
+          refreshing={refreshing}
+          onRefresh={onRefresh}
+          portfolioName={portfolioName}
+          holdingsInProfit={holdingsInProfit}
+          medianNextYear={medianNextYear}
+          onCreatePortfolio={onCreatePortfolio}
+          onAddPosition={onAddPosition}
+          onOpenTradeModal={onOpenTradeModal}
+          onOpenCommandPalette={onOpenCommandPalette}
+          onOpenWatchlist={onOpenWatchlist}
+          onOpenCsvImport={onOpenCsvImport}
+          onSwitchSource={onSwitchSource}
+          onOpenMenu={() => setDrawerOpen(true)}
+          editable={state?.editable ?? false}
+        />
+        {children}
+        <footer className="footer">
+          <span>
+            {state?.source === 'snapshot' ? 'Demo portfolio from the snapshot' : 'Your self-hosted portfolio'}.
+            Not investment advice. Market data from Yahoo Finance.
+          </span>
+          <span>
+            {state?.apiVersion ? `API ${state.apiVersion}, ` : ''}
+            {summary ? `as of ${formatDate(summary.as_of)}, ` : ''}
+            built {summary ? formatTimestamp(summary.generated_at) : '—'}
+          </span>
+        </footer>
+      </div>
     </div>
   )
 }

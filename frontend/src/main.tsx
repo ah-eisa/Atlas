@@ -1,13 +1,17 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 
-// Self-hosted IBM Plex, bundled by Vite - no external font requests at runtime.
+// Self-hosted fonts, bundled by Vite - no external font requests at runtime.
 // Only the weights the design system actually uses are imported.
-import '@fontsource/ibm-plex-sans/400.css'
-import '@fontsource/ibm-plex-sans/500.css'
-import '@fontsource/ibm-plex-sans/600.css'
+// Instrument Sans: the interface and every small figure.
+import '@fontsource/instrument-sans/400.css'
+import '@fontsource/instrument-sans/500.css'
+import '@fontsource/instrument-sans/600.css'
+// Newsreader: headlines and the large figures that lead a view.
+import '@fontsource/newsreader/400.css'
+import '@fontsource/newsreader/500.css'
+// IBM Plex Mono: code, file names and raw CSV only.
 import '@fontsource/ibm-plex-mono/400.css'
-import '@fontsource/ibm-plex-mono/500.css'
 
 import './styles/tokens.css'
 import './styles/base.css'

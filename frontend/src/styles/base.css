@@ -138,7 +138,17 @@ pre {
   display: flex;
   flex-direction: column;
   min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-xl);
   background: var(--surface-panel);
+  box-shadow: var(--shadow-sm);
+}
+
+/* A panel inside a panel is a section of it, not another card. */
+.panel .panel {
+  border-radius: var(--radius-lg);
+  box-shadow: none;
 }
 
 /* The header names what the panel answers. It sits on the panel's own
@@ -149,7 +159,7 @@ pre {
   justify-content: space-between;
   gap: var(--space-4);
   min-height: var(--panel-header-height);
-  padding: var(--space-3) var(--space-5) 0;
+  padding: var(--space-5) var(--space-6) 0;
   min-width: 0;
 }
 
@@ -161,13 +171,16 @@ pre {
   min-width: 0;
   margin: 0;
   color: var(--text-primary);
-  font-size: var(--size-heading);
-  font-weight: var(--weight-semibold);
-  letter-spacing: -0.005em;
+  font-family: var(--font-display);
+  font-size: 23px;
+  font-weight: var(--weight-medium);
+  letter-spacing: -0.01em;
+  line-height: 1.2;
 }
 
 .panel__subtitle {
   color: var(--text-tertiary);
+  font-family: var(--font-sans);
   font-size: var(--size-caption);
   font-weight: var(--weight-regular);
   letter-spacing: 0;
@@ -187,7 +200,7 @@ pre {
 }
 
 .panel__body--pad {
-  padding: var(--space-5);
+  padding: var(--space-5) var(--space-6) var(--space-6);
 }
 
 /* ------------------------------------------------------------------ *

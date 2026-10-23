@@ -9,6 +9,33 @@ frontend ships against it.
 
 ## [Unreleased]
 
+### Changed — "Statement" design
+
+- **A navigation rail on the left** replaces the top navigation bar. It
+  holds the wordmark, the portfolio switcher, the grouped views with an
+  icon each, and the data source. It collapses to icons (labels then show
+  as tooltips), remembers the choice, and opens and closes with Ctrl+\.
+  On a phone it is a drawer that slides in over the page.
+- **Evergreen and Newsreader.** Light is now the base palette, with a dark
+  theme on the same roles. The portfolio's value, panel titles and headline
+  figures are set in Newsreader; the interface in Instrument Sans. IBM
+  Plex Sans is no longer bundled.
+- **The overview opens with a sentence**: what the portfolio is worth
+  against what was paid, how many holdings are in profit, and the median of
+  next year's simulated outcomes, beside a card of four colour-keyed
+  changes.
+- **Content sits on cards** with space between them, instead of a
+  hairline grid.
+- **Each asset class has one colour everywhere**: a mark beside every
+  ticker, the holding's weight bar, and its slice of the allocation donut,
+  which previously coloured slices by rank.
+- Weight bars grow in on load; the current view's highlight slides along
+  the rail.
+- Charts drawn with Lightweight Charts, and every panel coloured from the
+  chart theme, now repaint on a live theme switch; they previously kept the
+  old theme's gridlines and series colours until something else
+  re-rendered them.
+
 ### Changed — visual design
 
 - **A new palette.** Ink-navy surfaces with warm off-white text and a single

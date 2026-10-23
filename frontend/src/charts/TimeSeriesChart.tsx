@@ -25,7 +25,7 @@ import {
 import { useEffect, useRef } from 'react'
 
 import { easeOutSine, MOTION, prefersReducedMotion } from '../lib/motion'
-import { themeVersion } from '../lib/theme'
+import { useTheme } from '../lib/theme'
 import { fromTime } from './series'
 import { chartTheme } from './theme'
 
@@ -214,14 +214,15 @@ export function TimeSeriesChart({
     }
   }, [])
 
-  // Re-apply the chart furniture when the theme changes. The series colours
-  // follow on their own, because the panels rebuild their series specs from
-  // the new palette; the grid, axes and crosshair are owned by the chart
-  // instance and would otherwise keep the old theme's colours.
-  const palette = themeVersion()
+  // Re-apply the chart furniture when the theme changes. The grid, axes and
+  // crosshair are owned by the chart instance and would otherwise keep the
+  // old theme's colours. The chart subscribes to the theme itself: reading
+  // the version during render only worked when a parent happened to
+  // re-render, and a live switch could leave dark gridlines on a light page.
+  const { theme } = useTheme()
   useEffect(() => {
     chartRef.current?.applyOptions(chartOptions())
-  }, [palette])
+  }, [theme])
 
   // Reconcile series: update in place where possible, add/remove on change.
   useEffect(() => {

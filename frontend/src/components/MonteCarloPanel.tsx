@@ -12,7 +12,7 @@ import { useMemo } from 'react'
 import type { EChartsOption } from 'echarts'
 
 import { EChart } from '../charts/EChart'
-import { axisLabelStyle, chartTheme, tooltipStyle } from '../charts/theme'
+import { axisLabelStyle, chartTheme, tooltipStyle, useChartTheme } from '../charts/theme'
 import {
   formatDate,
   formatMoney,
@@ -203,7 +203,7 @@ function histogramOption(
 
 /** The percentile fan: the projection itself. */
 export function MonteCarloPanel({ montecarlo, currency }: MonteCarloPanelProps) {
-  const theme = chartTheme()
+  const theme = useChartTheme()
   const fan = useMemo(() => fanOption(montecarlo, currency, theme), [montecarlo, currency, theme])
   const subtitle = `${montecarlo.paths.toLocaleString('en-GB')} paths · ${montecarlo.horizon_days} trading days`
 
@@ -236,7 +236,7 @@ export function MonteCarloPanel({ montecarlo, currency }: MonteCarloPanelProps) 
 
 /** Where those paths land after a year, and how likely each outcome is. */
 export function OutcomeDistributionPanel({ montecarlo, currency }: MonteCarloPanelProps) {
-  const theme = chartTheme()
+  const theme = useChartTheme()
   const histogram = useMemo(() => histogramOption(montecarlo, theme), [montecarlo, theme])
   const lossProbability = montecarlo.probability_below_start_pct
 

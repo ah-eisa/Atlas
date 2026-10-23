@@ -10,7 +10,7 @@ import { useMemo } from 'react'
 import type { EChartsOption } from 'echarts'
 
 import { EChart } from '../charts/EChart'
-import { axisLabelStyle, chartTheme, tooltipStyle } from '../charts/theme'
+import { axisLabelStyle, chartTheme, tooltipStyle, useChartTheme } from '../charts/theme'
 import { formatCorrelation } from '../lib/format'
 import type { RiskPayload } from '../lib/types'
 import { Panel } from './Panel'
@@ -137,7 +137,7 @@ function heatmapOption(
 }
 
 export function CorrelationPanel({ correlation, lookbackDays }: CorrelationPanelProps) {
-  const theme = chartTheme()
+  const theme = useChartTheme()
   const option = useMemo(() => heatmapOption(correlation, theme), [correlation, theme])
 
   const finite = correlation.matrix

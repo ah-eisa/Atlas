@@ -192,19 +192,60 @@
 }
 
 /* Weight cell: figure with a proportional rule beneath it. */
+/* Weight: the figure beside a bar that grows in on load, in the colour of
+   the holding's asset class. */
 .grid__weight {
-  position: relative;
-  display: inline-block;
-  padding-bottom: 4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-3);
+}
+
+.grid__weight-track {
+  width: 72px;
+  height: 6px;
+  overflow: hidden;
+  border-radius: 3px;
+  background: var(--line-faint);
 }
 
 .grid__weight-bar {
-  position: absolute;
-  right: 0;
-  bottom: 0;
-  height: 2px;
-  border-radius: 1px;
-  background: linear-gradient(90deg, var(--accent-dim), var(--accent));
+  display: block;
+  height: 100%;
+  border-radius: 3px;
+  transform-origin: left;
+  animation: weight-grow 1.1s var(--easing) 0.35s both;
+}
+
+@keyframes weight-grow {
+  from { transform: scaleX(0); }
+}
+
+/* A rounded mark in the asset class's colour, holding the ticker's root. */
+.grid__ticker-cell {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-4);
+}
+
+.grid__mark {
+  display: grid;
+  flex-shrink: 0;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  overflow: hidden;
+  border-radius: var(--radius);
+  color: #ffffff;
+  font-size: 10px;
+  font-weight: var(--weight-semibold);
+  letter-spacing: 0.02em;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .grid__weight-bar {
+    animation: none;
+  }
 }
 
 .grid__total {

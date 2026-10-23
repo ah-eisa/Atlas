@@ -17,15 +17,19 @@
   align-items: flex-end;
   justify-content: space-between;
   gap: var(--space-5) var(--space-8);
-  padding: var(--space-7) var(--space-5) var(--space-6);
+  padding: var(--space-7) var(--space-7) var(--space-6);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-xl);
   background: var(--surface-panel);
+  box-shadow: var(--shadow-sm);
 }
 
 .view__title {
   margin: 0;
   color: var(--text-primary);
-  font-size: var(--size-large);
-  font-weight: var(--weight-semibold);
+  font-family: var(--font-display);
+  font-size: 34px;
+  font-weight: var(--weight-medium);
   line-height: var(--leading-tight);
   letter-spacing: -0.015em;
 }

@@ -1,262 +1,85 @@
 /**
- * Design tokens - ATLAS.
+ * Design tokens - ATLAS, "Statement".
  *
- * An instrument panel for someone managing their own money: deep ink-navy
- * surfaces, warm off-white ink, and one accent - brass - reserved for where
- * you are and the action you would take next. Gains and losses are green and
- * coral, warnings orange, so the accent is never mistaken for a signal.
+ * A private-bank statement for your own money. Evergreen is the house
+ * colour: it marks where you are, the primary action, and the portfolio's
+ * own line on every chart. Six categorical hues, validated for colour-vision
+ * deficiency on both surfaces, mark what each holding is. Gains are green,
+ * losses brick red, warnings amber.
  *
- * Every figure is set in IBM Plex Sans with tabular numerals rather than a
- * monospace face: columns still align, and the numbers read as figures, not
- * as code. Labels are sentence case. Nothing glows.
+ * Headlines and the large figures that lead a view are set in Newsreader;
+ * the interface and every small figure in Instrument Sans with tabular
+ * numerals. Content sits on cards on a quiet page, with one orchestrated
+ * entrance and motion that answers what you do.
  *
- * Chart colours come from here too (see charts/theme.ts). The categorical
- * order was validated for colour-vision deficiency on both surfaces.
+ * Light is the base palette; dark redefines the same roles. Chart colours
+ * come from here too (see charts/theme.ts).
  */
 
 :root {
-  color-scheme: dark;
+  color-scheme: light;
 
   /* ---------------------------------------------------------------- *
-   * Surfaces - ink navy, stepping lighter as things come forward     *
+   * Surfaces                                                          *
    * ---------------------------------------------------------------- */
-  --surface-page: #0c121c;
-  --surface-panel: #111926;
-  --surface-header: #141d2b;
-  --surface-raised: #1a2433;
-  --surface-hover: #1f2b3d;
-  --surface-active: #27364c;
+  --surface-page: #f4f6f5;
+  --surface-panel: #ffffff;
+  --surface-header: #f8faf9;
+  --surface-raised: #f3f6f5;
+  --surface-hover: #eef3f1;
+  --surface-active: #e3ebe7;
 
-  --line: #1e2a3a;
-  --line-strong: #2c3b50;
-  --line-faint: #162030;
-  --line-neon: rgba(217, 178, 95, 0.4);
+  --line: #dfe5e2;
+  --line-strong: #c9d3cf;
+  --line-faint: #edf1ef;
+  --line-neon: rgba(18, 97, 79, 0.35);
 
   /* ---------------------------------------------------------------- *
    * Ink                                                               *
    * ---------------------------------------------------------------- */
-  --text-primary: #e9ecf1;
-  --text-secondary: #a3aebe;
-  --text-tertiary: #75839a;
-  --text-disabled: #4b586b;
-  --text-inverse: #1a1306;
+  --text-primary: #15201c;
+  --text-secondary: #4f5d58;
+  --text-tertiary: #67756f;
+  --text-disabled: #a3aeaa;
+  --text-inverse: #ffffff;
 
   /* ---------------------------------------------------------------- *
-   * Accent - brass. Current location and the primary action only.     *
+   * Accent - evergreen                                                *
    * ---------------------------------------------------------------- */
-  --accent: #d9b25f;
-  --accent-dim: #a8873f;
-  --accent-faint: rgba(217, 178, 95, 0.1);
+  --accent: #12614f;
+  --accent-strong: #1d8a70;
+  --accent-dim: #0d4a3c;
+  --accent-faint: #e2efe9;
   --accent-glow: none;
-  --accent-gradient: #d9b25f;
-  --accent-gradient-subtle: rgba(217, 178, 95, 0.1);
+  --accent-gradient: linear-gradient(140deg, #1d8a70, #12614f);
+  --accent-gradient-subtle: #e2efe9;
 
   /* ---------------------------------------------------------------- *
    * Signals                                                           *
    * ---------------------------------------------------------------- */
-  --positive: #4cc98f;
-  --positive-dim: #2f9466;
-  --positive-bg: rgba(76, 201, 143, 0.12);
+  --positive: #1f7a4d;
+  --positive-dim: #175e3b;
+  --positive-bg: #e5f3ec;
   --positive-glow: none;
-  --negative: #f0656f;
-  --negative-dim: #b8424c;
-  --negative-bg: rgba(240, 101, 111, 0.12);
+  --negative: #b4372f;
+  --negative-dim: #8f2b25;
+  --negative-bg: #f9e9e7;
   --negative-glow: none;
   --neutral: var(--text-secondary);
-  --warning: #ef8a4a;
-  --warning-bg: rgba(239, 138, 74, 0.12);
+  --warning: #b9661a;
+  --warning-bg: #fbefe2;
   --warning-glow: none;
-  --info: #6aa5f0;
-  --purple: #9085e9;
+  --info: #2a78d6;
+  --purple: #6250d6;
 
   /* ---------------------------------------------------------------- *
    * Data visualisation                                                *
    * ---------------------------------------------------------------- */
 
-  /* Categorical, in fixed order. Validated on #111926: every adjacent
-     pair clears the colour-vision and normal-vision floors, and all six
-     clear 3:1 against the surface. Green is left out on purpose - it
-     means "gain" here. */
-  --viz-cat-1: #3987e5;
-  --viz-cat-2: #d95926;
-  --viz-cat-3: #199e70;
-  --viz-cat-4: #c98500;
-  --viz-cat-5: #d55181;
-  --viz-cat-6: #9085e9;
-
-  /* Sequential: one hue (blue), from the surface to full strength. */
-  --viz-seq-1: #131f2e;
-  --viz-seq-2: #162d47;
-  --viz-seq-3: #1a3d66;
-  --viz-seq-4: #1c5099;
-  --viz-seq-5: #2a6cc4;
-  --viz-seq-6: #3987e5;
-  --viz-seq-7: #6da7ec;
-
-  /* The other pole of a correlation scale. */
-  --viz-negative: #c0565c;
-
-  /* Monthly return heat scale: two hues, deepening with size. */
-  --heat-pos-1-bg: #10261f;
-  --heat-pos-1-fg: #6fd3a3;
-  --heat-pos-2-bg: #133325;
-  --heat-pos-2-fg: #82dcb1;
-  --heat-pos-3-bg: #17432f;
-  --heat-pos-3-fg: #a2e6c5;
-  --heat-pos-4-bg: #1b573c;
-  --heat-pos-4-fg: #cbf2de;
-  --heat-neg-1-bg: #2a161c;
-  --heat-neg-1-fg: #f08f97;
-  --heat-neg-2-bg: #391b23;
-  --heat-neg-2-fg: #f3a1a8;
-  --heat-neg-3-bg: #4d212c;
-  --heat-neg-3-fg: #f6b6bc;
-  --heat-neg-4-bg: #662938;
-  --heat-neg-4-fg: #fad3d6;
-
-  /* Chart furniture: recessive, so the data carries the contrast. */
-  --viz-grid: #172233;
-  --viz-axis: #2a384d;
-  --viz-band: #182a42;
-  --viz-band-inner: #22426b;
-  --viz-crosshair: #75839a;
-  --viz-benchmark: #8794a8;
-
-  /* ---------------------------------------------------------------- *
-   * Typography                                                        *
-   * ---------------------------------------------------------------- */
-  --font-sans: 'IBM Plex Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  /* Figures: the same family with tabular numerals (set on .num). */
-  --font-mono: var(--font-sans);
-  /* Code, file names and raw CSV - the only true monospace. */
-  --font-code: 'IBM Plex Mono', ui-monospace, 'Cascadia Mono', monospace;
-
-  /* Type scale */
-  --size-micro: 11px;
-  --size-label: 12px;
-  --size-caption: 12px;
-  --size-body: 14px;
-  --size-data: 15px;
-  --size-heading: 16px;
-  --size-subhead: 18px;
-  --size-large: 24px;
-  --size-display: 52px;
-
-  --weight-regular: 400;
-  --weight-medium: 500;
-  --weight-semibold: 600;
-  --weight-bold: 600;
-
-  --leading-tight: 1.15;
-  --leading-snug: 1.35;
-  --leading-normal: 1.5;
-
-  /* Labels are sentence case; no tracking. Kept as tokens so older rules
-     that still reference them resolve to nothing. */
-  --tracking-label: 0;
-  --tracking-wide: 0;
-
-  /* ---------------------------------------------------------------- *
-   * Spacing                                                          *
-   * ---------------------------------------------------------------- */
-  --space-1: 2px;
-  --space-2: 4px;
-  --space-3: 8px;
-  --space-4: 12px;
-  --space-5: 16px;
-  --space-6: 20px;
-  --space-7: 24px;
-  --space-8: 32px;
-  --space-9: 40px;
-  --space-10: 48px;
-
-  --row-height: 36px;
-  --row-height-compact: 30px;
-  --header-height: 34px;
-  --panel-header-height: 48px;
-
-  /* ---------------------------------------------------------------- *
-   * Motion                                                            *
-   * ---------------------------------------------------------------- */
-  --duration-fast: 120ms;
-  --duration-base: 180ms;
-  --easing: cubic-bezier(0.16, 1, 0.3, 1);
-
-  /* Layout */
-  --max-width: 1760px;
-  --sidebar-width: 300px;
-
-  --radius-xs: 3px;
-  --radius-sm: 5px;
-  --radius: 8px;
-  --radius-lg: 12px;
-  --radius-xl: 16px;
-  --radius-full: 9999px;
-
-  /* Elevation: only for things that float (windows, menus). */
-  --shadow-sm: none;
-  --shadow-md: 0 8px 24px rgba(3, 7, 14, 0.45);
-  --shadow-lg: 0 24px 64px rgba(3, 7, 14, 0.6);
-  --shadow-glow: none;
-  --shadow-positive: none;
-  --shadow-negative: none;
-
-  --backdrop-blur: none;
-  --glass-bg: var(--surface-panel);
-  --glass-border: var(--line);
-}
-
-@media (prefers-reduced-motion: reduce) {
-  :root {
-    --duration-fast: 0ms;
-    --duration-base: 0ms;
-  }
-}
-
-/* -------------------------------------------------------------------- *
- * Light palette - cool paper, the same roles                           *
- * -------------------------------------------------------------------- */
-[data-theme='light'] {
-  color-scheme: light;
-
-  --surface-page: #eef1f5;
-  --surface-panel: #ffffff;
-  --surface-header: #f7f8fa;
-  --surface-raised: #f3f5f8;
-  --surface-hover: #edf0f4;
-  --surface-active: #e2e7ee;
-
-  --line: #e1e6ed;
-  --line-strong: #c9d1dc;
-  --line-faint: #f0f3f7;
-  --line-neon: rgba(138, 100, 20, 0.4);
-
-  --text-primary: #131b27;
-  --text-secondary: #4a5668;
-  --text-tertiary: #677386;
-  --text-disabled: #9aa4b2;
-  --text-inverse: #ffffff;
-
-  --accent: #8a6414;
-  --accent-dim: #6e500f;
-  --accent-faint: rgba(138, 100, 20, 0.08);
-  --accent-gradient: #8a6414;
-  --accent-gradient-subtle: rgba(138, 100, 20, 0.08);
-
-  --positive: #16794a;
-  --positive-dim: #115e39;
-  --positive-bg: rgba(22, 121, 74, 0.09);
-  --negative: #c2343f;
-  --negative-dim: #9c2a33;
-  --negative-bg: rgba(194, 52, 63, 0.08);
-  --neutral: var(--text-secondary);
-  --warning: #b9541a;
-  --warning-bg: rgba(185, 84, 26, 0.09);
-  --info: #2a6cc4;
-  --purple: #6250d6;
-
-  /* Categorical, same hues stepped for white. Three slots sit below 3:1
-     on white, so every categorical chart carries a legend with values. */
+  /* Categorical, in fixed order: blue, orange, aqua, yellow, magenta,
+     violet. Every adjacent pair clears the colour-vision and normal-vision
+     floors. Three slots sit below 3:1 on white, so every categorical chart
+     carries a legend with its values. */
   --viz-cat-1: #2a78d6;
   --viz-cat-2: #eb6834;
   --viz-cat-3: #1baf7a;
@@ -264,6 +87,7 @@
   --viz-cat-5: #e87ba4;
   --viz-cat-6: #6250d6;
 
+  /* Sequential: one hue (blue), near zero to full strength. */
   --viz-seq-1: #f2f7fd;
   --viz-seq-2: #cde2fb;
   --viz-seq-3: #9ec5f4;
@@ -291,13 +115,198 @@
   --heat-neg-4-bg: #eea6ad;
   --heat-neg-4-fg: #651c22;
 
-  --viz-grid: #edf0f4;
-  --viz-axis: #d3d9e2;
-  --viz-band: #dde9f9;
-  --viz-band-inner: #b8d2f3;
-  --viz-crosshair: #8792a3;
-  --viz-benchmark: #6c7789;
+  --viz-grid: #edf1ef;
+  --viz-axis: #d5ddd9;
+  --viz-band: #dcefe7;
+  --viz-band-inner: #b3dccb;
+  --viz-crosshair: #7c8984;
+  --viz-benchmark: #9aa6a1;
 
-  --shadow-md: 0 8px 24px rgba(19, 27, 39, 0.1);
-  --shadow-lg: 0 24px 64px rgba(19, 27, 39, 0.16);
+  /* ---------------------------------------------------------------- *
+   * Typography                                                        *
+   * ---------------------------------------------------------------- */
+  --font-sans: 'Instrument Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  /* Headlines and the large figures that lead a view. */
+  --font-display: 'Newsreader', Georgia, 'Times New Roman', serif;
+  /* Figures: the interface face with tabular numerals (set on .num). */
+  --font-mono: var(--font-sans);
+  /* Code, file names and raw CSV - the only true monospace. */
+  --font-code: 'IBM Plex Mono', ui-monospace, 'Cascadia Mono', monospace;
+
+  --size-micro: 11px;
+  --size-label: 12px;
+  --size-caption: 12.5px;
+  --size-body: 14px;
+  --size-data: 15px;
+  --size-heading: 16px;
+  --size-subhead: 18px;
+  --size-large: 26px;
+  --size-display: 84px;
+
+  --weight-regular: 400;
+  --weight-medium: 500;
+  --weight-semibold: 600;
+  --weight-bold: 600;
+
+  --leading-tight: 1.15;
+  --leading-snug: 1.35;
+  --leading-normal: 1.5;
+
+  --tracking-label: 0;
+  --tracking-wide: 0;
+
+  /* ---------------------------------------------------------------- *
+   * Spacing                                                          *
+   * ---------------------------------------------------------------- */
+  --space-1: 2px;
+  --space-2: 4px;
+  --space-3: 8px;
+  --space-4: 12px;
+  --space-5: 16px;
+  --space-6: 20px;
+  --space-7: 24px;
+  --space-8: 32px;
+  --space-9: 40px;
+  --space-10: 48px;
+
+  --row-height: 38px;
+  --row-height-compact: 32px;
+  --header-height: 36px;
+  --panel-header-height: 56px;
+
+  /* ---------------------------------------------------------------- *
+   * Motion                                                            *
+   * ---------------------------------------------------------------- */
+  --duration-fast: 140ms;
+  --duration-base: 220ms;
+  --duration-slow: 400ms;
+  --easing: cubic-bezier(0.2, 0.8, 0.2, 1);
+
+  /* Layout */
+  --max-width: 1600px;
+  /* The allocation column beside the overview chart. */
+  --sidebar-width: 320px;
+  /* The navigation rail, open and collapsed. */
+  --nav-width: 256px;
+  --nav-collapsed: 76px;
+  --page-gutter: 40px;
+  --card-gap: 24px;
+
+  --radius-xs: 4px;
+  --radius-sm: 6px;
+  --radius: 10px;
+  --radius-lg: 14px;
+  --radius-xl: 18px;
+  --radius-full: 9999px;
+
+  /* Cards sit on the page with a soft shadow; windows float higher. */
+  --shadow-sm: 0 1px 2px rgba(21, 32, 28, 0.04), 0 8px 24px rgba(21, 32, 28, 0.06);
+  --shadow-md: 0 8px 28px rgba(21, 32, 28, 0.12);
+  --shadow-lg: 0 24px 64px rgba(21, 32, 28, 0.18);
+  --shadow-glow: none;
+  --shadow-positive: none;
+  --shadow-negative: none;
+
+  --backdrop-blur: none;
+  --glass-bg: var(--surface-panel);
+  --glass-border: var(--line);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --duration-fast: 0ms;
+    --duration-base: 0ms;
+    --duration-slow: 0ms;
+  }
+}
+
+/* -------------------------------------------------------------------- *
+ * Dark - the same roles on deep evergreen                              *
+ * -------------------------------------------------------------------- */
+[data-theme='dark'] {
+  color-scheme: dark;
+
+  --surface-page: #0e1513;
+  --surface-panel: #131d1a;
+  --surface-header: #172420;
+  --surface-raised: #1a2824;
+  --surface-hover: #1f302b;
+  --surface-active: #26392f;
+
+  --line: #22312c;
+  --line-strong: #30443d;
+  --line-faint: #1b2824;
+  --line-neon: rgba(63, 191, 152, 0.35);
+
+  --text-primary: #e8efec;
+  --text-secondary: #a9b8b2;
+  --text-tertiary: #84958e;
+  --text-disabled: #52625c;
+  --text-inverse: #06120e;
+
+  --accent: #3fbf98;
+  --accent-strong: #62d3ae;
+  --accent-dim: #2a8a6d;
+  --accent-faint: #173b31;
+  --accent-gradient: linear-gradient(140deg, #62d3ae, #3fbf98);
+  --accent-gradient-subtle: #173b31;
+
+  --positive: #4cc98f;
+  --positive-dim: #2f9466;
+  --positive-bg: #15302a;
+  --negative: #f0756d;
+  --negative-dim: #b84a44;
+  --negative-bg: #3a1f1f;
+  --neutral: var(--text-secondary);
+  --warning: #ef9a52;
+  --warning-bg: #382818;
+  --info: #6aa5f0;
+  --purple: #9085e9;
+
+  /* Categorical, the same hues stepped for the dark surface: all six
+     clear 3:1, and every adjacent pair clears the CVD floor. */
+  --viz-cat-1: #3987e5;
+  --viz-cat-2: #d95926;
+  --viz-cat-3: #199e70;
+  --viz-cat-4: #c98500;
+  --viz-cat-5: #d55181;
+  --viz-cat-6: #9085e9;
+
+  --viz-seq-1: #15231f;
+  --viz-seq-2: #162d47;
+  --viz-seq-3: #1a3d66;
+  --viz-seq-4: #1c5099;
+  --viz-seq-5: #2a6cc4;
+  --viz-seq-6: #3987e5;
+  --viz-seq-7: #6da7ec;
+
+  --viz-negative: #c0565c;
+
+  --heat-pos-1-bg: #10261f;
+  --heat-pos-1-fg: #6fd3a3;
+  --heat-pos-2-bg: #133325;
+  --heat-pos-2-fg: #82dcb1;
+  --heat-pos-3-bg: #17432f;
+  --heat-pos-3-fg: #a2e6c5;
+  --heat-pos-4-bg: #1b573c;
+  --heat-pos-4-fg: #cbf2de;
+  --heat-neg-1-bg: #2a161c;
+  --heat-neg-1-fg: #f08f97;
+  --heat-neg-2-bg: #391b23;
+  --heat-neg-2-fg: #f3a1a8;
+  --heat-neg-3-bg: #4d212c;
+  --heat-neg-3-fg: #f6b6bc;
+  --heat-neg-4-bg: #662938;
+  --heat-neg-4-fg: #fad3d6;
+
+  --viz-grid: #1b2824;
+  --viz-axis: #2c3e37;
+  --viz-band: #173229;
+  --viz-band-inner: #1f4d3d;
+  --viz-crosshair: #74857e;
+  --viz-benchmark: #6f817a;
+
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3), 0 10px 28px rgba(0, 0, 0, 0.28);
+  --shadow-md: 0 10px 30px rgba(0, 0, 0, 0.4);
+  --shadow-lg: 0 24px 64px rgba(0, 0, 0, 0.55);
 }
