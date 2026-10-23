@@ -706,3 +706,17 @@ def test_a_comparison_against_another_benchmark(analytics_client: Any, monkeypat
     assert payload["symbol"] == "^TEST"
     assert payload["observations"] > 0
     assert payload["active_return_pct"] is not None
+
+
+def test_the_dashboard_page_is_revalidated_on_every_load(
+    empty_client: Any, temp_settings: Any
+) -> None:
+    """index.html names the current build's bundles, so a browser must not
+    reuse an old copy of it after a rebuild."""
+    temp_settings.frontend_dist.mkdir(parents=True, exist_ok=True)
+    (temp_settings.frontend_dist / "index.html").write_text("<!doctype html><title>ATLAS</title>")
+
+    response = empty_client.get("/overview")
+
+    assert response.status_code == 200
+    assert response.headers["cache-control"] == "no-cache"

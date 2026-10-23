@@ -1506,7 +1506,10 @@ def spa(full_path: str) -> Response:
             status_code=404,
             detail={"code": "frontend_not_built", "message": "frontend/dist/index.html is missing."},
         )
-    return FileResponse(index)
+    # The page names the hashed bundles of the current build, so the browser
+    # must check it on every load. Without this it may reuse a stale copy for
+    # hours after a rebuild and keep loading the previous interface.
+    return FileResponse(index, headers={"Cache-Control": "no-cache"})
 
 
 __all__ = ["app", "get_analytics", "error_response"]
