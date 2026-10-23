@@ -233,3 +233,22 @@ test('the navigation is grouped and [ ] step between views', async ({ page }) =>
   await page.locator('body').press('[')
   await expect(page).toHaveURL(/#\/overview/)
 })
+
+test('copying an animated figure copies its value once', async ({ page }) => {
+  await page.goto('/?source=snapshot#/overview')
+  const delta = page.locator('.topbar__delta').first()
+  await expect(delta).toBeVisible()
+
+  const copied = await delta.evaluate((element) => {
+    const range = document.createRange()
+    range.selectNodeContents(element)
+    const selection = window.getSelection()!
+    selection.removeAllRanges()
+    selection.addRange(range)
+    return selection.toString()
+  })
+  const value = await delta.locator('.counter__reserve').first().innerText()
+
+  expect(copied.split(value).length - 1).toBe(1)
+  expect(copied).not.toMatch(/\(\s*\n/)
+})

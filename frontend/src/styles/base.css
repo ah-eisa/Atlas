@@ -335,28 +335,37 @@ body {
  * "0" to "80,325" without changing the layout around it.               *
  * ------------------------------------------------------------------ */
 
+/* The final figure stays in the text flow and reserves the width; the
+   animated copy is laid over it. Keeping the reserve inline (not a grid
+   item) and the animated copy unselectable means a copy-paste yields the
+   true value once, on one line, instead of both copies on separate lines. */
 .counter {
-  display: inline-grid;
-  justify-items: start;
+  position: relative;
+  display: inline-block;
 }
 
-.counter > * {
-  grid-area: 1 / 1;
-}
-
-/* The final figure reserves the width but is not painted: it is made
-   transparent rather than hidden, so it keeps its place in the layout and
-   stays in the accessibility tree. A screen reader therefore announces the
-   true value once instead of counting it up from zero, while the animated
-   copy on top of it is the one that is painted. */
+/* The final figure is made transparent rather than hidden, so it keeps its
+   place in the layout and stays in the accessibility tree. A screen reader
+   therefore announces the true value once instead of counting it up from
+   zero, while the animated copy on top of it is the one that is painted. */
 .counter__reserve {
   color: transparent;
 }
 
+.counter__value {
+  position: absolute;
+  top: 0;
+  left: 0;
+  white-space: nowrap;
+  user-select: none;
+  pointer-events: none;
+}
+
 /* Right-aligned contexts keep the digits pinned to the right edge. */
-.tabular-right .counter,
-.readout__value .counter {
-  justify-items: end;
+.tabular-right .counter__value,
+.readout__value .counter__value {
+  right: 0;
+  left: auto;
 }
 
 /* ------------------------------------------------------------------ *
