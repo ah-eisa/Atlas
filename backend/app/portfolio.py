@@ -43,7 +43,7 @@ from .data import Holding, MarketData, Portfolio, fx_rate_on, normalise_currency
 from .serialize import iso, json_safe, money_series, ratio_series, round_money, round_ratio
 
 SPARKLINE_DAYS: int = 90
-API_VERSION: str = "2.2.0"
+API_VERSION: str = "2.3.0"
 
 PERIODS: tuple[metrics.PeriodKey, ...] = ("day", "week", "month", "ytd", "all")
 

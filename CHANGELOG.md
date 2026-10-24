@@ -9,6 +9,29 @@ frontend ships against it.
 
 ## [Unreleased]
 
+## [2.3.0] — 2026-10-24
+
+The trade ledger, fixed income, macro and filings, options and the portfolio
+lab, merged into one product: a FIFO ledger whose figures hold up, every
+synthetic number labelled, one design across eleven views, and a container
+image that builds again. Schema version 6 (tax lots) is applied on start.
+
+### Fixed — container image
+
+- **The image builds again.** The frontend stage copied `frontend/` and
+  `snapshot.json` into one directory, but the Vite build reads the snapshot
+  at `../snapshot.json`, so the snapshot plugin failed and CI was red. The
+  stage now mirrors the repository layout.
+- **The image ships the bundled bond and macro datasets.** `.dockerignore`
+  excluded all of `backend/data`, which would have served an empty yield
+  curve. CI now checks that the container serves the curve and the page.
+
+### Changed — documentation
+
+- The README describes all eleven views, the ledger, the design and the
+  current limitations, and points to `ah-eisa/Atlas`. The development
+  report has a 2.3 section.
+
 ### Changed — "Statement" design
 
 - **A navigation rail on the left** replaces the top navigation bar. It

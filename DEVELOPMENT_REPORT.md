@@ -1,15 +1,66 @@
-# Development Report — ATLAS 2.2
+# Development Report — ATLAS 2.3
 
 An engineering record of the work that turned the original portfolio-dashboard
 template into a standalone investment analytics application: what was wrong,
 what changed, how it was verified, and what is still missing.
 
-This edition covers the 2.2 work, which was spent making the analytics
-defensible — total-return benchmarking, currency attribution, recorded cash
-flows, money-weighted return, scenario tools — and then pinning the result
-with contract, unit and browser tests.
+This edition covers 2.3. The 2.2 work made the analytics defensible; 2.3
+merged the trade ledger, fixed income, macro and filings, options and the
+portfolio lab into one product, then spent most of its effort making the
+ledger's numbers correct, labelling every synthetic figure, and giving the
+eleven views one design. The 2.2 record follows unchanged, from section 1.
 
 ---
+
+## 2.3 at a glance
+
+### What was built
+
+| Area | Change |
+|---|---|
+| **Trade ledger** | Every purchase is its own lot (schema v6). A sale consumes the oldest lots held on its date, so realised P&L is measured against the cost of the units sold instead of the average cost. Deleting a sale returns its units, and reopens a position the sale had closed; deleting a purchase that a later sale used is refused (`409 transaction_conflict`). A position edited by hand becomes a single new lot. |
+| **History** | Each open lot enters the position history on its own date, so units bought later are not credited with earlier returns. |
+| **Import** | CSV and broker-statement trades are replayed in date order, buys before sells on the same day, so newest-first statements no longer drop their sales. |
+| **Honest data** | Watchlist alerts fire only on portfolio or live prices; static reference prices are labelled and never trigger. Option chains and the market ticker report `live` or `sample`. Live Greeks come from each contract's implied volatility instead of placeholders. Prices are shown in the currency they are quoted in, with the converted price beneath. |
+| **Lab** | The attribution report's reference return covers the selected window. |
+| **Merged views** | Bonds, macro and filings, options and the lab now share the product's layout and palette; they had relied on class names no stylesheet defined. |
+| **Design** | "Statement": a collapsible navigation rail (drawer on phones), cards on a quiet page, Newsreader and Instrument Sans, an evergreen accent, one colour per asset class, light and dark themes. Every window is one accessible dialog (Escape, focus trap and return, scroll lock). |
+| **Operations** | `scipy` and `pyarrow` declared; the fixed income loader logs files it cannot read; the dashboard page is sent `no-cache`; the Docker image builds again and ships the bundled datasets. |
+
+### Verification
+
+| Check | Result |
+|---|---|
+| Backend tests | 216 pass (21 new: FIFO lots, reversible deletions, backdated sales, lot-dated history, CSV ordering, data-source labelling, windowed attribution, cache header) |
+| Frontend unit tests | 19 pass |
+| Browser smoke suite | 14 scenarios on desktop and phone, all pass (new: Escape and focus return, grouped navigation and `[` `]`, single copy of an animated figure) |
+| Payload contract | Unchanged schema; CI comparison passes |
+| Lint | No new warnings (5 pre-existing `exhaustive-deps` warnings remain) |
+| Container | The build failure was reproduced outside Docker (the Vite snapshot plugin could not find `../snapshot.json` in the old stage layout) and fixed; CI now also checks the container serves the yield curve |
+
+### Remaining technical debt
+
+- The ledger records buys and sells only: no dividends, fees, taxes, splits,
+  other corporate actions or FX cash movements.
+- Units already sold are not represented in past position values.
+- The bond and macro datasets live on the data volume, so an existing volume
+  keeps the copy it was seeded with.
+- Five `react-hooks/exhaustive-deps` lint warnings in the merged views.
+- The ECharts chunk is above Vite's 500 kB warning.
+
+### Next priorities
+
+1. **Portfolio accounting audit**: FIFO edge cases, corporate actions,
+   dividends, fees, taxes, splits and FX cash flows, each with tests that pin
+   the expected figures.
+2. **Institutional portfolio layer**: benchmark policies, sleeves and model
+   portfolios, compliance rules, an audit trail, scheduled reporting.
+3. **Multi-user, authentication and permissions**, only once the product is
+   used by more than one person.
+
+---
+
+# The 2.2 record
 
 ## 1. Starting point
 

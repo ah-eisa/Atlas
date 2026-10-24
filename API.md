@@ -11,7 +11,7 @@ python -m uvicorn backend.app.api:app --port 8000 # from the repository root
 
 Interactive OpenAPI docs: `/docs`. ReDoc: `/redoc`. Raw schema: `/openapi.json`.
 
-Current API version: **2.2.0** (reported as `version` on the health route and
+Current API version: **2.3.0** (reported as `version` on the health route and
 `api_version` in the bootstrap payload).
 
 ---
@@ -98,7 +98,7 @@ answers in milliseconds.
 ```json
 {
   "status": "ok",
-  "version": "2.2.0",
+  "version": "2.3.0",
   "process": "669a3aeb",
   "base_currency": "EUR",
   "positions": 12,
@@ -114,7 +114,7 @@ counts and timings only.
 
 ```json
 {
-  "version": "2.2.0",
+  "version": "2.3.0",
   "process": "669a3aeb",
   "uptime_seconds": 1834.512,
   "requests": {
@@ -157,7 +157,7 @@ positions and the complete analytics bundle.
 
 ```json
 {
-  "api_version": "2.2.0",
+  "api_version": "2.3.0",
   "source": "api",
   "base_currency": "EUR",
   "portfolio_id": 1,

@@ -1,17 +1,18 @@
 # ATLAS — Portfolio Intelligence
 
-[![CI](https://github.com/chrispathway/portfolio-dashboard/actions/workflows/ci.yml/badge.svg)](https://github.com/chrispathway/portfolio-dashboard/actions/workflows/ci.yml)
+[![CI](https://github.com/ah-eisa/Atlas/actions/workflows/ci.yml/badge.svg)](https://github.com/ah-eisa/Atlas/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-A self-hosted investment analytics workbench. Enter your positions, and ATLAS
-turns them into an institutional-style terminal: time-weighted performance
-against a benchmark, drawdown and risk decomposition, expected shortfall,
-position-level risk contribution, and a Monte Carlo projection of the year
-ahead.
+A self-hosted investment analytics workbench. Enter your positions or record
+your trades, and ATLAS turns them into an institutional-style statement:
+time-weighted and money-weighted performance against a benchmark, drawdown
+and risk decomposition, expected shortfall, attribution, stress tests, a
+Monte Carlo projection of the year ahead, and the bond, macro and options
+context around them.
 
-Everything runs on your own machine. The only outbound requests are to Yahoo
-Finance for public price history. There is no account, no telemetry, and no
-server other than the one you run.
+Everything runs on your own machine. Prices come from Yahoo Finance, economic
+series from FRED and company filings from SEC EDGAR, all public. There is no
+account, no telemetry, and no server other than the one you run.
 
 > **Not investment advice.** This is an analytics tool, not a recommendation
 > engine. The portfolio committed to this repo is a worked example, not
@@ -38,23 +39,33 @@ server other than the one you run.
 
 ## What it does
 
-Six views over one analytics payload:
+Eleven views over one analytics payload, grouped the way the navigation
+rail shows them:
 
-| View | Question it answers |
-|---|---|
-| **Overview** | What is the portfolio worth, how has it behaved, and what is driving the risk? |
-| **Performance** | How did the portfolio compound, where did the money actually go, and how long was it underwater? |
-| **Risk** | How volatile is it, what did the worst days look like, and which positions are responsible? |
-| **Holdings** | What do I own, what did it cost, what is it worth now — and how do I change it? |
-| **Projection** | What does the next year plausibly look like, and what is it assuming? |
-| **Data** | Where did these numbers come from, when were they fetched, and how fresh are they? |
+| Group | View | Question it answers |
+|---|---|---|
+| **Portfolio** | **Overview** | What is the portfolio worth against what I paid, how has it behaved, and what is driving the risk? |
+| | **Performance** | How did it compound, where did the money actually go, and how long was it underwater? |
+| | **Risk** | How volatile is it, what did the worst days look like, and which positions are responsible? |
+| | **Lab** | Is it concentrated, how would it fare in a past crisis, and where did its return come from? |
+| | **Projection** | What does the next year plausibly look like, and what is it assuming? |
+| **Book** | **Holdings** | What do I own, what did it cost, what is it worth now — and how do I change it? |
+| | **Trades** | What did I buy and sell, and what did each sale realise? |
+| **Markets** | **Bonds** | Where are Treasury yields and credit spreads, and what would a rate move do to a bond? |
+| | **Macro & filings** | What are inflation, rates and employment doing, and what have my companies filed? |
+| | **Options** | What does the chain look like, and how does one option respond to price, time and volatility? |
+| **Sources** | **Data** | Where did these numbers come from, when were they fetched, and how fresh are they? |
 
 Analytics that are actually implemented, not decorative:
 
-- **Time-weighted return** with acquisition-date activation and external
-  cash-flow adjustment, so a position bought mid-period is not credited with
-  returns that predate it. The money-weighted return (XIRR) is reported
-  beside it, because the two answer different questions.
+- **Time-weighted return** with lot-dated activation and external cash-flow
+  adjustment, so units bought mid-period are not credited with returns that
+  predate them. The money-weighted return (XIRR) is reported beside it,
+  because the two answer different questions.
+- **A FIFO trade ledger.** Every purchase is its own lot; a sale consumes the
+  oldest lots held on its date, and its realised P&L is measured against the
+  cost of exactly those units. Deleting a sale returns its units; deleting a
+  purchase a later sale has used is refused.
 - **Benchmark-relative analytics**: Jensen alpha, beta, tracking error,
   information ratio, up/down capture, and correlation, all estimated on the
   common sample with a total-return benchmark. Any other symbol can be
@@ -65,13 +76,23 @@ Analytics that are actually implemented, not decorative:
   (expected shortfall) at both levels.
 - **Currency decomposition**: the unrealised P&L is split between the
   instrument's own price move and the FX move, with the cost basis converted
-  at the FX rate of the acquisition date.
-- **Attribution**: active return per position, grouped into asset class and
-  region, with the residual stated rather than hidden.
-- **Scenario tools**: a historical replay of the current positions over a past
-  window, target weights with allocation drift, and a rebalance preview.
+  at the FX rate of the acquisition date. Prices are shown in the currency
+  they are quoted in, with the converted price beneath.
+- **Attribution**: Brinson-Fachler allocation, selection and interaction by
+  asset class, region or currency, against an equal-weight or custom policy
+  benchmark, with the residual stated rather than hidden.
+- **Scenario tools**: multi-factor stress tests against past crises, a
+  historical replay of the current positions, target weights with allocation
+  drift, and a rebalance preview.
+- **Fixed income and options**: the Treasury curve and credit spreads with
+  their history, a bond calculator (price, duration, convexity, DV01, rate
+  shocks), and Black-Scholes pricing with Greeks from each contract's own
+  implied volatility. Synthetic sample data is labelled as such.
 - **Projection**: 10,000-path multivariate-normal Monte Carlo with percentile
   bands, a final-value histogram, and the assumptions stated on screen.
+- **Operations**: several portfolios with their own reporting currency, CSV
+  and broker-statement import, a watchlist with price and risk alerts, and
+  `/api/v1/metrics` with request latency percentiles and cache counters.
 
 Every figure states its convention — annualised, geometric, over what window,
 against what risk-free rate — because a number without its convention is not
@@ -82,20 +103,27 @@ interpretable.
 ## Architecture
 
 ```
-portfolio-dashboard/
+Atlas/
 ├── backend/
 │   ├── app/                 # the whole service, importable as a package
 │   │   ├── api.py           # FastAPI routes, middleware, error contract
 │   │   ├── portfolio.py     # TWR engine and payload assembly
 │   │   ├── metrics.py       # risk, return, benchmark and concentration maths
 │   │   ├── montecarlo.py    # path simulation
+│   │   ├── lab.py           # X-ray, stress tests, attribution, factsheet
+│   │   ├── fixed_income.py  # yield curve, spreads, bond calculator
+│   │   ├── macro_sec.py     # FRED indicators and SEC EDGAR filings
+│   │   ├── options.py       # option chains, Black-Scholes and Greeks
+│   │   ├── importer.py      # CSV / broker import, watchlist and alerts
 │   │   ├── data.py          # yfinance fetch, FX, atomic on-disk cache
-│   │   ├── store.py         # SQLite persistence (positions, settings)
+│   │   ├── store.py         # SQLite persistence: positions, lots, trades
+│   │   ├── observability.py # request and cache metrics
 │   │   ├── instruments.py   # ticker metadata lookup
 │   │   ├── schemas.py       # strict Pydantic v2 request/response models
 │   │   ├── serialize.py     # JSON-safe rounding, null handling
 │   │   └── config.py        # environment-driven settings
-│   ├── tests/               # 174 hermetic tests
+│   ├── data/                # bundled bond and macro datasets (the database lives here too)
+│   ├── tests/               # 216 hermetic tests
 │   ├── export_schema.py     # exports the committed payload JSON Schema
 │   ├── generate_snapshot.py # writes the committed snapshot.json
 │   └── setup_holdings.py    # interactive / CSV position import
@@ -103,9 +131,10 @@ portfolio-dashboard/
 │   ├── e2e/                 # Playwright smoke suite (desktop + phone)
 │   └── src/
 │       ├── App.tsx          # shell, routing, loading/empty/error states
-│       ├── views/           # the six views, each loaded on demand
-│       ├── components/      # panels, charts, tables, editors
-│       ├── lib/             # api client, types, formatting, routing, motion
+│       ├── views/           # the eleven views, each loaded on demand
+│       ├── components/      # sidebar, panels, charts, tables, windows
+│       ├── charts/          # ECharts and Lightweight Charts wrappers, theme bridge
+│       ├── lib/             # api client, types, formatting, routing, navigation
 │       └── styles/          # design tokens and layout
 ├── snapshot.json            # committed demo payload (no backend needed)
 └── pytest.ini
@@ -113,17 +142,20 @@ portfolio-dashboard/
 
 **Backend.** FastAPI with a revision-aware analytics cache: prices and the
 Monte Carlo are expensive, so they are rebuilt only when the stored positions
-or the reporting currency actually change. Positions live in SQLite (WAL
-mode); the price cache is an atomically-replaced JSON file with a format
-version, so a stale cache is detected rather than misread.
+or the reporting currency actually change. Positions, lots and trades live in
+SQLite (WAL mode, versioned migrations); the price cache is an
+atomically-replaced JSON file with a format version, so a stale cache is
+detected rather than misread.
 
 **Frontend.** React 19 + TypeScript, built with Vite. ECharts for the
-distribution/heatmap panels, Lightweight Charts for the time series, TanStack
-Table for the holdings grid. The design system is an institutional one —
-hairline grids, tabular figures, one accent colour, and no decoration that
-does not carry information — with complete dark and light palettes. The six
-views are lazily loaded, so the shell and the KPI band paint before the
-charting libraries are fetched.
+distribution, heatmap and donut panels, Lightweight Charts for the time
+series, TanStack Table for the holdings grid. The design ("Statement") reads
+like a private-bank statement: a collapsible navigation rail, content on
+cards, Newsreader for headlines and lead figures, Instrument Sans for the
+interface, one evergreen accent, and one colour per asset class, in complete
+light and dark themes. Every window shares one accessible dialog. The views
+are lazily loaded, so the shell paints before the charting libraries are
+fetched.
 
 ---
 
@@ -134,8 +166,8 @@ You need **Python 3.11+** and **Node 20+**.
 ### With `make` (macOS / Linux / WSL)
 
 ```bash
-git clone https://github.com/chrispathway/portfolio-dashboard.git
-cd portfolio-dashboard
+git clone https://github.com/ah-eisa/Atlas.git
+cd Atlas
 
 make setup       # install backend + frontend dependencies
 make dev         # open http://localhost:5173
@@ -144,8 +176,8 @@ make dev         # open http://localhost:5173
 ### Without `make` (Windows PowerShell)
 
 ```powershell
-git clone https://github.com/chrispathway/portfolio-dashboard.git
-cd portfolio-dashboard
+git clone https://github.com/ah-eisa/Atlas.git
+cd Atlas
 
 python -m venv .venv
 .venv\Scripts\pip install -r backend\requirements.txt
@@ -205,12 +237,14 @@ cares which one is running. The active mode is always visible in the header
 The dashboard ships with two complete palettes, not one palette plus an
 inversion:
 
-- **Dark** — a true-black trading surface, the original design.
-- **Light** — a paper-white instrument panel: white panels on a cool grey
-  page, hairline rules instead of floating cards, and a categorical ramp that
-  runs dark-to-light so the largest slice still reads strongest.
+- **Light** — white cards on a quiet grey-green page, evergreen ink for the
+  accent, the base palette.
+- **Dark** — the same roles on deep evergreen, each colour re-stepped for the
+  dark surface rather than inverted.
 
-The switch lives in the header. The first visit follows the operating
+The six categorical colours (one per asset class) were validated for
+colour-vision deficiency on both surfaces. The switch is the moon or sun
+button in the toolbar. The first visit follows the operating
 system's `prefers-color-scheme`; once you choose, the choice is remembered and
 survives a reload. The theme is applied before the first paint, so the page
 never flashes the wrong background.
@@ -372,13 +406,14 @@ make test-frontend  # frontend: Vitest
 make test-e2e       # browser: Playwright, against the production build
 ```
 
-The backend suite (174 tests) is hermetic: it never reaches Yahoo Finance,
+The backend suite (216 tests) is hermetic: it never reaches Yahoo Finance,
 never touches your real database, and uses a synthetic market with a fixed
 seed, so results are reproducible. It covers the metric maths, the TWR and
 XIRR methodology, the FX decomposition, the SQLite store and its schema
 version, the HTTP contract (validation, duplicate tickers, empty portfolios,
-exports, cash flows, portfolios, API-key protection, CORS on rejected keys)
-and the error contract.
+exports, cash flows, portfolios, API-key protection, CORS on rejected keys),
+the error contract, the FIFO ledger (lot matching, reversible deletions,
+date-ordered CSV import), and the labelling of sample and reference data.
 
 The payload contract is pinned twice over: `backend/tests/test_contract.py`
 validates the committed `snapshot.json` against a JSON Schema generated from
@@ -388,12 +423,14 @@ the Pydantic models, and CI regenerates that schema
 the payload therefore breaks the build instead of the dashboard.
 
 The frontend unit tests (19) cover the pure logic — formatting, the hash
-router and the snapshot normaliser. The Playwright smoke suite (8 scenarios,
+router and the snapshot normaliser. The Playwright smoke suite (14 scenarios,
 run on a desktop and a phone viewport) answers the questions only a browser
 can: the app mounts, every view renders panels, the charts fill their
 containers, the figures are not zeros, counters settle, the theme switch
-repaints and survives a reload, nothing overflows sideways, and the holdings
-grid scrolls instead of breaking the layout. It runs against the production
+repaints and survives a reload, nothing overflows sideways, the holdings
+grid scrolls instead of breaking the layout, windows close on Escape and
+return focus, the navigation groups and `[` `]` shortcuts work, and a copied
+figure is copied once. It runs against the production
 bundle, which is also what the container ships.
 
 ```bash
@@ -415,6 +452,13 @@ Then open <http://localhost:8080>. The image serves the built SPA and the API
 from one process on one port, so there is no CORS configuration to get wrong.
 See [docker-compose.yml](docker-compose.yml) for the volume and environment
 variables.
+
+The image carries the bundled bond and macro datasets under
+`/app/backend/data`, which is also the data volume. A new volume is seeded
+from the image; an existing one keeps its own copy, so after an upgrade that
+changes those datasets, recreate the volume or copy the new files in. CI
+builds the image, waits for its health check and checks that it serves the
+yield curve and the dashboard.
 
 ---
 
@@ -453,10 +497,17 @@ variables.
 - Holdings' prices are dividend-adjusted by the data provider, and the
   default benchmark is a provider total-return series. Neither index
   methodology is independently verified.
-- Attribution is the single-index arithmetic form: it attributes active
-  return to positions, not to allocation versus selection within sectors.
-- Position history is modelled as a single purchase at the acquisition date.
-  It cannot reconstruct a sequence of buys and sells.
+- The overview's attribution is the single-index arithmetic form (active
+  return per position). The Lab's Brinson-Fachler attribution splits
+  allocation from selection, as a single-period buy-and-hold from the start
+  of the window.
+- The ledger records buys and sells only. Dividends, fees, taxes, splits and
+  other corporate actions are not recorded as transactions; prices are
+  provider-adjusted for dividends and splits instead.
+- Position history follows the open lots: each lot enters on its own date,
+  but units already sold are not shown in past values.
+- Editing a position by hand replaces its trade history with a single lot,
+  so orders placed before the edit can no longer be reversed one by one.
 - There is no multi-user support, no authentication, and no audit log. This
   is a personal tool.
 
