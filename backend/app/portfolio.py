@@ -29,7 +29,9 @@ Unit conventions (mirrored in ``API.md``):
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+import logging
+from collections import defaultdict
+from dataclasses import dataclass, replace
 from datetime import datetime, timezone
 from functools import cached_property
 from typing import Any
@@ -37,10 +39,12 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
-from . import metrics, montecarlo
+from . import ledger, metrics, montecarlo
 from .config import SETTINGS, Settings
 from .data import Holding, MarketData, Portfolio, fx_rate_on, normalise_currency, to_iso_dates
 from .serialize import iso, json_safe, money_series, ratio_series, round_money, round_ratio
+
+logger = logging.getLogger(__name__)
 
 SPARKLINE_DAYS: int = 90
 API_VERSION: str = "2.3.0"
@@ -116,27 +120,120 @@ class PortfolioAnalytics:
         self.settings = settings
 
     # ------------------------------------------------------------------
+    # The ledger
+    # ------------------------------------------------------------------
+
+    @cached_property
+    def ledger_replay(self) -> ledger.Replay | None:
+        """The ledger replayed, or ``None`` for a portfolio without one.
+
+        A portfolio read from ``holdings.json`` has no ledger: its positions
+        are all there is, and the analytics estimate how the money arrived.
+        """
+        if not self.portfolio.ledger:
+            return None
+        try:
+            return ledger.replay(self.portfolio.ledger, self.portfolio.base_currency)
+        except ledger.LedgerError as exc:
+            logger.warning("The ledger does not replay (%s); using the positions alone", exc)
+            return None
+
+    @cached_property
+    def ledger_tickers(self) -> frozenset[str]:
+        """Positions whose history is rebuilt from the ledger.
+
+        Every position the ledger describes exactly, and every position it
+        closed that the market data can still price. A held position the
+        ledger does not describe (it should not happen; the store records
+        every hand edit) falls back to its own acquisition date.
+        """
+        replayed = self.ledger_replay
+        if replayed is None:
+            return frozenset()
+        result: set[str] = set()
+        held = set()
+        for holding in self.portfolio.holdings:
+            held.add(holding.ticker.upper())
+            quantity, _, _ = replayed.position(holding.ticker.upper())
+            if abs(quantity - holding.quantity) <= ledger.QTY_EPS * max(1.0, holding.quantity):
+                result.add(holding.ticker)
+        priced = set(self.market.prices_base.columns)
+        for movement in replayed.movements:
+            ticker = movement.ticker
+            if ticker and movement.units and ticker not in held and ticker in priced:
+                result.add(ticker)
+        return frozenset(result)
+
+    @cached_property
+    def unpriced_tickers(self) -> list[str]:
+        """Closed positions the market data has no history for."""
+        replayed = self.ledger_replay
+        if replayed is None:
+            return []
+        held = {holding.ticker.upper() for holding in self.portfolio.holdings}
+        priced = set(self.market.prices_base.columns)
+        return sorted(
+            {
+                m.ticker
+                for m in replayed.movements
+                if m.ticker and m.units and m.ticker not in held and m.ticker not in priced
+            }
+        )
+
+    def _movement_applies(self, movement: ledger.Movement) -> bool:
+        """Whether a movement is part of the history the analytics rebuild."""
+        if movement.ticker is None:
+            return True
+        if movement.ticker in self.ledger_tickers:
+            return True
+        # Income and charges of a position still count when its units come
+        # from its acquisition date rather than the ledger.
+        return not movement.units and movement.kind not in ("BUY", "SELL") and (
+            movement.ticker not in self.unpriced_tickers
+        )
+
+    # ------------------------------------------------------------------
     # Position schedule and valuation
     # ------------------------------------------------------------------
 
     @cached_property
     def quantity_frame(self) -> pd.DataFrame:
-        """Units held per ticker on each trading day.
+        """Units held per ticker on each trading day, in today's units.
 
-        Each open lot contributes zero before its first trading day of
-        ownership and its quantity afterwards, so units bought later are not
-        credited with returns that predate them. A holding without lots is a
-        single lot on its acquisition date. Units already sold are not
-        represented: the history describes the positions held today.
+        A position rebuilt from the ledger holds what its events say on each
+        day: units bought later are not credited with returns that predate
+        them, and units sold are part of the history until the day they were
+        sold. The price history is adjusted for splits, so units before a
+        split are restated in today's units with the split's ratio.
+
+        A holding without a ledger is its lots (or a single lot on its
+        acquisition date): the history describes the positions held today.
         """
         index = self.market.prices_base.index
-        frame = pd.DataFrame(0.0, index=index, columns=list(self.portfolio.tickers))
+        closed = sorted(self.ledger_tickers - set(self.portfolio.tickers))
+        frame = pd.DataFrame(0.0, index=index, columns=[*self.portfolio.tickers, *closed])
         for holding in self.portfolio.holdings:
+            if holding.ticker in self.ledger_tickers:
+                continue
             column = frame.columns.get_loc(holding.ticker)
             for acquired, quantity in _holding_lots(holding):
                 position = self._first_position(acquired)
                 frame.iloc[position:, column] += quantity
-        return frame
+
+        replayed = self.ledger_replay
+        if replayed is not None:
+            for movement in replayed.movements:
+                if not movement.units or movement.ticker not in self.ledger_tickers:
+                    continue
+                column = frame.columns.get_loc(movement.ticker)
+                frame.iloc[self._first_position(movement.on):, column] += movement.units
+            for ticker, splits in replayed.splits.items():
+                if ticker not in self.ledger_tickers:
+                    continue
+                column = frame.columns.get_loc(ticker)
+                for on, ratio in splits:
+                    frame.iloc[: self._first_position(on), column] *= ratio
+        return frame.clip(lower=0.0)
 
     def _first_position(self, acquired: str) -> int:
         """Index of the first trading day on or after ``acquired``.
@@ -150,11 +247,206 @@ class PortfolioAnalytics:
         position = int(index.searchsorted(target, side="left"))
         return min(position, len(index) - 1)
 
+    def _split_factor(self, ticker: str, position: int) -> float:
+        """Today's units per unit held on the trading day at ``position``."""
+        factor = 1.0
+        if self.ledger_replay is not None:
+            for on, ratio in self.ledger_replay.splits.get(ticker, []):
+                if self._first_position(on) > position:
+                    factor *= ratio
+        return factor
+
+    def _rate_at(self, currency: str, position: int) -> float:
+        """Base units per unit of ``currency`` on the trading day at ``position``."""
+        major, unit = normalise_currency(currency)
+        if major == self.portfolio.base_currency:
+            return unit
+        series = self.market.fx.get(major)
+        if series is None:
+            return float("nan")
+        return float(series.iloc[position]) * unit
+
+    @cached_property
+    def market_dividends(self) -> list[ledger.Movement]:
+        """Dividends the market data says the positions were entitled to.
+
+        For each ex-dividend date, the units held at the previous close times
+        the dividend per unit, paid on the ex-date. Prices that already have
+        dividends folded in (an older cache) produce none: the dividend is
+        already in the price. A dividend the owner recorded - paid within 60
+        days after the ex-date - replaces the derived one, because it is what
+        was actually received, net of the tax withheld.
+        """
+        if self.market.dividends_in_prices or not self.market.dividends:
+            return []
+        recorded: dict[str, list[pd.Timestamp]] = {}
+        if self.ledger_replay is not None:
+            for movement in self.ledger_replay.movements:
+                if movement.category == "dividend" and movement.ticker:
+                    recorded.setdefault(movement.ticker, []).append(pd.Timestamp(movement.on))
+        quantities = self.quantity_frame
+        index = quantities.index
+        result: list[ledger.Movement] = []
+        for ticker, series in self.market.dividends.items():
+            if ticker not in quantities.columns:
+                continue
+            currency = self._currency_of(ticker)
+            for stamp, per_unit in series.items():
+                if not per_unit or per_unit <= 0:
+                    continue
+                ex_date = pd.Timestamp(stamp).normalize()
+                position = int(index.searchsorted(ex_date, side="left"))
+                if position == 0 or position >= len(index):
+                    continue
+                units = float(quantities[ticker].iloc[position - 1])
+                if units <= ledger.QTY_EPS:
+                    continue
+                if any(
+                    pd.Timedelta(0) <= paid - ex_date <= pd.Timedelta(days=60)
+                    for paid in recorded.get(ticker, [])
+                ):
+                    continue
+                amount = units * float(per_unit)
+                on = ex_date.strftime("%Y-%m-%d")
+                result.append(
+                    ledger.Movement(
+                        on,
+                        f"market:{ticker}:{on}",
+                        "DIVIDEND",
+                        ticker,
+                        cash=((currency, amount),),
+                        category="dividend",
+                        value=amount,
+                        currency=currency,
+                    )
+                )
+        return result
+
+    def _currency_of(self, ticker: str) -> str:
+        for holding in self.portfolio.holdings:
+            if holding.ticker == ticker:
+                return holding.currency
+        if self.ledger_replay is not None and ticker in self.ledger_replay.currencies:
+            return self.ledger_replay.currencies[ticker]
+        return self.portfolio.currencies.get(ticker, self.portfolio.base_currency)
+
+    @cached_property
+    def _cash_book(self) -> tuple[pd.DataFrame, pd.Series, pd.Series]:
+        """Cash per currency, the money the owner added, and what they withdrew.
+
+        Returns ``(balances, implicit, external)`` over the full price index:
+        ``balances`` in each currency's own units; ``implicit`` the money the
+        owner is assumed to have added on a day, in the base currency;
+        ``external`` the deposits and withdrawals they recorded.
+
+        A purchase is paid from cash in its own currency first, then from
+        base-currency cash converted at the day's rate. What cash cannot pay
+        for is money the owner added - the assumption the analytics have
+        always made about a purchase - and is an external flow on that day.
+        Sale proceeds and dividends stay in the portfolio as cash until they
+        are spent or withdrawn.
+        """
+        index = self.market.prices_base.index
+        base = self.portfolio.base_currency
+        days: list[dict[str, float]] = [defaultdict(float) for _ in range(len(index))]
+        external = np.zeros(len(index))
+
+        def credit(position: int, currency: str, amount: float) -> None:
+            major, unit = normalise_currency(currency)
+            days[position][major] += amount * unit
+
+        if self.ledger_replay is None:
+            return (
+                pd.DataFrame(index=index, columns=[base], data=0.0),
+                pd.Series(0.0, index=index),
+                pd.Series(0.0, index=index),
+            )
+
+        prices = self.market.prices_base
+        quantities = self.quantity_frame
+        # A position the ledger does not describe arrives at its market value.
+        for holding in self.portfolio.holdings:
+            if holding.ticker in self.ledger_tickers:
+                continue
+            for acquired, quantity in _holding_lots(holding):
+                position = self._first_position(acquired)
+                credit(position, base, -float(prices[holding.ticker].iloc[position]) * quantity)
+        for movement in [*self.ledger_replay.movements, *self.market_dividends]:
+            if not self._movement_applies(movement):
+                continue
+            position = self._first_position(movement.on)
+            if movement.at_market:
+                if movement.ticker in quantities.columns:
+                    # Units nobody recorded a price for (a hand-edited
+                    # position) arrive at the day's market value.
+                    units = movement.units * self._split_factor(movement.ticker, position)
+                    credit(position, base, -units * float(prices[movement.ticker].iloc[position]))
+                continue
+            for currency, amount in movement.cash:
+                if movement.kind == "DIVIDEND" and self.market.dividends_in_prices:
+                    # The price already carries the dividend.
+                    continue
+                credit(position, currency, amount)
+            if movement.category == "withholding" and self.market.dividends_in_prices:
+                # ...but not the tax withheld from it.
+                credit(position, movement.currency or base, -movement.value)
+            external[position] += movement.external
+
+        currencies = sorted({base, *(c for day in days for c in day)})
+        balance = dict.fromkeys(currencies, 0.0)
+        balances = np.zeros((len(index), len(currencies)))
+        implicit = np.zeros(len(index))
+        for position, deltas in enumerate(days):
+            for currency, amount in deltas.items():
+                balance[currency] += amount
+            for currency in currencies:
+                if currency != base and balance[currency] < -1e-9:
+                    rate = self._rate_at(currency, position)
+                    if np.isfinite(rate):
+                        balance[base] += balance[currency] * rate
+                        balance[currency] = 0.0
+            if balance[base] < -1e-9:
+                implicit[position] += -balance[base]
+                balance[base] = 0.0
+            balances[position] = [balance[currency] for currency in currencies]
+        return (
+            pd.DataFrame(balances, index=index, columns=currencies),
+            pd.Series(implicit, index=index),
+            pd.Series(external, index=index),
+        )
+
+    @cached_property
+    def cash_balances(self) -> pd.DataFrame:
+        """Cash per currency in its own units, over the active window."""
+        balances, _, _ = self._cash_book
+        return balances.loc[self.active_index]
+
+    @cached_property
+    def cash_frame(self) -> pd.DataFrame:
+        """Cash per currency in the base currency, over the active window.
+
+        Foreign cash is valued at each day's rate, so a currency's move on
+        cash held in it is part of the portfolio's return.
+        """
+        balances = self.cash_balances
+        frame = pd.DataFrame(0.0, index=balances.index, columns=balances.columns)
+        for currency in balances.columns:
+            major, unit = normalise_currency(currency)
+            if major == self.portfolio.base_currency:
+                frame[currency] = balances[currency] * unit
+            elif major in self.market.fx:
+                rates = self.market.fx[major].reindex(balances.index).ffill()
+                frame[currency] = balances[currency] * rates * unit
+        return frame.fillna(0.0)
+
     @cached_property
     def active_index(self) -> pd.DatetimeIndex:
-        """Trading days from the first position's acquisition onward."""
+        """Trading days from the first position (or the first cash) onward."""
         quantities = self.quantity_frame
         active = quantities.sum(axis=1) > 0
+        if self.ledger_replay is not None:
+            balances, _, _ = self._cash_book
+            active = active | (balances.abs().sum(axis=1) > 1e-9)
         if not bool(active.any()):
             return self.market.prices_base.index[-1:]
         first = active.idxmax()
@@ -166,7 +458,7 @@ class PortfolioAnalytics:
 
     @cached_property
     def prices_base(self) -> pd.DataFrame:
-        return self.market.prices_base.loc[self.active_index]
+        return self.market.prices_base.loc[self.active_index, list(self.quantity_frame.columns)]
 
     @cached_property
     def position_values(self) -> pd.DataFrame:
@@ -175,41 +467,55 @@ class PortfolioAnalytics:
 
     @cached_property
     def value_frame(self) -> pd.DataFrame:
-        """Per-holding market value through time, honouring acquisition dates."""
+        """Per-position market value through time, honouring when units were held."""
         return self.prices_base * self.active_quantity_frame
 
     @cached_property
     def equity(self) -> pd.Series:
-        """Actual portfolio market value in the base currency, every trading day."""
-        return metrics.equity_curve(self.value_frame)
+        """Actual portfolio market value in the base currency, every trading day.
+
+        Positions plus the cash the portfolio holds.
+        """
+        positions = metrics.equity_curve(self.value_frame)
+        if self.ledger_replay is None:
+            return positions
+        return positions + self.cash_frame.sum(axis=1)
 
     @cached_property
     def flows(self) -> pd.Series:
         """External contributions, indexed by trading day.
 
-        When the owner has recorded cash flows, those are authoritative: they
-        are the money that actually moved. The estimate described below is
-        only used when no ledger exists, because inferring a contribution
-        from a purchase date is an approximation of the truth.
+        With a ledger, the flows are the deposits and withdrawals the owner
+        recorded, plus the money they are assumed to have added whenever the
+        portfolio's cash could not pay for a purchase (see ``_cash_book``).
+        Dividends, fees, taxes, sales and conversions move money inside the
+        portfolio, so they are part of its return, not flows.
 
-        Without a ledger, a position enters the portfolio at its *market
+        Without a ledger, recorded cash flows are authoritative when there
+        are any; otherwise a position enters the portfolio at its *market
         value* on the first day it is held. That is the correct external flow
         for a time-weighted return: the purchase transfers wealth into the
         portfolio rather than creating it. Using the cost basis instead would
         report the difference between the entered cost and that day's close
         as investment performance.
 
-        Positions already held on the first observation are part of the opening
-        value and produce no flow.
+        What is already there on the first observation is the opening value
+        and produces no flow.
         """
         index = self.active_index
         result = pd.Series(0.0, index=index)
         if len(index) == 0:
             return result
 
-        ledger = self.portfolio.cash_flows
-        if ledger:
-            for flow in ledger:
+        if self.ledger_replay is not None:
+            _, implicit, external = self._cash_book
+            result = (implicit + external).loc[index].astype(float)
+            result.iloc[0] = 0.0
+            return result
+
+        ledger_flows = self.portfolio.cash_flows
+        if ledger_flows:
+            for flow in ledger_flows:
                 target = pd.Timestamp(flow.occurred_on).normalize()
                 position = int(index.searchsorted(target, side="left"))
                 # A flow before the first observation is part of the opening
@@ -330,7 +636,9 @@ class PortfolioAnalytics:
         previous_base = self.prices_base.iloc[-2] if len(self.prices_base) > 1 else self.prices_base.iloc[-1]
         latest_native = self.market.prices_native.iloc[-1]
         current_values = self.value_frame.iloc[-1]
-        weights = metrics.allocation(current_values)
+        # A weight is a share of everything the portfolio holds, cash included.
+        total = float(self.total_value)
+        weights = current_values / total if total else current_values * 0.0
         history_tail = self.prices_base.tail(SPARKLINE_DAYS)
 
         views: list[PositionView] = []
@@ -425,15 +733,36 @@ class PortfolioAnalytics:
 
     @cached_property
     def monte_carlo(self) -> montecarlo.MonteCarloResult:
-        return montecarlo.simulate(
-            self.asset_returns,
-            self.value_frame.iloc[-1],
+        held = self.value_frame.iloc[-1].reindex(list(self.portfolio.tickers)).fillna(0.0)
+        result = montecarlo.simulate(
+            self.asset_returns[list(self.portfolio.tickers)],
+            held,
             paths=self.settings.mc_paths,
             horizon_days=self.settings.mc_horizon_days,
             seed=self.settings.mc_seed,
             batch_paths=self.settings.mc_batch_paths,
             histogram_bins=self.settings.mc_histogram_bins,
             trading_days_per_year=self.settings.trading_days_per_year,
+        )
+        cash = sum(self.cash_values.values())
+        if not cash:
+            return result
+        # Cash is held as it is: it shifts every outcome by the same amount.
+        start = result.start_value + cash
+        return replace(
+            result,
+            start_value=start,
+            percentile_bands={
+                key: [value + cash for value in values] for key, values in result.percentile_bands.items()
+            },
+            final_values_summary={key: value + cash for key, value in result.final_values_summary.items()},
+            histogram=[
+                replace(bucket, start=bucket.start + cash, end=bucket.end + cash)
+                for bucket in result.histogram
+            ],
+            expected_value=result.expected_value + cash,
+            median_value=result.median_value + cash,
+            expected_return_pct=(result.expected_value + cash) / start - 1.0 if start else 0.0,
         )
 
     # ------------------------------------------------------------------
@@ -478,6 +807,20 @@ class PortfolioAnalytics:
                 )
         if len(self.portfolio.holdings) < 3:
             warnings.append("A portfolio of fewer than three positions is highly concentrated.")
+        if self.unpriced_tickers:
+            warnings.append(
+                "No price history for "
+                + ", ".join(self.unpriced_tickers)
+                + ", so the trades in them are left out of the history."
+            )
+        if self.ledger_replay is not None and self.market.dividends_in_prices:
+            recorded = any(m.category == "dividend" for m in self.ledger_replay.movements)
+            if recorded:
+                warnings.append(
+                    "These prices already include dividends (an older price cache), so "
+                    "recorded dividends are reported as income but not added to cash until "
+                    "prices are refreshed."
+                )
         return warnings
 
     def _period_payload(self, period: metrics.PeriodKey) -> dict[str, Any]:
@@ -500,17 +843,131 @@ class PortfolioAnalytics:
     def _allocation_breakdown(self, attribute: str) -> list[dict[str, Any]]:
         values = pd.Series({p.ticker: p.value_base for p in self.positions}, dtype=float)
         keys = pd.Series({p.ticker: getattr(p, attribute) for p in self.positions})
-        grouped = values.groupby(keys).sum().sort_values(ascending=False)
+        grouped = values.groupby(keys).sum()
+        counts = keys.value_counts()
+        # Cash is part of what the portfolio holds: its own bucket by class
+        # and region, and in its own currency by currency.
+        for currency, value in self.cash_values.items():
+            if value <= 0.005:
+                continue
+            key = currency if attribute == "currency" else "Cash"
+            grouped[key] = float(grouped.get(key, 0.0)) + value
+        grouped = grouped.sort_values(ascending=False)
         weights = metrics.allocation(grouped)
         return [
             {
                 "key": str(key),
                 "value": round_money(grouped[key]),
                 "allocation_pct": round_ratio(weights[key]),
-                "holdings": int((keys == key).sum()),
+                "holdings": int(counts.get(key, 0)),
             }
             for key in grouped.index
         ]
+
+    @cached_property
+    def cash_values(self) -> dict[str, float]:
+        """Cash held now per currency, valued in the base currency."""
+        if self.ledger_replay is None or self.cash_frame.empty:
+            return {}
+        latest = self.cash_frame.iloc[-1]
+        return {str(currency): float(value) for currency, value in latest.items() if abs(value) > 0.005}
+
+    def _cash_payload(self) -> list[dict[str, Any]]:
+        if not self.cash_values:
+            return []
+        balances = self.cash_balances.iloc[-1]
+        total = float(self.total_value)
+        return [
+            {
+                "currency": currency,
+                "balance": round_money(float(balances[currency])),
+                "value_base": round_money(value),
+                "allocation_pct": round_ratio(value / total if total else None),
+            }
+            for currency, value in sorted(self.cash_values.items(), key=lambda item: -item[1])
+        ]
+
+    def _ledger_report(self) -> dict[str, Any] | None:
+        """Income, charges and realised results, in the base currency.
+
+        Every amount is converted at the rate of the day it was paid. A
+        sale's realised result is its proceeds at the sale-day rate less the
+        cost of the lots it used, each at the rate of the day it was bought,
+        so it includes the currency's move while the units were held.
+        """
+        replayed = self.ledger_replay
+        if replayed is None:
+            return None
+
+        categories = ("dividend", "withholding", "fee", "tax", "return_of_capital")
+        totals = dict.fromkeys((*categories, "realized"), 0.0)
+        by_year: dict[str, dict[str, float]] = {}
+        by_ticker: dict[str, dict[str, float]] = {}
+
+        def add(on: str, ticker: str | None, category: str, value: float) -> None:
+            totals[category] += value
+            year = by_year.setdefault(on[:4], dict.fromkeys(totals, 0.0))
+            year[category] += value
+            if ticker:
+                row = by_ticker.setdefault(ticker, dict.fromkeys(totals, 0.0))
+                row[category] += value
+
+        movements = [*replayed.movements, *self.market_dividends]
+        for movement in movements:
+            if movement.category not in categories or not self._movement_applies(movement):
+                continue
+            position = self._first_position(movement.on)
+            rate = self._rate_at(movement.currency or self.portfolio.base_currency, position)
+            if np.isfinite(rate):
+                add(movement.on, movement.ticker, movement.category, movement.value * rate)
+
+        for sale in replayed.sales.values():
+            currency = sale.currency or self._currency_of(sale.ticker)
+            proceeds = sale.proceeds * self._rate_at(currency, self._first_position(sale.on))
+            cost = sum(
+                allocation.quantity
+                * allocation.cost_per_unit
+                * self._rate_at(currency, self._first_position(allocation.acquired))
+                for allocation in sale.allocations
+            )
+            if np.isfinite(proceeds) and np.isfinite(cost):
+                add(sale.on, sale.ticker, "realized", proceeds - cost)
+
+        if self.market.dividends_in_prices:
+            source = "in_prices"
+        elif self.market_dividends:
+            source = "market"
+        elif totals["dividend"]:
+            source = "recorded"
+        else:
+            source = "none"
+
+        _, implicit, external = self._cash_book
+        window = self.active_index
+
+        def money(row: dict[str, float]) -> dict[str, Any]:
+            return {
+                "dividends": round_money(row["dividend"]),
+                "withholding": round_money(row["withholding"]),
+                "return_of_capital": round_money(row["return_of_capital"]),
+                "fees": round_money(row["fee"]),
+                "taxes": round_money(row["tax"]),
+                "realized": round_money(row["realized"]),
+                "net_income": round_money(row["dividend"] - row["withholding"] - row["fee"] - row["tax"]),
+            }
+
+        return {
+            **money(totals),
+            "dividends_source": source,
+            "cash_value": round_money(sum(self.cash_values.values())),
+            "cash": self._cash_payload(),
+            "contributions_recorded": round_money(float(external.loc[window].sum())),
+            "contributions_assumed": round_money(float(implicit.loc[window].iloc[1:].sum())),
+            "by_year": [{"year": year, **money(row)} for year, row in sorted(by_year.items())],
+            "by_position": [
+                {"ticker": ticker, **money(row)} for ticker, row in sorted(by_ticker.items())
+            ],
+        }
 
     def _benchmark_summary(self) -> dict[str, Any]:
         benchmark = self.market.benchmark.reindex(self.active_index).ffill()
@@ -564,6 +1021,7 @@ class PortfolioAnalytics:
             {
                 **self._envelope(),
                 "total_value": round_money(self.total_value),
+                "cash": self._cash_payload(),
                 "holdings": [
                     {
                         "ticker": p.ticker,
@@ -605,7 +1063,8 @@ class PortfolioAnalytics:
 
     def summary(self) -> dict[str, Any]:
         total_cost = float(sum(p.cost_total_base for p in self.positions))
-        total_pnl = self.total_value - total_cost
+        # Unrealised P&L is the positions against what they cost; cash has no cost.
+        total_pnl = float(sum(p.value_base for p in self.positions)) - total_cost
         tail = self.equity.tail(SPARKLINE_DAYS)
 
         return json_safe(
@@ -627,6 +1086,7 @@ class PortfolioAnalytics:
                     "dates": to_iso_dates(tail.index),
                     "values": money_series(tail.to_numpy()),
                 },
+                "ledger": self._ledger_report(),
             }
         )
 
@@ -1050,7 +1510,7 @@ class PortfolioAnalytics:
                 "drawdown_pct": ratio_series(metrics.drawdown_series(growth).to_numpy()),
                 "per_holding": {
                     ticker: money_series(self.value_frame[ticker].to_numpy())
-                    for ticker in self.value_frame.columns
+                    for ticker in self.portfolio.tickers
                 },
                 "flows": [
                     {"date": pd.Timestamp(stamp).strftime("%Y-%m-%d"), "amount": round_money(value)}

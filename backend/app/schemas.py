@@ -201,6 +201,20 @@ class OrderInput(BaseModel):
     order_type: OrderType
     quantity: float = Field(gt=0, le=1e12, allow_inf_nan=False)
     price: float = Field(ge=0, le=1e15, allow_inf_nan=False)
+    fee: float = Field(
+        default=0.0,
+        ge=0,
+        le=1e15,
+        allow_inf_nan=False,
+        description="Commission, in the instrument's currency. Part of a purchase's cost; deducted from a sale's proceeds.",
+    )
+    tax: float = Field(
+        default=0.0,
+        ge=0,
+        le=1e15,
+        allow_inf_nan=False,
+        description="Tax on the order (stamp duty, tax on a gain), in the instrument's currency.",
+    )
     executed_at: date
     notes: str = Field(default="", max_length=200)
 
@@ -222,9 +236,92 @@ class TransactionOut(BaseModel):
     order_type: OrderType
     quantity: float
     price: float
+    fee: float = 0.0
+    tax: float = 0.0
+    currency: str | None = None
     realized_pnl: float
     executed_at: str
     notes: str
+    # True for an order from before a hand edit of its position: the edited
+    # position replaced it, so it no longer applies.
+    superseded: bool = False
+    created_at: str
+
+
+LedgerEventKind = Literal[
+    "DIVIDEND", "FEE", "TAX", "SPLIT", "SYMBOL_CHANGE", "SPINOFF", "RETURN_OF_CAPITAL", "FX"
+]
+
+
+class LedgerEventIn(BaseModel):
+    """A dividend, fee, tax, corporate action or currency conversion.
+
+    Which fields matter depends on the kind:
+
+    * ``DIVIDEND``: ``ticker``, ``amount`` (gross), ``tax`` (withheld), ``currency``.
+    * ``FEE`` / ``TAX``: ``amount``, ``currency``, optionally ``ticker``.
+    * ``SPLIT``: ``ticker``, ``ratio`` (new units per old: 4 for 4-for-1).
+    * ``SYMBOL_CHANGE``: ``ticker``, ``new_ticker``, ``ratio`` (new per old).
+    * ``SPINOFF``: ``ticker``, ``new_ticker``, ``ratio``, ``cost_fraction``.
+    * ``RETURN_OF_CAPITAL``: ``ticker``, ``amount`` (total received), ``currency``.
+    * ``FX``: ``currency`` and ``amount`` sold, ``to_currency`` and
+      ``to_amount`` received, optionally ``fee`` (in ``currency``).
+    """
+
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
+
+    kind: LedgerEventKind
+    occurred_on: date
+    ticker: str | None = Field(default=None, max_length=20)
+    amount: float = Field(default=0.0, ge=0, le=1e15, allow_inf_nan=False)
+    currency: str | None = Field(default=None, min_length=3, max_length=3)
+    fee: float = Field(default=0.0, ge=0, le=1e15, allow_inf_nan=False)
+    tax: float = Field(default=0.0, ge=0, le=1e15, allow_inf_nan=False)
+    ratio: float | None = Field(default=None, gt=0, le=1e6, allow_inf_nan=False)
+    new_ticker: str | None = Field(default=None, max_length=20)
+    cost_fraction: float = Field(default=0.0, ge=0, le=1, allow_inf_nan=False)
+    to_currency: str | None = Field(default=None, min_length=3, max_length=3)
+    to_amount: float = Field(default=0.0, ge=0, le=1e15, allow_inf_nan=False)
+    note: str = Field(default="", max_length=200)
+
+    @field_validator("ticker", "new_ticker")
+    @classmethod
+    def _tickers(cls, value: str | None) -> str | None:
+        if value is None or not value.strip():
+            return None
+        normalised = value.strip().upper()
+        if not TICKER_PATTERN.match(normalised):
+            raise ValueError("ticker must be a Yahoo Finance symbol")
+        return normalised
+
+    @field_validator("currency", "to_currency")
+    @classmethod
+    def _currency(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        if not value.isalpha():
+            raise ValueError("currency must be a three-letter ISO code")
+        return value if value in ("GBp", "ZAc", "ILA") else value.upper()
+
+
+class LedgerEventOut(BaseModel):
+    id: int
+    kind: str
+    occurred_on: str
+    ticker: str | None
+    quantity: float
+    price: float
+    amount: float
+    currency: str | None
+    fee: float
+    tax: float
+    ratio: float
+    new_ticker: str | None
+    cost_fraction: float
+    to_currency: str | None
+    to_amount: float
+    note: str
+    superseded: bool
     created_at: str
 
 
@@ -238,6 +335,7 @@ class RealizedPnlSummaryOut(BaseModel):
     win_rate_pct: float | None
     total_buy_volume: float
     total_sell_volume: float
+    total_fees: float = 0.0
 
 
 # --------------------------------------------------------------------------

@@ -48,18 +48,23 @@ from collections import Counter
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
-from typing import Iterable, Sequence
+from typing import Any, Iterable, Sequence
 
 import pandas as pd
 import yfinance as yf
 
 from .config import SETTINGS, Settings
+from .ledger import UNIT_KINDS, LedgerEvent
 
 logger = logging.getLogger(__name__)
 
 # Bumped whenever the on-disk shape changes. A cache from an older version is
-# ignored and replaced rather than migrated.
-CACHE_FORMAT_VERSION = 5
+# replaced rather than migrated; it is only read when the provider cannot be
+# reached (see ``load_market_data``).
+CACHE_FORMAT_VERSION = 6
+# Version 5 stored total-return closes, with dividends folded into the price.
+# Version 6 stores closes adjusted for splits only, plus the dividends.
+_TOTAL_RETURN_CACHE_VERSION = 5
 
 # Venues that quote in a minor unit, mapped to their major unit and the factor
 # that converts to it. Yahoo reports these codes verbatim in its metadata.
@@ -156,6 +161,13 @@ class Portfolio:
     base_currency: str
     holdings: tuple[Holding, ...]
     cash_flows: tuple[CashFlow, ...] = ()
+    # The book of record (see ledger.py): every trade, dividend, fee, tax,
+    # corporate action, conversion and hand edit. Empty for a portfolio read
+    # from holdings.json, whose positions are then all there is.
+    ledger: tuple[LedgerEvent, ...] = ()
+    # Quote currency of every instrument the ledger mentions, including
+    # positions no longer held.
+    currencies: dict[str, str] = field(default_factory=dict)
 
     @property
     def tickers(self) -> tuple[str, ...]:
@@ -199,6 +211,14 @@ class MarketData:
     # provider could not be reached. The analytics are still computed, and
     # the UI says plainly how old they are.
     stale: bool = False
+    # Cash dividends per unit, by ex-dividend date, for each instrument that
+    # paid any. Split-adjusted, like the prices.
+    dividends: dict[str, pd.Series] = field(default_factory=dict)
+    # True when the closes are total-return closes, with every dividend
+    # already folded into the price (Yahoo's adjusted close). The analytics
+    # then credit no dividend as cash, or it would be counted twice. A cache
+    # written before dividends were tracked is read this way.
+    dividends_in_prices: bool = True
 
     @property
     def as_of(self) -> date:
@@ -282,52 +302,72 @@ def load_portfolio(path: Path | None = None) -> Portfolio:
     )
 
 
-def _cache_file(cache_dir: Path, symbols: Sequence[str], years: int) -> Path:
+def _cache_file(
+    cache_dir: Path, symbols: Sequence[str], years: int, version: int = CACHE_FORMAT_VERSION
+) -> Path:
     """Deterministic cache path for a given symbol set and lookback."""
-    key = f"v{CACHE_FORMAT_VERSION}-{years}y-{'_'.join(sorted(symbols))}"
+    key = f"v{version}-{years}y-{'_'.join(sorted(symbols))}"
     digest = hashlib.sha256(key.encode("utf-8")).hexdigest()[:12]
     return cache_dir / f"prices-{years}y-{digest}.json"
 
 
-def _download_closes(symbols: Sequence[str], start: date, end: date) -> pd.DataFrame:
-    """Download adjusted daily closes for ``symbols`` from Yahoo Finance.
+def _download_closes(
+    symbols: Sequence[str],
+    start: date,
+    end: date,
+    optional: Sequence[str] = (),
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Download daily closes and cash dividends from Yahoo Finance.
+
+    The closes are adjusted for splits but not for dividends: the dividends
+    come back separately, per unit and by ex-date, so the analytics can credit
+    each one as cash the day it was paid instead of folding it into the price.
 
     A batch download is attempted twice before individual symbols are retried
     one by one. Yahoo's endpoint occasionally drops one ticker from an otherwise
     successful multi-symbol response; retrying the batch alone would convert
     that transient miss into a hard failure for the whole portfolio.
 
+    ``optional`` symbols (positions no longer held, which may since have been
+    delisted) are kept when they come back and dropped when they do not.
+
     Returns:
-        DataFrame of closes indexed by date with one column per symbol.
+        ``(closes, dividends)``, indexed by date with one column per symbol.
 
     Raises:
-        RuntimeError: if the download returns nothing usable.
+        RuntimeError: if a required symbol returns nothing usable.
     """
-    logger.info("Downloading %d symbols from Yahoo Finance (%s .. %s)", len(symbols), start, end)
+    every = list(dict.fromkeys([*symbols, *optional]))
+    logger.info("Downloading %d symbols from Yahoo Finance (%s .. %s)", len(every), start, end)
 
     last_error: Exception | None = None
     for attempt in range(2):
         try:
-            closes = _download_batch(symbols, start, end)
-            missing = [s for s in symbols if s not in closes.columns or closes[s].dropna().empty]
-            if not missing:
-                return closes
-            logger.warning("Batch download missed %s; retrying individually", missing)
-            pieces = {s: closes[s] for s in symbols if s in closes.columns and closes[s].notna().any()}
+            closes, dividends = _download_batch(every, start, end, with_dividends=True)
+            missing = [s for s in every if s not in closes.columns or closes[s].dropna().empty]
+            if missing:
+                logger.warning("Batch download missed %s; retrying individually", missing)
+            pieces = {s: closes[s] for s in every if s in closes.columns and closes[s].notna().any()}
+            paid = {s: dividends[s] for s in pieces if s in dividends.columns}
             for symbol in missing:
                 try:
-                    single = _download_batch([symbol], start, end)
+                    single, single_dividends = _download_batch(
+                        [symbol], start, end, with_dividends=True
+                    )
                     if symbol in single.columns and single[symbol].notna().any():
                         pieces[symbol] = single[symbol]
+                        if symbol in single_dividends.columns:
+                            paid[symbol] = single_dividends[symbol]
                 except Exception as exc:  # noqa: BLE001 - keep the symbols that worked
                     last_error = exc
                     logger.warning("Individual download failed for %s: %s", symbol, exc)
-            if len(pieces) == len(symbols):
-                frame = pd.DataFrame(pieces).sort_index()
-                frame.index.name = "date"
-                return frame
             absent = [s for s in symbols if s not in pieces]
-            raise RuntimeError(f"No price data returned for: {absent}")
+            if absent:
+                raise RuntimeError(f"No price data returned for: {absent}")
+            frame = pd.DataFrame(pieces).sort_index()
+            frame.index.name = "date"
+            dividend_frame = pd.DataFrame(paid).reindex(frame.index).fillna(0.0)
+            return frame, dividend_frame
         except RuntimeError:
             raise
         except Exception as exc:  # noqa: BLE001 - retry transport failures once
@@ -339,12 +379,22 @@ def _download_closes(symbols: Sequence[str], start: date, end: date) -> pd.DataF
     raise RuntimeError(f"Yahoo Finance download failed: {last_error}") from last_error
 
 
-def _download_batch(symbols: Sequence[str], start: date, end: date) -> pd.DataFrame:
+def _download_batch(
+    symbols: Sequence[str], start: date, end: date, *, with_dividends: bool = False
+) -> Any:
+    """One Yahoo download.
+
+    With ``with_dividends`` it returns ``(closes, dividends)``: closes
+    adjusted for splits only, and the cash dividends per unit. Without, it
+    returns total-return closes (dividends reinvested), which is what a
+    benchmark comparison wants.
+    """
     raw = yf.download(
         list(symbols),
         start=start.isoformat(),
         end=end.isoformat(),
-        auto_adjust=True,
+        auto_adjust=not with_dividends,
+        actions=with_dividends,
         progress=False,
         group_by="column",
         threads=True,
@@ -352,15 +402,25 @@ def _download_batch(symbols: Sequence[str], start: date, end: date) -> pd.DataFr
     if raw is None or raw.empty:
         raise RuntimeError("Yahoo Finance returned no data; check connectivity or symbols")
 
-    closes = raw["Close"] if isinstance(raw.columns, pd.MultiIndex) else raw[["Close"]]
-    if isinstance(closes, pd.Series):  # single-symbol edge case
-        closes = closes.to_frame(symbols[0])
-    if len(symbols) == 1 and list(closes.columns) == ["Close"]:
-        closes = closes.rename(columns={"Close": symbols[0]})
+    def field_frame(name: str) -> pd.DataFrame:
+        if isinstance(raw.columns, pd.MultiIndex):
+            if name not in raw.columns.get_level_values(0):
+                return pd.DataFrame(index=raw.index)
+            frame = raw[name]
+        else:
+            frame = raw[[name]] if name in raw.columns else pd.DataFrame(index=raw.index)
+        if isinstance(frame, pd.Series):  # single-symbol edge case
+            frame = frame.to_frame(symbols[0])
+        if len(symbols) == 1 and list(frame.columns) == [name]:
+            frame = frame.rename(columns={name: symbols[0]})
+        frame.index = pd.to_datetime(frame.index).tz_localize(None).normalize()
+        frame.index.name = "date"
+        return frame.sort_index()
 
-    closes.index = pd.to_datetime(closes.index).tz_localize(None).normalize()
-    closes.index.name = "date"
-    return closes.sort_index()
+    closes = field_frame("Close")
+    if not with_dividends:
+        return closes
+    return closes, field_frame("Dividends").fillna(0.0)
 
 
 def _read_cache(path: Path) -> tuple[pd.DataFrame, datetime] | None:
@@ -370,6 +430,17 @@ def _read_cache(path: Path) -> tuple[pd.DataFrame, datetime] | None:
     directory, and unpickling an attacker-controlled file executes arbitrary
     code. Nothing in a price cache justifies that risk.
     """
+    cached = _read_cache_with_dividends(path)
+    if cached is None:
+        return None
+    closes, _, fetched_at = cached
+    return closes, fetched_at
+
+
+def _read_cache_with_dividends(
+    path: Path,
+) -> tuple[pd.DataFrame, pd.DataFrame | None, datetime] | None:
+    """The cached closes, their dividends (``None`` in an older cache), and when."""
     if not path.exists():
         return None
     try:
@@ -380,8 +451,16 @@ def _read_cache(path: Path) -> tuple[pd.DataFrame, datetime] | None:
         frame = frame.sort_index()
         if frame.empty:
             raise ValueError("cache contains no rows")
+        dividends: pd.DataFrame | None = None
+        if "dividends" in payload:
+            dividends = pd.DataFrame(0.0, index=frame.index, columns=list(frame.columns))
+            for symbol, paid in payload["dividends"].items():
+                for day, amount in paid.items():
+                    stamp = pd.Timestamp(day).normalize()
+                    if symbol in dividends.columns and stamp in dividends.index:
+                        dividends.loc[stamp, symbol] = float(amount)
         fetched_at = datetime.fromisoformat(payload["fetched_at"])
-        return frame, fetched_at
+        return frame, dividends, fetched_at
     except Exception as exc:  # noqa: BLE001 - a corrupt cache must never be fatal
         logger.warning("Ignoring unreadable price cache %s: %s", path, exc)
         return None
@@ -389,23 +468,46 @@ def _read_cache(path: Path) -> tuple[pd.DataFrame, datetime] | None:
 
 def _load_cached(path: Path, ttl_hours: float) -> tuple[pd.DataFrame, datetime] | None:
     """Return cached closes if the cache exists and is fresh, else ``None``."""
-    if not path.exists():
-        return None
-    age_hours = (time.time() - path.stat().st_mtime) / 3600.0
-    if age_hours > ttl_hours:
-        logger.info("Price cache is %.1fh old (ttl %.1fh); refetching", age_hours, ttl_hours)
+    if not _is_fresh(path, ttl_hours):
         return None
     return _read_cache(path)
 
 
-def _store_cache(path: Path, closes: pd.DataFrame, fetched_at: datetime) -> None:
-    """Write the cache atomically so a crash cannot leave a truncated file."""
+def _is_fresh(path: Path, ttl_hours: float) -> bool:
+    if not path.exists():
+        return False
+    age_hours = (time.time() - path.stat().st_mtime) / 3600.0
+    if age_hours > ttl_hours:
+        logger.info("Price cache is %.1fh old (ttl %.1fh); refetching", age_hours, ttl_hours)
+        return False
+    return True
+
+
+def _store_cache(
+    path: Path,
+    closes: pd.DataFrame,
+    fetched_at: datetime,
+    dividends: pd.DataFrame | None = None,
+) -> None:
+    """Write the cache atomically so a crash cannot leave a truncated file.
+
+    Dividends are stored sparsely - only the days something was paid.
+    """
     path.parent.mkdir(parents=True, exist_ok=True)
-    payload = {
+    payload: dict[str, Any] = {
         "format": CACHE_FORMAT_VERSION,
         "fetched_at": fetched_at.isoformat(),
         "closes": json.loads(closes.to_json(orient="split", date_format="iso")),
     }
+    if dividends is not None:
+        payload["dividends"] = {
+            str(symbol): {
+                pd.Timestamp(day).strftime("%Y-%m-%d"): float(amount)
+                for day, amount in dividends[symbol].items()
+                if amount and amount > 0
+            }
+            for symbol in dividends.columns
+        }
     temporary = path.with_suffix(".tmp")
     temporary.write_text(json.dumps(payload, separators=(",", ":")), encoding="utf-8")
     temporary.replace(path)
@@ -477,41 +579,69 @@ def load_market_data(
         raise ValueError("portfolio has no holdings")
 
     base = portfolio.base_currency
-
-    # One FX series per foreign quote currency in the portfolio.
-    foreign = sorted(
+    held = list(portfolio.tickers)
+    # Positions the ledger shows were held and are not now: their history is
+    # part of the portfolio's, if the provider still has it.
+    closed = sorted(
         {
-            normalise_currency(holding.currency)[0]
-            for holding in portfolio.holdings
-            if normalise_currency(holding.currency)[0] != base
+            ticker
+            for event in portfolio.ledger
+            for ticker in (event.ticker, event.new_ticker)
+            if ticker and event.kind in UNIT_KINDS and ticker not in held
         }
     )
+    instrument_currency = {
+        **{ticker: portfolio.currencies.get(ticker, base) for ticker in closed},
+        **{holding.ticker: holding.currency for holding in portfolio.holdings},
+    }
+
+    # One FX series per foreign currency the portfolio holds or pays in.
+    currencies = {normalise_currency(code)[0] for code in instrument_currency.values()}
+    for event in portfolio.ledger:
+        for code in (event.currency, event.to_currency):
+            if code:
+                currencies.add(normalise_currency(code)[0])
+    foreign = sorted(currency for currency in currencies if currency != base)
     pairs = {currency: fx_symbol(currency, base) for currency in foreign}
 
-    symbols = list(dict.fromkeys([*portfolio.tickers, settings.benchmark, *pairs.values()]))
+    symbols = list(dict.fromkeys([*held, settings.benchmark, *pairs.values()]))
     end = date.today() + timedelta(days=1)  # yfinance `end` is exclusive
     start = end - timedelta(days=int(365.25 * settings.history_years) + 10)
 
-    cache_path = _cache_file(settings.cache_dir, symbols, settings.history_years)
-    cached = _load_cached(cache_path, settings.cache_ttl_hours) if use_cache else None
+    cache_path = _cache_file(settings.cache_dir, [*symbols, *closed], settings.history_years)
+    cached = (
+        _read_cache_with_dividends(cache_path)
+        if use_cache and _is_fresh(cache_path, settings.cache_ttl_hours)
+        else None
+    )
     stale = False
+    dividends: pd.DataFrame | None = None
 
     if cached is not None:
-        closes, fetched_at = cached
+        closes, dividends, fetched_at = cached
         logger.info("Using cached prices from %s", fetched_at.isoformat())
     else:
         try:
-            closes = _download_closes(symbols, start, end)
+            closes, dividends = _download_closes(symbols, start, end, optional=closed)
             fetched_at = datetime.now(timezone.utc)
-            _store_cache(cache_path, closes, fetched_at)
+            _store_cache(cache_path, closes, fetched_at, dividends)
         except Exception as exc:  # noqa: BLE001 - the fallback is the point
             # The provider is unreachable. The last known prices are still
             # worth more than an error page: the analytics are computed from
-            # them and the UI is told how old they are.
-            fallback = _read_cache(cache_path)
+            # them and the UI is told how old they are. A cache from before
+            # dividends were tracked holds total-return closes; it is still
+            # usable, with the dividends taken as already in the price.
+            fallback = _read_cache_with_dividends(cache_path)
+            if fallback is None:
+                older = _read_cache(
+                    _cache_file(
+                        settings.cache_dir, symbols, settings.history_years, _TOTAL_RETURN_CACHE_VERSION
+                    )
+                )
+                fallback = (older[0], None, older[1]) if older is not None else None
             if fallback is None:
                 raise
-            closes, fetched_at = fallback
+            closes, dividends, fetched_at = fallback
             stale = True
             logger.warning(
                 "Yahoo Finance is unreachable (%s); falling back to prices from %s",
@@ -527,20 +657,41 @@ def load_market_data(
         if series.notna().any()
     }
 
-    aligned = _align_to_trading_calendar(closes, settings.benchmark)
+    required = [symbol for symbol in symbols if symbol in closes.columns]
+    aligned = _align_to_trading_calendar(closes[required], settings.benchmark)
+    # A closed position's history may start late (a listing inside the
+    # window) or end early (a delisting): it is filled rather than allowed to
+    # cut the portfolio's history short. Its units are zero where it is filled.
+    optional = [ticker for ticker in closed if ticker in closes.columns]
+    if optional:
+        extra = closes[optional].reindex(aligned.index).ffill().bfill()
+        aligned = aligned.join(extra.dropna(axis=1, how="all"))
 
-    fx = {currency: aligned[symbol] for currency, symbol in pairs.items()}
+    fx = {currency: aligned[symbol] for currency, symbol in pairs.items() if symbol in aligned}
     benchmark = aligned[settings.benchmark]
-    prices_native = aligned.loc[:, list(portfolio.tickers)]
+    priced = [*held, *(ticker for ticker in closed if ticker in aligned.columns)]
+    prices_native = aligned.loc[:, priced]
 
     prices_base = prices_native.copy()
-    for holding in portfolio.holdings:
-        currency, unit = normalise_currency(holding.currency)
+    for ticker in priced:
+        currency, unit = normalise_currency(instrument_currency[ticker])
         if currency == base:
             # Still applies the minor-unit factor: GBp priced against a GBP base.
-            prices_base[holding.ticker] = prices_native[holding.ticker] * unit
+            prices_base[ticker] = prices_native[ticker] * unit
+        elif currency in fx:
+            prices_base[ticker] = prices_native[ticker] * unit * fx[currency]
         else:
-            prices_base[holding.ticker] = prices_native[holding.ticker] * unit * fx[currency]
+            prices_base = prices_base.drop(columns=[ticker])
+            prices_native = prices_native.drop(columns=[ticker])
+
+    paid: dict[str, pd.Series] = {}
+    if dividends is not None:
+        for ticker in prices_native.columns:
+            if ticker in dividends.columns:
+                series = dividends[ticker]
+                series = series[series > 0]
+                if not series.empty:
+                    paid[ticker] = series
 
     return MarketData(
         prices_native=prices_native,
@@ -551,6 +702,8 @@ def load_market_data(
         fetched_at=fetched_at,
         raw_last_dates=raw_last_dates,
         stale=stale,
+        dividends=paid,
+        dividends_in_prices=dividends is None,
     )
 
 

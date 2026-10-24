@@ -181,7 +181,7 @@ def test_a_provider_outage_falls_back_to_the_last_known_prices(
 
     calls = {"n": 0}
 
-    def failing_download(symbols, start, end):
+    def failing_download(symbols, start, end, optional=()):
         calls["n"] += 1
         if calls["n"] == 1:
             # First call succeeds and populates the cache.

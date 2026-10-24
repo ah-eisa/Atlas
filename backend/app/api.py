@@ -52,6 +52,8 @@ from .schemas import (
     HistoricalYieldPoint,
     HoldingInput,
     HoldingOut,
+    LedgerEventIn,
+    LedgerEventOut,
     MacroHistoryPoint,
     MacroSummaryResponse,
     MarketQuote,
@@ -702,6 +704,8 @@ def place_order(
                 "order_type": body.order_type,
                 "quantity": body.quantity,
                 "price": body.price,
+                "fee": body.fee,
+                "tax": body.tax,
                 "executed_at": body.executed_at.isoformat(),
                 "notes": body.notes,
             },
@@ -738,6 +742,60 @@ def delete_transaction(
             status_code=409,
             detail={"code": "transaction_conflict", "message": str(exc)},
         ) from exc
+
+
+@app.get("/api/v1/ledger-events", response_model=list[LedgerEventOut], tags=["ledger"])
+def list_ledger_events(portfolio_id: int = Depends(_portfolio_id)) -> list[dict[str, Any]]:
+    """Every dividend, fee, tax, corporate action, conversion and hand edit, newest first."""
+    return store.list_ledger_events(SETTINGS, portfolio_id)
+
+
+@app.post("/api/v1/ledger-events", status_code=201, response_model=LedgerEventOut, tags=["ledger"])
+def create_ledger_event(
+    body: LedgerEventIn, portfolio_id: int = Depends(_portfolio_id)
+) -> dict[str, Any]:
+    """Record a dividend, fee, tax, corporate action or currency conversion.
+
+    The positions are rebuilt from the whole ledger; an event that cannot
+    apply (a split of a position not held on its date) is refused with 422
+    and nothing is recorded.
+    """
+    try:
+        created = store.create_ledger_event(
+            {**body.model_dump(), "occurred_on": body.occurred_on.isoformat()},
+            SETTINGS,
+            portfolio_id,
+        )
+    except store.LedgerValidationError as exc:
+        raise HTTPException(
+            status_code=422,
+            detail={"code": "ledger_validation_error", "message": str(exc)},
+        ) from exc
+    _service.invalidate()
+    return created
+
+
+@app.delete("/api/v1/ledger-events/{event_id}", status_code=204, tags=["ledger"])
+def delete_ledger_event(
+    event_id: int,
+    response: Response,
+    portfolio_id: int = Depends(_portfolio_id),
+) -> Response:
+    try:
+        store.delete_ledger_event(event_id, SETTINGS, portfolio_id)
+    except store.TransactionNotFound as exc:
+        raise HTTPException(
+            status_code=404,
+            detail={"code": "not_found", "message": str(exc)},
+        ) from exc
+    except store.TransactionConflict as exc:
+        raise HTTPException(
+            status_code=409,
+            detail={"code": "ledger_conflict", "message": str(exc)},
+        ) from exc
+    _service.invalidate()
+    response.status_code = 204
+    return response
 
 
 @app.get("/api/v1/portfolio/realized-pnl", response_model=RealizedPnlSummaryOut, tags=["transactions"])

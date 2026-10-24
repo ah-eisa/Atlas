@@ -206,6 +206,9 @@
         "base_currency": {
           "type": "string"
         },
+        "cash": {
+          "type": "array"
+        },
         "generated_at": {
           "type": "string"
         },
@@ -1189,6 +1192,16 @@
         },
         "holdings_count": {
           "type": "number"
+        },
+        "ledger": {
+          "type": [
+            "null",
+            "string",
+            "number",
+            "boolean",
+            "array",
+            "object"
+          ]
         },
         "sparkline": {
           "additionalProperties": true,
