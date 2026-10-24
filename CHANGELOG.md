@@ -9,6 +9,37 @@ frontend ships against it.
 
 ## [Unreleased]
 
+### Changed — the "Sovereign" design
+
+- New palette in both themes: alabaster and emerald for light, obsidian for
+  dark, with gold for forward-looking figures. Cormorant Garamond for
+  headlines and lead figures, Plus Jakarta Sans for the interface, JetBrains
+  Mono for every figure.
+- The toolbar is pinned frosted glass with a Light / Dark pill. On the
+  overview the value leads a statement card (invested capital, unrealised
+  P&L, profitable positions, projection median) beside four cards for the
+  changes that matter, each with the deposits it is net of.
+- Pill buttons, an emerald primary action, rounded cards on a softly lit page.
+
+### Added
+
+- **Reporting currency in the toolbar.** In live mode the currency every
+  figure is reported in can be switched from the toolbar; the analytics are
+  rebuilt in the new currency.
+- **Holding details.** A click (or Enter) on a holding opens it up close:
+  value, unrealised P&L and weight, its ninety-session price, cost, quantity,
+  the price and FX split, and a what-if slider that shows the weight it
+  would carry at another size. Trade and Edit open from there.
+- **Asset-class filters** on the holdings grid, and the instrument, name and
+  class in one cell beside its ninety-session trend.
+- **Performance chart:** 3M and 6M ranges, a soft wash under the portfolio's
+  line (and the drawdown), and the gap to the benchmark in the legend.
+
+### Fixed
+
+- A page left open across a new build no longer goes blank when it opens a
+  view: it reloads once to pick up the new files.
+
 ## [2.3.0] — 2026-10-24
 
 The trade ledger, fixed income, macro and filings, options and the portfolio

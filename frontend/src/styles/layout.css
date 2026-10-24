@@ -69,17 +69,45 @@
  * Headline                                                            *
  *                                                                     *
  * The portfolio's value is the one large thing in the product. On the *
- * overview it leads the page in Newsreader, with a sentence that says *
- * what it means and the four changes that matter in a card beside it. *
+ * overview it leads the page as a statement card - the value in       *
+ * Cormorant, a sentence that says what it means and the four figures  *
+ * behind it - beside four cards for the changes that matter.          *
  * Everywhere else it shrinks to one line.                             *
  * ------------------------------------------------------------------ */
 
 .topbar__masthead {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 380px;
+  grid-template-columns: minmax(0, 7fr) minmax(0, 5fr);
   align-items: stretch;
-  gap: var(--space-9);
-  padding: var(--space-4) var(--page-gutter) var(--space-8);
+  gap: var(--card-gap);
+  padding: 0 var(--page-gutter) var(--card-gap);
+}
+
+.statement {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  min-width: 0;
+  padding: var(--space-8);
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-xl);
+  background: var(--surface-panel);
+  box-shadow: var(--shadow-sm);
+  animation: enter 560ms var(--easing) backwards;
+}
+
+/* A soft light in the far corner of the card. */
+.statement__glow {
+  position: absolute;
+  top: -35px;
+  right: -30px;
+  width: 220px;
+  height: 220px;
+  border-radius: 50%;
+  background: radial-gradient(circle, var(--accent-faint), transparent 70%);
+  pointer-events: none;
 }
 
 .topbar__identity {
@@ -97,18 +125,31 @@
 }
 
 .eyebrow {
+  color: var(--text-secondary);
+  font-size: var(--size-caption);
+}
+
+.eyebrow--caps {
   color: var(--text-tertiary);
-  font-size: var(--size-body);
+  font-size: 11.5px;
+  font-weight: var(--weight-bold);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.eyebrow__sep {
+  color: var(--line-strong);
 }
 
 .topbar__chip {
   display: inline-flex;
   align-items: center;
-  padding: 2px 10px;
+  margin-left: auto;
+  padding: 3px 10px;
   border-radius: var(--radius-full);
   background: var(--surface-raised);
   font-size: var(--size-label);
-  font-weight: var(--weight-medium);
+  font-weight: var(--weight-semibold);
 }
 
 .topbar__chip.pos {
@@ -121,6 +162,7 @@
 
 .topbar__value {
   display: flex;
+  flex-wrap: wrap;
   align-items: baseline;
   gap: var(--space-4);
   margin: var(--space-4) 0 var(--space-5);
@@ -129,80 +171,177 @@
 .topbar__amount {
   color: var(--text-primary);
   font-family: var(--font-display);
-  font-size: var(--size-display);
-  font-weight: var(--weight-regular);
-  line-height: 0.95;
-  letter-spacing: -0.025em;
+  font-size: clamp(44px, 5.6vw, var(--size-display));
+  font-weight: var(--weight-semibold);
+  line-height: 1;
+  letter-spacing: -0.03em;
 }
 
 .topbar__currency {
   color: var(--text-tertiary);
-  font-family: var(--font-display);
-  font-size: 28px;
+  font-size: 20px;
+  font-weight: var(--weight-medium);
 }
 
 .topbar__story {
-  max-width: 62ch;
+  max-width: 64ch;
   margin: 0;
   color: var(--text-secondary);
-  font-size: 17px;
-  line-height: 1.65;
+  font-size: 15.5px;
+  line-height: 1.68;
 }
 
 .topbar__story b {
   font-weight: var(--weight-semibold);
 }
 
-.topbar__story b:not(.pos):not(.neg) {
+.topbar__story b:not(.pos):not(.neg):not(.gold) {
   color: var(--text-primary);
 }
 
-/* The four changes, in a card. */
-.topbar__deltas {
+.gold {
+  color: var(--gold);
+}
+
+/* The four figures behind the value, under a hairline. */
+.statement__facts {
   display: grid;
-  align-content: center;
-  padding: var(--space-2) var(--space-6);
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--space-5);
+  margin: var(--space-7) 0 0;
+  padding-top: var(--space-6);
+  border-top: 1px solid var(--line-faint);
+}
+
+.statement__facts dt {
+  color: var(--text-tertiary);
+  font-size: var(--size-micro);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.statement__facts dd {
+  margin: 2px 0 0;
+  font-size: var(--size-data);
+  font-weight: var(--weight-semibold);
+}
+
+/* The four changes, each on its own card. */
+.topbar__kpis {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-5);
+}
+
+.kpi-card {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  min-width: 0;
+  padding: var(--space-6);
   border: 1px solid var(--line);
   border-radius: var(--radius-xl);
   background: var(--surface-panel);
   box-shadow: var(--shadow-sm);
+  animation: enter 560ms var(--easing) backwards;
+  transition: border-color var(--duration-base) var(--easing);
+}
+
+.kpi-card:hover {
+  border-color: var(--line-neon);
+}
+
+.kpi-card__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.kpi-card__label {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  color: var(--text-secondary);
+  font-size: var(--size-label);
+  font-weight: var(--weight-semibold);
+}
+
+.kpi-card__mark {
+  flex-shrink: 0;
+  width: 8px;
+  height: 8px;
+  border-radius: 3px;
+}
+
+.kpi-card__pct {
+  padding: 3px 10px;
+  border-radius: var(--radius-full);
+  background: var(--surface-raised);
+  font-size: var(--size-label);
+  font-weight: var(--weight-semibold);
+  white-space: nowrap;
+}
+
+.kpi-card__pct.pos {
+  background: var(--positive-bg);
+}
+
+.kpi-card__pct.neg {
+  background: var(--negative-bg);
+}
+
+.kpi-card__value {
+  margin: var(--space-5) 0 var(--space-3);
+  font-family: var(--font-display);
+  font-size: 32px;
+  font-weight: var(--weight-semibold);
+  line-height: 1.05;
+}
+
+.kpi-card__value .num {
+  font-family: inherit;
+  letter-spacing: -0.01em;
+}
+
+.kpi-card__note {
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--line-faint);
+  color: var(--text-tertiary);
+  font-size: 11.5px;
+}
+
+/* The changes on one line, for the compact headline. */
+.topbar__deltas {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-6);
 }
 
 .topbar__delta {
-  display: grid;
-  grid-template-columns: 10px 1fr auto;
-  grid-template-rows: auto auto;
-  align-items: center;
-  column-gap: var(--space-4);
-  padding: var(--space-4) 0;
-  border-bottom: 1px solid var(--line-faint);
-}
-
-.topbar__delta:last-child {
-  border-bottom: 0;
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-3);
 }
 
 .topbar__delta-mark {
-  width: 10px;
-  height: 10px;
+  width: 8px;
+  height: 8px;
   border-radius: 3px;
 }
 
 .topbar__delta-label {
   color: var(--text-secondary);
-  font-size: var(--size-body);
+  font-size: var(--size-caption);
 }
 
 .topbar__delta-value {
-  font-family: var(--font-display);
-  font-size: 26px;
-  font-weight: var(--weight-medium);
-  line-height: 1.1;
-  text-align: right;
+  font-size: var(--size-data);
+  font-weight: var(--weight-semibold);
 }
 
 .topbar__delta-pct {
-  grid-column: 2 / 4;
   color: var(--text-tertiary);
   font-size: var(--size-label);
 }
@@ -213,7 +352,7 @@
   flex-wrap: wrap;
   align-items: baseline;
   gap: var(--space-3) var(--space-7);
-  padding: var(--space-2) var(--page-gutter) var(--space-7);
+  padding: 0 var(--page-gutter) var(--space-7);
 }
 
 .topbar__masthead--compact .topbar__identity {
@@ -226,6 +365,10 @@
 .topbar__masthead--compact .eyebrow {
   color: var(--text-secondary);
   font-weight: var(--weight-medium);
+}
+
+.topbar__masthead--compact .topbar__chip {
+  margin-left: 0;
 }
 
 .topbar__masthead--compact .topbar__value {
@@ -242,33 +385,6 @@
 
 .topbar__masthead--compact .topbar__eyebrow {
   order: 2;
-}
-
-.topbar__masthead--compact .topbar__deltas {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-2) var(--space-6);
-  padding: 0;
-  border: 0;
-  background: none;
-  box-shadow: none;
-}
-
-.topbar__masthead--compact .topbar__delta {
-  display: flex;
-  align-items: baseline;
-  gap: var(--space-3);
-  padding: 0;
-  border: 0;
-}
-
-.topbar__masthead--compact .topbar__delta:not(:first-child):not(:last-child) {
-  display: none;
-}
-
-.topbar__masthead--compact .topbar__delta-value {
-  font-family: var(--font-sans);
-  font-size: var(--size-data);
 }
 
 .topbar__empty {
@@ -485,16 +601,10 @@
 
   .topbar__masthead {
     grid-template-columns: minmax(0, 1fr);
-    gap: var(--space-6);
   }
 
-  .topbar__deltas {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    column-gap: var(--space-7);
-  }
-
-  .topbar__delta:nth-last-child(2) {
-    border-bottom: 0;
+  .topbar__kpis {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
   }
 }
 
@@ -528,25 +638,29 @@
     font-size: 26px;
   }
 
-  .topbar__masthead {
-    padding-bottom: var(--space-6);
+  .statement {
+    padding: var(--space-6);
+  }
+
+  .topbar__chip {
+    margin-left: 0;
   }
 
   .topbar__story {
-    font-size: var(--size-data);
+    font-size: var(--size-body);
   }
 
-  .topbar__deltas {
-    grid-template-columns: minmax(0, 1fr);
-    padding: var(--space-1) var(--space-5);
+  .statement__facts,
+  .topbar__kpis {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .topbar__delta:nth-last-child(2) {
-    border-bottom: 1px solid var(--line-faint);
+  .kpi-card {
+    padding: var(--space-5);
   }
 
-  .topbar__delta-value {
-    font-size: 22px;
+  .kpi-card__value {
+    font-size: 26px;
   }
 
   .topbar__masthead--compact .topbar__amount {
@@ -698,11 +812,13 @@
 
 .holdings-toolbar {
   display: flex;
+  flex-wrap: wrap;
   justify-content: space-between;
   align-items: center;
-  padding: var(--space-3) var(--space-5);
-  border-bottom: 1px solid var(--line);
-  background: var(--surface-header);
+  margin-top: var(--space-4);
+  padding: var(--space-3) var(--space-6);
+  border-top: 1px solid var(--line-faint);
+  border-bottom: 1px solid var(--line-faint);
   gap: var(--space-4);
 }
 
@@ -716,10 +832,10 @@
 
 .holdings-toolbar__input {
   width: 100%;
-  height: 28px;
-  background: var(--surface-panel);
+  height: 32px;
+  background: var(--surface-raised);
   border: 1px solid var(--line);
-  border-radius: 3px;
+  border-radius: var(--radius-full);
   color: var(--text-primary);
   padding: 0 var(--space-3);
   font-size: var(--size-caption);
@@ -797,4 +913,11 @@
   width: calc(100% - 2 * var(--page-gutter));
   max-width: calc(var(--max-width) - 2 * var(--page-gutter));
   margin: 0 auto var(--card-gap);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .statement,
+  .kpi-card {
+    animation: none;
+  }
 }

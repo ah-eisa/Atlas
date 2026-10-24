@@ -165,14 +165,37 @@
 }
 
 .grid__ticker {
-  font-size: var(--size-caption);
-  font-weight: 600;
+  font-size: 13.5px;
+  font-weight: 700;
   color: var(--text-primary);
-  letter-spacing: 0.03em;
+  letter-spacing: -0.01em;
 }
 
 .grid__name {
+  color: var(--text-tertiary);
+  font-size: 11.5px;
+  white-space: nowrap;
+}
+
+.grid__instrument {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  line-height: 1.3;
+}
+
+.grid__class {
   color: var(--text-secondary);
+}
+
+/* A row opens its holding up close. */
+.grid__row--open {
+  cursor: pointer;
+}
+
+.grid__row--open:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
 }
 
 .grid__tag {
@@ -232,8 +255,8 @@
   display: grid;
   flex-shrink: 0;
   place-items: center;
-  width: 32px;
-  height: 32px;
+  width: 36px;
+  height: 36px;
   overflow: hidden;
   border-radius: var(--radius);
   color: #ffffff;
@@ -1496,4 +1519,16 @@
 .grid__price-base {
   color: var(--text-tertiary);
   font-size: var(--size-label);
+}
+
+/* Rows that lead with an instrument mark and a two-line name stand taller. */
+.grid__row--open .grid__td {
+  height: 58px;
+}
+
+/* The gap to the benchmark closes the legend, set apart by a hairline. */
+.performance__spread {
+  margin-left: auto;
+  padding-left: var(--space-4);
+  border-left: 1px solid var(--line);
 }

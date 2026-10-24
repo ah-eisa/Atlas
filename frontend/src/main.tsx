@@ -3,15 +3,19 @@ import { createRoot } from 'react-dom/client'
 
 // Self-hosted fonts, bundled by Vite - no external font requests at runtime.
 // Only the weights the design system actually uses are imported.
-// Instrument Sans: the interface and every small figure.
-import '@fontsource/instrument-sans/400.css'
-import '@fontsource/instrument-sans/500.css'
-import '@fontsource/instrument-sans/600.css'
-// Newsreader: headlines and the large figures that lead a view.
-import '@fontsource/newsreader/400.css'
-import '@fontsource/newsreader/500.css'
-// IBM Plex Mono: code, file names and raw CSV only.
-import '@fontsource/ibm-plex-mono/400.css'
+// Plus Jakarta Sans: the interface.
+import '@fontsource/plus-jakarta-sans/400.css'
+import '@fontsource/plus-jakarta-sans/500.css'
+import '@fontsource/plus-jakarta-sans/600.css'
+import '@fontsource/plus-jakarta-sans/700.css'
+// Cormorant Garamond: headlines and the large figures that lead a view.
+import '@fontsource/cormorant-garamond/500.css'
+import '@fontsource/cormorant-garamond/600.css'
+import '@fontsource/cormorant-garamond/700.css'
+// JetBrains Mono: every figure, with tabular numerals, plus code and raw CSV.
+import '@fontsource/jetbrains-mono/400.css'
+import '@fontsource/jetbrains-mono/500.css'
+import '@fontsource/jetbrains-mono/600.css'
 
 import './styles/tokens.css'
 import './styles/base.css'

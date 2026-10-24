@@ -120,8 +120,8 @@ export function watchSystemTheme(): () => void {
   return () => query.removeEventListener('change', handler)
 }
 
-/** The theme, and a callback to flip it. */
-export function useTheme(): { theme: Theme; toggle: () => void } {
+/** The theme, and callbacks to flip it or pick one. */
+export function useTheme(): { theme: Theme; toggle: () => void; setTheme: (theme: Theme) => void } {
   const theme = useSyncExternalStore(subscribe, getTheme, getTheme)
-  return { theme, toggle: toggleTheme }
+  return { theme, toggle: toggleTheme, setTheme }
 }

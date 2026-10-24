@@ -120,7 +120,10 @@ export function Sidebar({
         <div className="sidebar__brand">
           <a className="sidebar__home" href="#/overview" aria-label="ATLAS, go to the overview">
             <AtlasLogo size={30} className="sidebar__logo" />
-            <span className="sidebar__word">ATLAS</span>
+            <span className="sidebar__word">
+              <strong>ATLAS</strong>
+              <small>Private wealth</small>
+            </span>
           </a>
           <button
             type="button"

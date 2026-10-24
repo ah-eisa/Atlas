@@ -19,7 +19,7 @@ import { Sidebar } from './components/Sidebar'
 import { NAV_ORDER } from './lib/navigation'
 import { TopBar } from './components/TopBar'
 import { WatchlistModal } from './components/WatchlistModal'
-import { ApiError, deletePosition, type DataConfig } from './lib/api'
+import { ApiError, deletePosition, updateBaseCurrency, type DataConfig } from './lib/api'
 import { formatDate, formatTimestamp } from './lib/format'
 import { useTheme } from './lib/theme'
 import { useHashRoute, type ViewKey } from './lib/useHashRoute'
@@ -30,17 +30,43 @@ import type { DataSource, OrderType, PortfolioState, Position } from './lib/type
 // a view's panels and, more importantly, without waiting for the charting
 // libraries. Each chunk is fetched the first time its view is opened and
 // cached thereafter.
-const OverviewView = lazy(() => import('./views/OverviewView'))
-const PerformanceView = lazy(() => import('./views/PerformanceView'))
-const RiskView = lazy(() => import('./views/RiskView'))
-const LabView = lazy(() => import('./views/LabView'))
-const ProjectionView = lazy(() => import('./views/ProjectionView'))
-const HoldingsView = lazy(() => import('./views/HoldingsView'))
-const TransactionsView = lazy(() => import('./views/TransactionsView'))
-const FixedIncomeView = lazy(() => import('./views/FixedIncomeView'))
-const MacroSecView = lazy(() => import('./views/MacroSecView'))
-const OptionsView = lazy(() => import('./views/OptionsView'))
-const DataView = lazy(() => import('./views/DataView'))
+//
+// A page opened before a new build was deployed still asks for the old
+// chunk names, which no longer exist. Rather than leave a blank page, the
+// app reloads once to pick up the new build; a second failure within a
+// minute is a real error and is thrown.
+const RELOAD_KEY = 'atlas.chunk-reload'
+
+function lazyView<P extends object>(load: () => Promise<{ default: React.ComponentType<P> }>) {
+  return lazy(() =>
+    load().catch((error: unknown) => {
+      let last = 0
+      try {
+        last = Number(window.sessionStorage.getItem(RELOAD_KEY) ?? 0)
+        if (Date.now() - last > 60_000) {
+          window.sessionStorage.setItem(RELOAD_KEY, String(Date.now()))
+          window.location.reload()
+          return new Promise<{ default: React.ComponentType<P> }>(() => {})
+        }
+      } catch {
+        // Without storage a reload could loop; report the failure instead.
+      }
+      throw error
+    }),
+  )
+}
+
+const OverviewView = lazyView(() => import('./views/OverviewView'))
+const PerformanceView = lazyView(() => import('./views/PerformanceView'))
+const RiskView = lazyView(() => import('./views/RiskView'))
+const LabView = lazyView(() => import('./views/LabView'))
+const ProjectionView = lazyView(() => import('./views/ProjectionView'))
+const HoldingsView = lazyView(() => import('./views/HoldingsView'))
+const TransactionsView = lazyView(() => import('./views/TransactionsView'))
+const FixedIncomeView = lazyView(() => import('./views/FixedIncomeView'))
+const MacroSecView = lazyView(() => import('./views/MacroSecView'))
+const OptionsView = lazyView(() => import('./views/OptionsView'))
+const DataView = lazyView(() => import('./views/DataView'))
 
 const SIDEBAR_KEY = 'atlas.sidebar.collapsed'
 
@@ -66,6 +92,7 @@ function Shell({
   onOpenWatchlist,
   onOpenCsvImport,
   onSwitchSource,
+  onChangeCurrency,
   children,
 }: {
   state: PortfolioState | null
@@ -81,6 +108,7 @@ function Shell({
   onOpenWatchlist?: () => void
   onOpenCsvImport?: () => void
   onSwitchSource?: (source: DataSource) => void
+  onChangeCurrency?: (currency: string) => Promise<void>
   children: React.ReactNode
 }) {
   const summary = state?.analytics?.summary ?? null
@@ -174,6 +202,7 @@ function Shell({
           onOpenCsvImport={onOpenCsvImport}
           onSwitchSource={onSwitchSource}
           onOpenMenu={() => setDrawerOpen(true)}
+          onChangeCurrency={onChangeCurrency}
           editable={state?.editable ?? false}
         />
         {children}
@@ -593,6 +622,13 @@ export default function App() {
     reload()
   }
 
+  // Every figure is restated in the new currency, so the analytics are
+  // rebuilt rather than converted on the client.
+  const handleChangeCurrency = async (currency: string) => {
+    await updateBaseCurrency(config, currency)
+    reload()
+  }
+
   const handleDeletePosition = async (id: number) => {
     await deletePosition(config, id)
     reload()
@@ -670,6 +706,7 @@ export default function App() {
       onOpenWatchlist={() => setIsWatchlistOpen(true)}
       onOpenCsvImport={() => setIsCsvImportOpen(true)}
       onSwitchSource={setSource}
+      onChangeCurrency={data.source === 'api' && data.editable ? handleChangeCurrency : undefined}
     >
       <WarningStrip state={data} error={error} onClearError={clearError} />
       {content}

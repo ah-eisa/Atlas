@@ -149,13 +149,17 @@ detected rather than misread.
 
 **Frontend.** React 19 + TypeScript, built with Vite. ECharts for the
 distribution, heatmap and donut panels, Lightweight Charts for the time
-series, TanStack Table for the holdings grid. The design ("Statement") reads
-like a private-bank statement: a collapsible navigation rail, content on
-cards, Newsreader for headlines and lead figures, Instrument Sans for the
-interface, one evergreen accent, and one colour per asset class, in complete
-light and dark themes. Every window shares one accessible dialog. The views
-are lazily loaded, so the shell paints before the charting libraries are
-fetched.
+series, TanStack Table for the holdings grid. The design ("Sovereign") reads
+like a private-bank statement: a collapsible navigation rail, a pinned glass
+toolbar, content on rounded cards over a softly lit page, Cormorant Garamond
+for headlines and lead figures, Plus Jakarta Sans for the interface and
+JetBrains Mono for every figure, an emerald accent with gold for what lies
+ahead, and one colour per asset class, in complete light and dark themes.
+Every window shares one accessible dialog; a click on a holding opens it up
+close, with its ninety-session price and a what-if slider for its weight.
+The views are lazily loaded, so the shell paints before the charting
+libraries are fetched, and a page left open across a new build reloads once
+instead of going blank.
 
 ---
 
@@ -237,14 +241,15 @@ cares which one is running. The active mode is always visible in the header
 The dashboard ships with two complete palettes, not one palette plus an
 inversion:
 
-- **Light** — white cards on a quiet grey-green page, evergreen ink for the
-  accent, the base palette.
-- **Dark** — the same roles on deep evergreen, each colour re-stepped for the
-  dark surface rather than inverted.
+- **Light** — "alabaster and emerald": white cards on warm alabaster, deep
+  emerald for the accent, gold for projections. The base palette.
+- **Dark** — "obsidian": the same roles on near-black green, each colour
+  re-stepped for the dark surface rather than inverted.
 
 The six categorical colours (one per asset class) were validated for
-colour-vision deficiency on both surfaces. The switch is the moon or sun
-button in the toolbar. The first visit follows the operating
+colour-vision deficiency on both surfaces. The switch is the Light / Dark
+pill in the toolbar (a single sun or moon button on a phone). The first
+visit follows the operating
 system's `prefers-color-scheme`; once you choose, the choice is remembered and
 survives a reload. The theme is applied before the first paint, so the page
 never flashes the wrong background.
@@ -423,7 +428,7 @@ the Pydantic models, and CI regenerates that schema
 the payload therefore breaks the build instead of the dashboard.
 
 The frontend unit tests (19) cover the pure logic — formatting, the hash
-router and the snapshot normaliser. The Playwright smoke suite (14 scenarios,
+router and the snapshot normaliser. The Playwright smoke suite (15 scenarios,
 run on a desktop and a phone viewport) answers the questions only a browser
 can: the app mounts, every view renders panels, the charts fill their
 containers, the figures are not zeros, counters settle, the theme switch

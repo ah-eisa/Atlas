@@ -116,7 +116,8 @@ test('the theme switch repaints the page', async ({ page }) => {
     () => getComputedStyle(document.body).backgroundColor,
   )
 
-  await page.locator('.topbar__theme').click()
+  // The Light/Dark pill on wide screens, a single toggle on a phone.
+  await page.locator('.theme-switch__option[aria-pressed="false"]:visible, .topbar__theme:visible').first().click()
   await expect
     .poll(async () => page.evaluate(() => document.documentElement.dataset.theme))
     .not.toBe(before)
@@ -236,7 +237,7 @@ test('the navigation is grouped and [ ] step between views', async ({ page }) =>
 
 test('copying an animated figure copies its value once', async ({ page }) => {
   await page.goto('/?source=snapshot#/overview')
-  const delta = page.locator('.topbar__delta').first()
+  const delta = page.locator('.kpi-card').first()
   await expect(delta).toBeVisible()
 
   const copied = await delta.evaluate((element) => {
@@ -251,4 +252,39 @@ test('copying an animated figure copies its value once', async ({ page }) => {
 
   expect(copied.split(value).length - 1).toBe(1)
   expect(copied).not.toMatch(/\(\s*\n/)
+})
+
+test('a holding opens up close and the grid filters by asset class', async ({ page }) => {
+  await page.goto('/?source=snapshot#/holdings')
+  const rows = page.locator('.grid__row--open')
+  await expect(rows.first()).toBeVisible()
+  const all = await rows.count()
+
+  // Filtering by one class leaves only that class's rows.
+  const filters = page.getByRole('group', { name: 'Asset class' })
+  const narrower = filters.getByRole('button').nth(1)
+  const label = (await narrower.innerText()).trim()
+  const count = Number(/\((\d+)\)/.exec(label)?.[1])
+  await narrower.click()
+  await expect(rows).toHaveCount(count)
+  expect(count).toBeLessThan(all)
+  await filters.getByRole('button').first().click()
+  await expect(rows).toHaveCount(all)
+
+  // A row opens the holding; Escape closes it and returns focus to the row.
+  const first = rows.first()
+  const ticker = (await first.locator('.grid__ticker').innerText()).trim()
+  await first.click()
+  const dialog = page.getByRole('dialog')
+  await expect(dialog).toBeVisible()
+  await expect(dialog).toContainText(ticker)
+
+  // The what-if slider restates the weight without changing anything.
+  const slider = dialog.getByRole('slider')
+  await slider.press('End')
+  await expect(dialog.locator('.inspector__whatif-delta')).toContainText('Buy')
+
+  await page.keyboard.press('Escape')
+  await expect(dialog).toBeHidden()
+  await expect(first).toBeFocused()
 })

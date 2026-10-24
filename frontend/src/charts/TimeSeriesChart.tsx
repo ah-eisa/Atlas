@@ -2,13 +2,14 @@
  * React wrapper around TradingView Lightweight Charts.
  *
  * Deliberately restrained, following the library's own house style: thin
- * lines, hairline axes, muted gridlines, no area gradients (a gradient fill is
- * explicitly out of bounds for this design system, so only line series are
- * used), and a crosshair that reports values to the parent for an external
- * readout rather than drawing a floating bubble over the data.
+ * lines, hairline axes, muted gridlines, and a crosshair that reports values
+ * to the parent for an external readout rather than drawing a floating bubble
+ * over the data. The portfolio's own line may carry a soft wash beneath it
+ * (`area`) that fades out towards the axis; reference series stay bare lines.
  */
 
 import {
+  AreaSeries,
   createChart,
   CrosshairMode,
   LineSeries,
@@ -38,6 +39,18 @@ export interface SeriesSpec {
   lineWidth?: 1 | 2
   /** Dashed rendering marks a reference series (e.g. the benchmark). */
   dashed?: boolean
+  /** A wash under the line, fading towards the axis. */
+  area?: boolean
+}
+
+type PlottedSeries = ISeriesApi<'Line'> | ISeriesApi<'Area'>
+
+/** `#rrggbb` at the given opacity; other colour forms are returned unchanged. */
+function withAlpha(color: string, alpha: number): string {
+  const match = /^#([0-9a-f]{6})$/i.exec(color.trim())
+  if (!match) return color
+  const value = Number.parseInt(match[1], 16)
+  return `rgba(${(value >> 16) & 255}, ${(value >> 8) & 255}, ${value & 255}, ${alpha})`
 }
 
 /** Values under the crosshair, or `null` when the pointer leaves the chart. */
@@ -83,7 +96,7 @@ export function TimeSeriesChart({
 }: TimeSeriesChartProps) {
   const hostRef = useRef<HTMLDivElement | null>(null)
   const chartRef = useRef<IChartApi | null>(null)
-  const seriesRef = useRef(new Map<string, ISeriesApi<'Line'>>())
+  const seriesRef = useRef(new Map<string, PlottedSeries>())
   // Set when the chart is torn down. Effects clean up in definition order, so
   // the chart is already gone by the time the series and price-line cleanups
   // run; touching a disposed instance throws "Object is disposed".
@@ -232,8 +245,10 @@ export function TimeSeriesChart({
     const theme = chartTheme()
     const present = new Set(series.map((spec) => spec.id))
 
+    // A series that changes between a line and an area is drawn afresh.
+    const kinds = new Map(series.map((spec) => [spec.id, spec.area ? 'Area' : 'Line']))
     for (const [id, api] of seriesRef.current) {
-      if (!present.has(id)) {
+      if (!present.has(id) || api.seriesType() !== kinds.get(id)) {
         chart.removeSeries(api)
         seriesRef.current.delete(id)
       }
@@ -242,8 +257,17 @@ export function TimeSeriesChart({
     series.forEach((spec) => {
       let api = seriesRef.current.get(spec.id)
       if (!api) {
-        api = chart.addSeries(LineSeries, { priceLineVisible: false, lastValueVisible: false })
+        api = spec.area
+          ? chart.addSeries(AreaSeries, { priceLineVisible: false, lastValueVisible: false })
+          : chart.addSeries(LineSeries, { priceLineVisible: false, lastValueVisible: false })
         seriesRef.current.set(spec.id, api)
+      }
+      if (spec.area) {
+        api.applyOptions({
+          lineColor: spec.color,
+          topColor: withAlpha(spec.color, 0.26),
+          bottomColor: withAlpha(spec.color, 0),
+        })
       }
       api.applyOptions({
         color: spec.color,

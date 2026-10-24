@@ -27,12 +27,14 @@ import { MOTION } from '../lib/motion'
 import type { HistoryPayload, PeriodKey, ReturnsPayload, SummaryPayload } from '../lib/types'
 import { Panel, Segmented } from './Panel'
 
-type Range = '1w' | '1m' | 'ytd' | 'all'
+type Range = '1w' | '1m' | '3m' | '6m' | 'ytd' | 'all'
 type View = 'growth' | 'return' | 'drawdown'
 
 const RANGES = [
   { value: '1w' as const, label: '1W' },
   { value: '1m' as const, label: '1M' },
+  { value: '3m' as const, label: '3M' },
+  { value: '6m' as const, label: '6M' },
   { value: 'ytd' as const, label: 'YTD' },
   { value: 'all' as const, label: 'All' },
 ]
@@ -62,7 +64,7 @@ function rangeStartIndex(dates: string[], range: Range): number {
   } else {
     const date = new Date(`${last}T00:00:00Z`)
     if (range === '1w') date.setUTCDate(date.getUTCDate() - 7)
-    else date.setUTCMonth(date.getUTCMonth() - 1)
+    else date.setUTCMonth(date.getUTCMonth() - (range === '6m' ? 6 : range === '3m' ? 3 : 1))
     cutoff = date.toISOString().slice(0, 10)
   }
 
@@ -103,6 +105,7 @@ export function PerformancePanel({ history, summary, returns, currency }: Perfor
           label: 'Drawdown',
           color: theme.negative,
           lineWidth: 1,
+          area: true,
           data: toLineData(dates, history.drawdown_pct.slice(start)),
         },
       ]
@@ -114,6 +117,7 @@ export function PerformancePanel({ history, summary, returns, currency }: Perfor
           id: 'portfolio',
           label: 'Portfolio',
           color: theme.accent,
+          area: true,
           data: toLineData(dates, rebaseToReturn(portfolio)),
         },
         {
@@ -132,6 +136,7 @@ export function PerformancePanel({ history, summary, returns, currency }: Perfor
         id: 'portfolio',
         label: 'Portfolio',
         color: theme.accent,
+        area: true,
         data: toLineData(dates, portfolio),
       },
       {
@@ -155,6 +160,19 @@ export function PerformancePanel({ history, summary, returns, currency }: Perfor
   // the row always shows something rather than flickering empty.
   const latestDate = history.dates[history.dates.length - 1]
   const readoutDate = crosshair?.time ?? latestDate
+
+  // How far the portfolio stands from the benchmark at the readout date, in
+  // the chart's own unit: index points on Growth, percentage points on Return.
+  const shownValue = (id: string) => {
+    const spec = series.find((candidate) => candidate.id === id)
+    return crosshair?.values[id] ?? spec?.data[spec.data.length - 1]?.value
+  }
+  const portfolioShown = shownValue('portfolio')
+  const benchmarkShown = shownValue('benchmark')
+  const spread =
+    view !== 'drawdown' && portfolioShown !== undefined && benchmarkShown !== undefined
+      ? portfolioShown - benchmarkShown
+      : null
 
   return (
     <Panel
@@ -194,6 +212,14 @@ export function PerformancePanel({ history, summary, returns, currency }: Perfor
               </span>
             )
           })}
+          {spread !== null ? (
+            <span className="performance__legend-item performance__spread">
+              <span className="performance__legend-label">vs benchmark</span>
+              <span className={`num performance__legend-value ${signClass(spread)}`}>
+                {isPercentView ? formatPercentSigned(spread) : formatMoneySigned(spread)}
+              </span>
+            </span>
+          ) : null}
         </div>
 
         <TimeSeriesChart

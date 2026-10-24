@@ -3,8 +3,9 @@
  *
  * The rail holds the wordmark, the portfolio, the grouped views and the data
  * source. It collapses to icons (the column eases to its new width), and on
- * a phone it becomes a drawer. The toolbar is one quiet row: search, the
- * actions, theme and refresh.
+ * a phone it becomes a drawer. The toolbar is one row of frosted glass that
+ * stays pinned while the page scrolls: search, theme, the reporting
+ * currency, the actions and refresh.
  */
 
 /* ------------------------------------------------------------------ *
@@ -45,6 +46,9 @@
   overflow: hidden;
   border-right: 1px solid var(--line);
   background: var(--surface-panel);
+  transition:
+    background-color var(--duration-slow) var(--easing),
+    border-color var(--duration-slow) var(--easing);
 }
 
 .sidebar__brand {
@@ -79,10 +83,24 @@
 }
 
 .sidebar__word {
-  font-size: var(--size-body);
-  font-weight: var(--weight-semibold);
-  letter-spacing: 0.2em;
+  display: flex;
+  flex-direction: column;
+  line-height: 1.15;
   white-space: nowrap;
+}
+
+.sidebar__word strong {
+  font-size: 13px;
+  font-weight: var(--weight-bold);
+  letter-spacing: 0.22em;
+}
+
+.sidebar__word small {
+  color: var(--gold);
+  font-size: 10px;
+  font-weight: var(--weight-semibold);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
 }
 
 .sidebar__toggle,
@@ -122,12 +140,16 @@
   padding: var(--space-3);
   border: 1px solid var(--line);
   border-radius: var(--radius-lg);
-  transition: border-color var(--duration-fast) var(--easing);
+  background: var(--surface-raised);
+  transition:
+    border-color var(--duration-fast) var(--easing),
+    box-shadow var(--duration-base) var(--easing);
 }
 
 .sidebar__book:hover,
 .sidebar__book:focus-within {
-  border-color: var(--accent);
+  border-color: var(--line-neon);
+  box-shadow: var(--shadow-md);
 }
 
 .sidebar__book-mark {
@@ -136,10 +158,11 @@
   place-items: center;
   width: 32px;
   height: 32px;
+  border: 1px solid var(--line-neon);
   border-radius: var(--radius);
   background: var(--accent-faint);
   color: var(--accent);
-  font-weight: var(--weight-semibold);
+  font-weight: var(--weight-bold);
 }
 
 .sidebar__book-field {
@@ -213,7 +236,10 @@
   margin: 0 0 var(--space-1) var(--space-4);
   overflow: hidden;
   color: var(--text-tertiary);
-  font-size: var(--size-label);
+  font-size: 10.5px;
+  font-weight: var(--weight-semibold);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
   white-space: nowrap;
   transition: opacity var(--duration-base) var(--easing);
 }
@@ -228,13 +254,21 @@
   padding: 0 var(--space-4);
   border-radius: var(--radius);
   color: var(--text-secondary);
-  font-size: var(--size-body);
+  font-size: 13.5px;
   font-weight: var(--weight-medium);
   text-decoration: none;
   white-space: nowrap;
   transition:
     color var(--duration-fast) var(--easing),
     background-color var(--duration-fast) var(--easing);
+}
+
+.nav__link .nav__icon {
+  transition: transform var(--duration-fast) var(--easing);
+}
+
+.nav__link:hover .nav__icon {
+  transform: scale(1.08);
 }
 
 .nav__link:hover {
@@ -251,6 +285,7 @@
 .nav__link--active:hover {
   background: transparent;
   color: var(--accent);
+  font-weight: var(--weight-semibold);
 }
 
 .nav__link--disabled,
@@ -307,9 +342,10 @@
   top: 8px;
   bottom: 8px;
   left: calc(-1 * var(--space-4));
-  width: 3px;
-  border-radius: 0 3px 3px 0;
+  width: 3.5px;
+  border-radius: 0 4px 4px 0;
   background: var(--accent);
+  box-shadow: 0 0 10px var(--accent);
 }
 
 /* The data source, at the foot of the rail. */
@@ -443,11 +479,112 @@
  * ------------------------------------------------------------------ */
 
 .topbar__chrome {
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  margin-bottom: var(--space-7);
+  border-bottom: 1px solid var(--line);
+  background: var(--surface-glass);
+  -webkit-backdrop-filter: blur(16px);
+  backdrop-filter: blur(16px);
+  transition:
+    background-color var(--duration-slow) var(--easing),
+    border-color var(--duration-slow) var(--easing);
+}
+
+.topbar__chrome-inner {
   display: flex;
   align-items: center;
   gap: var(--space-4);
-  min-height: 72px;
-  padding: var(--space-4) var(--page-gutter);
+  max-width: var(--max-width);
+  min-height: 64px;
+  margin: 0 auto;
+  padding: var(--space-3) var(--page-gutter);
+}
+
+/* Light and Dark as one pill, the active side raised. */
+.theme-switch {
+  display: inline-flex;
+  gap: 2px;
+  padding: 3px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-full);
+  background: var(--surface-raised);
+}
+
+.theme-switch__option {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 11px;
+  border: 0;
+  border-radius: var(--radius-full);
+  background: transparent;
+  color: var(--text-tertiary);
+  font: var(--weight-semibold) var(--size-label) var(--font-sans);
+  cursor: pointer;
+  transition:
+    color var(--duration-fast) var(--easing),
+    background-color var(--duration-base) var(--easing),
+    box-shadow var(--duration-base) var(--easing);
+}
+
+.theme-switch__option:hover {
+  color: var(--text-primary);
+}
+
+.theme-switch__option[aria-pressed='true'] {
+  background: var(--surface-panel);
+  color: var(--text-primary);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+}
+
+.theme-switch__option:focus-visible,
+.currency-switch__select:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* The reporting currency: every figure on the page is restated in it. */
+.currency-switch {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+.currency-switch__select {
+  height: 34px;
+  padding: 0 28px 0 var(--space-4);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-full);
+  background:
+    linear-gradient(45deg, transparent 50%, var(--text-tertiary) 50%) right 14px center / 5px 5px no-repeat,
+    linear-gradient(-45deg, transparent 50%, var(--text-tertiary) 50%) right 10px center / 5px 5px no-repeat,
+    var(--surface-panel);
+  color: var(--text-primary);
+  font-size: var(--size-label);
+  font-weight: var(--weight-semibold);
+  appearance: none;
+  cursor: pointer;
+  transition: border-color var(--duration-fast) var(--easing);
+}
+
+.currency-switch__select:hover:not(:disabled) {
+  border-color: var(--accent);
+}
+
+.currency-switch__select:disabled {
+  cursor: progress;
+  opacity: 0.6;
+}
+
+.currency-switch--error .currency-switch__select {
+  border-color: var(--negative);
+}
+
+.currency-switch .spinner {
+  position: absolute;
+  right: 30px;
 }
 
 .icon-button {
@@ -500,11 +637,11 @@
   align-items: center;
   gap: var(--space-4);
   max-width: 460px;
-  height: 40px;
+  height: 38px;
   padding: 0 var(--space-3) 0 var(--space-5);
   border: 1px solid var(--line);
   border-radius: var(--radius-full);
-  background: var(--surface-panel);
+  background: var(--surface-raised);
   color: var(--text-tertiary);
   font: var(--size-body) var(--font-sans);
   text-align: left;
@@ -547,6 +684,7 @@
 
 .topbar__narrow-only,
 .topbar__more-icon,
+.topbar__theme,
 .menu__item--phone-only {
   display: none;
 }
@@ -688,16 +826,24 @@
     display: inline-grid;
   }
 
-  .topbar__chrome {
+  .topbar__chrome-inner {
     --page-gutter: var(--space-5);
   }
 }
 
 @media (max-width: 720px) {
   .topbar__chrome {
+    margin-bottom: var(--space-5);
+  }
+
+  .topbar__chrome-inner {
     gap: var(--space-3);
     min-height: 60px;
     padding: var(--space-3) var(--space-4);
+  }
+
+  .topbar__theme {
+    display: inline-grid;
   }
 
   .topbar__search {

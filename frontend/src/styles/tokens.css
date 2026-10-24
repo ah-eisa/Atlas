@@ -1,16 +1,18 @@
 /**
- * Design tokens - ATLAS, "Statement".
+ * Design tokens - ATLAS, "Sovereign".
  *
- * A private-bank statement for your own money. Evergreen is the house
- * colour: it marks where you are, the primary action, and the portfolio's
- * own line on every chart. Six categorical hues, validated for colour-vision
- * deficiency on both surfaces, mark what each holding is. Gains are green,
- * losses brick red, warnings amber.
+ * A private-bank statement for your own money. Light is alabaster paper with
+ * deep emerald; dark is an obsidian terminal with a luminous emerald. Emerald
+ * marks where you are, the primary action and the portfolio's own line on
+ * every chart; gold marks the forward-looking figures (the projection, the
+ * tier). Six categorical hues, validated for colour-vision deficiency on
+ * both surfaces, mark what each holding is. Gains are green, losses red,
+ * warnings amber.
  *
- * Headlines and the large figures that lead a view are set in Newsreader;
- * the interface and every small figure in Instrument Sans with tabular
- * numerals. Content sits on cards on a quiet page, with one orchestrated
- * entrance and motion that answers what you do.
+ * Headlines and the large figures that lead a view are set in Cormorant
+ * Garamond, the interface in Plus Jakarta Sans, and every figure in
+ * JetBrains Mono with tabular numerals. Content sits on rounded cards over a
+ * softly lit page.
  *
  * Light is the base palette; dark redefines the same roles. Chart colours
  * come from here too (see charts/theme.ts).
@@ -22,52 +24,59 @@
   /* ---------------------------------------------------------------- *
    * Surfaces                                                          *
    * ---------------------------------------------------------------- */
-  --surface-page: #f4f6f5;
+  --surface-page: #f5f4ef;
   --surface-panel: #ffffff;
-  --surface-header: #f8faf9;
-  --surface-raised: #f3f6f5;
-  --surface-hover: #eef3f1;
-  --surface-active: #e3ebe7;
+  --surface-header: #f9f8f4;
+  --surface-raised: #f9f8f4;
+  --surface-hover: #f3f1ea;
+  --surface-active: #efece5;
+  --surface-glass: rgba(255, 255, 255, 0.86);
+  /* The light that falls on the page behind the cards. */
+  --page-ambient:
+    radial-gradient(circle at 15% 0%, rgba(15, 94, 72, 0.06), transparent 45%),
+    radial-gradient(circle at 85% 15%, rgba(166, 124, 30, 0.05), transparent 40%);
 
-  --line: #dfe5e2;
-  --line-strong: #c9d3cf;
-  --line-faint: #edf1ef;
-  --line-neon: rgba(18, 97, 79, 0.35);
+  --line: #e3e0d6;
+  --line-strong: #d3cfc2;
+  --line-faint: #eceae3;
+  --line-neon: rgba(15, 94, 72, 0.25);
 
   /* ---------------------------------------------------------------- *
    * Ink                                                               *
    * ---------------------------------------------------------------- */
-  --text-primary: #15201c;
-  --text-secondary: #4f5d58;
-  --text-tertiary: #67756f;
-  --text-disabled: #a3aeaa;
+  --text-primary: #111a16;
+  --text-secondary: #4a5852;
+  --text-tertiary: #66746e;
+  --text-disabled: #a3aca7;
   --text-inverse: #ffffff;
 
   /* ---------------------------------------------------------------- *
-   * Accent - evergreen                                                *
+   * Accent - emerald, with gold for what lies ahead                   *
    * ---------------------------------------------------------------- */
-  --accent: #12614f;
-  --accent-strong: #1d8a70;
-  --accent-dim: #0d4a3c;
-  --accent-faint: #e2efe9;
-  --accent-glow: none;
-  --accent-gradient: linear-gradient(140deg, #1d8a70, #12614f);
-  --accent-gradient-subtle: #e2efe9;
+  --accent: #0f5e48;
+  --accent-strong: #14775b;
+  --accent-dim: #0b4636;
+  --accent-faint: rgba(15, 94, 72, 0.09);
+  --accent-glow: rgba(15, 94, 72, 0.18);
+  --accent-gradient: linear-gradient(135deg, #0f5e48, #14775b);
+  --accent-gradient-subtle: rgba(15, 94, 72, 0.09);
+  --gold: #8f6a14;
+  --gold-faint: rgba(166, 124, 30, 0.11);
 
   /* ---------------------------------------------------------------- *
    * Signals                                                           *
    * ---------------------------------------------------------------- */
-  --positive: #1f7a4d;
-  --positive-dim: #175e3b;
-  --positive-bg: #e5f3ec;
+  --positive: #15804e;
+  --positive-dim: #10663e;
+  --positive-bg: rgba(21, 128, 78, 0.1);
   --positive-glow: none;
-  --negative: #b4372f;
-  --negative-dim: #8f2b25;
-  --negative-bg: #f9e9e7;
+  --negative: #c0352b;
+  --negative-dim: #9a2a22;
+  --negative-bg: rgba(192, 53, 43, 0.1);
   --negative-glow: none;
   --neutral: var(--text-secondary);
-  --warning: #b9661a;
-  --warning-bg: #fbefe2;
+  --warning: #b86214;
+  --warning-bg: rgba(184, 98, 20, 0.11);
   --warning-glow: none;
   --info: #2a78d6;
   --purple: #6250d6;
@@ -115,23 +124,23 @@
   --heat-neg-4-bg: #eea6ad;
   --heat-neg-4-fg: #651c22;
 
-  --viz-grid: #edf1ef;
-  --viz-axis: #d5ddd9;
-  --viz-band: #dcefe7;
-  --viz-band-inner: #b3dccb;
-  --viz-crosshair: #7c8984;
-  --viz-benchmark: #9aa6a1;
+  --viz-grid: #eceae3;
+  --viz-axis: #dcd8cc;
+  --viz-band: #dcebe4;
+  --viz-band-inner: #b0d4c4;
+  --viz-crosshair: #7a8882;
+  --viz-benchmark: #8c9b94;
 
   /* ---------------------------------------------------------------- *
    * Typography                                                        *
    * ---------------------------------------------------------------- */
-  --font-sans: 'Instrument Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-sans: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   /* Headlines and the large figures that lead a view. */
-  --font-display: 'Newsreader', Georgia, 'Times New Roman', serif;
-  /* Figures: the interface face with tabular numerals (set on .num). */
-  --font-mono: var(--font-sans);
-  /* Code, file names and raw CSV - the only true monospace. */
-  --font-code: 'IBM Plex Mono', ui-monospace, 'Cascadia Mono', monospace;
+  --font-display: 'Cormorant Garamond', Georgia, 'Times New Roman', serif;
+  /* Figures, with tabular numerals (set on .num). */
+  --font-mono: 'JetBrains Mono', ui-monospace, 'Cascadia Mono', monospace;
+  /* Code, file names and raw CSV. */
+  --font-code: var(--font-mono);
 
   --size-micro: 11px;
   --size-label: 12px;
@@ -180,29 +189,29 @@
   --duration-fast: 140ms;
   --duration-base: 220ms;
   --duration-slow: 400ms;
-  --easing: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --easing: cubic-bezier(0.22, 1, 0.36, 1);
 
   /* Layout */
   --max-width: 1600px;
   /* The allocation column beside the overview chart. */
   --sidebar-width: 320px;
   /* The navigation rail, open and collapsed. */
-  --nav-width: 256px;
-  --nav-collapsed: 76px;
+  --nav-width: 268px;
+  --nav-collapsed: 80px;
   --page-gutter: 40px;
   --card-gap: 24px;
 
-  --radius-xs: 4px;
-  --radius-sm: 6px;
-  --radius: 10px;
+  --radius-xs: 6px;
+  --radius-sm: 8px;
+  --radius: 11px;
   --radius-lg: 14px;
-  --radius-xl: 18px;
+  --radius-xl: 20px;
   --radius-full: 9999px;
 
   /* Cards sit on the page with a soft shadow; windows float higher. */
-  --shadow-sm: 0 1px 2px rgba(21, 32, 28, 0.04), 0 8px 24px rgba(21, 32, 28, 0.06);
-  --shadow-md: 0 8px 28px rgba(21, 32, 28, 0.12);
-  --shadow-lg: 0 24px 64px rgba(21, 32, 28, 0.18);
+  --shadow-sm: 0 1px 2px rgba(17, 26, 22, 0.04), 0 12px 32px -4px rgba(17, 26, 22, 0.05);
+  --shadow-md: 0 8px 28px rgba(17, 26, 22, 0.1);
+  --shadow-lg: 0 20px 48px -8px rgba(17, 26, 22, 0.14);
   --shadow-glow: none;
   --shadow-positive: none;
   --shadow-negative: none;
@@ -221,45 +230,53 @@
 }
 
 /* -------------------------------------------------------------------- *
- * Dark - the same roles on deep evergreen                              *
+ * Dark - the same roles on an obsidian terminal                        *
  * -------------------------------------------------------------------- */
 [data-theme='dark'] {
   color-scheme: dark;
 
-  --surface-page: #0e1513;
-  --surface-panel: #131d1a;
-  --surface-header: #172420;
-  --surface-raised: #1a2824;
-  --surface-hover: #1f302b;
-  --surface-active: #26392f;
+  --surface-page: #070b09;
+  --surface-panel: #0d1411;
+  --surface-header: #121b17;
+  --surface-raised: #121b17;
+  --surface-hover: #15201b;
+  --surface-active: #182520;
+  --surface-glass: rgba(13, 20, 17, 0.82);
+  --page-ambient:
+    radial-gradient(circle at 18% 0%, rgba(52, 211, 153, 0.09), transparent 45%),
+    radial-gradient(circle at 88% 12%, rgba(245, 158, 11, 0.06), transparent 40%),
+    radial-gradient(circle at 50% 90%, rgba(59, 130, 246, 0.05), transparent 50%);
 
-  --line: #22312c;
-  --line-strong: #30443d;
-  --line-faint: #1b2824;
-  --line-neon: rgba(63, 191, 152, 0.35);
+  --line: #1d2b25;
+  --line-strong: #2a3d35;
+  --line-faint: #15201b;
+  --line-neon: rgba(52, 211, 153, 0.32);
 
-  --text-primary: #e8efec;
-  --text-secondary: #a9b8b2;
-  --text-tertiary: #84958e;
-  --text-disabled: #52625c;
-  --text-inverse: #06120e;
+  --text-primary: #edf3f0;
+  --text-secondary: #9caea6;
+  --text-tertiary: #7a8d85;
+  --text-disabled: #4c5e56;
+  --text-inverse: #04130d;
 
-  --accent: #3fbf98;
-  --accent-strong: #62d3ae;
-  --accent-dim: #2a8a6d;
-  --accent-faint: #173b31;
-  --accent-gradient: linear-gradient(140deg, #62d3ae, #3fbf98);
-  --accent-gradient-subtle: #173b31;
+  --accent: #34d399;
+  --accent-strong: #6ee7b7;
+  --accent-dim: #22a576;
+  --accent-faint: rgba(52, 211, 153, 0.12);
+  --accent-glow: rgba(52, 211, 153, 0.22);
+  --accent-gradient: linear-gradient(135deg, #34d399, #6ee7b7);
+  --accent-gradient-subtle: rgba(52, 211, 153, 0.12);
+  --gold: #f59e0b;
+  --gold-faint: rgba(245, 158, 11, 0.14);
 
-  --positive: #4cc98f;
-  --positive-dim: #2f9466;
-  --positive-bg: #15302a;
-  --negative: #f0756d;
-  --negative-dim: #b84a44;
-  --negative-bg: #3a1f1f;
+  --positive: #34d399;
+  --positive-dim: #22a576;
+  --positive-bg: rgba(52, 211, 153, 0.13);
+  --negative: #f87171;
+  --negative-dim: #c45252;
+  --negative-bg: rgba(248, 113, 113, 0.13);
   --neutral: var(--text-secondary);
-  --warning: #ef9a52;
-  --warning-bg: #382818;
+  --warning: #fbbf24;
+  --warning-bg: rgba(251, 191, 36, 0.13);
   --info: #6aa5f0;
   --purple: #9085e9;
 
@@ -299,14 +316,14 @@
   --heat-neg-4-bg: #662938;
   --heat-neg-4-fg: #fad3d6;
 
-  --viz-grid: #1b2824;
-  --viz-axis: #2c3e37;
-  --viz-band: #173229;
-  --viz-band-inner: #1f4d3d;
-  --viz-crosshair: #74857e;
-  --viz-benchmark: #6f817a;
+  --viz-grid: #15201b;
+  --viz-axis: #24342d;
+  --viz-band: #12302a;
+  --viz-band-inner: #1a4a3c;
+  --viz-crosshair: #61746c;
+  --viz-benchmark: #5b7067;
 
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3), 0 10px 28px rgba(0, 0, 0, 0.28);
-  --shadow-md: 0 10px 30px rgba(0, 0, 0, 0.4);
-  --shadow-lg: 0 24px 64px rgba(0, 0, 0, 0.55);
+  --shadow-sm: 0 2px 4px rgba(0, 0, 0, 0.35), 0 16px 40px -6px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  --shadow-md: 0 10px 30px rgba(0, 0, 0, 0.5);
+  --shadow-lg: 0 24px 60px -10px rgba(0, 0, 0, 0.7), inset 0 1px 0 rgba(255, 255, 255, 0.08);
 }

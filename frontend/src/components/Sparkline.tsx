@@ -23,6 +23,11 @@ interface SparklineProps {
   ariaLabel?: string
   /** Marks the final point with a small dot. */
   showEndpoint?: boolean
+  /** Shades the area under the line, fading towards the baseline. */
+  area?: boolean
+  strokeWidth?: number
+  /** Stretches the graphic to the width of its container. */
+  fluid?: boolean
 }
 
 function toneColor(tone: SparklineTone, rising: boolean): string {
@@ -38,6 +43,9 @@ export function Sparkline({
   tone = 'auto',
   ariaLabel,
   showEndpoint = false,
+  area = false,
+  strokeWidth = 1,
+  fluid = false,
 }: SparklineProps) {
   const clipId = useId()
   const points = values.filter((value) => Number.isFinite(value))
@@ -61,7 +69,7 @@ export function Sparkline({
 
   return (
     <svg
-      width={width}
+      width={fluid ? '100%' : width}
       height={height}
       viewBox={`0 0 ${width} ${height}`}
       preserveAspectRatio="none"
@@ -73,12 +81,21 @@ export function Sparkline({
       <clipPath id={clipId}>
         <rect x="0" y="0" width={width} height={height} />
       </clipPath>
+      {area ? (
+        <defs>
+          <linearGradient id={`${clipId}-fill`} x1="0" x2="0" y1="0" y2="1">
+            <stop offset="0%" stopColor={color} stopOpacity="0.24" />
+            <stop offset="100%" stopColor={color} stopOpacity="0" />
+          </linearGradient>
+        </defs>
+      ) : null}
       <g clipPath={`url(#${clipId})`}>
+        {area ? <path d={`${path} L${width},${height} L0,${height} Z`} fill={`url(#${clipId}-fill)`} /> : null}
         <path
           d={path}
           fill="none"
           stroke={color}
-          strokeWidth={1}
+          strokeWidth={strokeWidth}
           strokeLinejoin="round"
           strokeLinecap="round"
           vectorEffect="non-scaling-stroke"
