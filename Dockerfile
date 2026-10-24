@@ -12,7 +12,11 @@
 # ---------------------------------------------------------------------------
 FROM node:22-alpine AS frontend
 
-WORKDIR /build
+# The stage mirrors the repository layout - frontend/ with snapshot.json
+# beside it - because vite.config.ts reads the snapshot at
+# `../snapshot.json`. Copying both into one directory put the file one level
+# too deep, and the build failed in the snapshot plugin.
+WORKDIR /build/frontend
 
 # Dependencies first, so a source-only change reuses the cached install layer.
 COPY frontend/package.json frontend/package-lock.json* ./
@@ -21,7 +25,7 @@ RUN npm ci --no-audit --no-fund
 COPY frontend/ ./
 # The Vite build reads the committed snapshot at the repository root and
 # emits it into dist/, so the demo mode works without a backend.
-COPY snapshot.json ./
+COPY snapshot.json /build/snapshot.json
 RUN npm run build
 
 # ---------------------------------------------------------------------------
@@ -42,7 +46,7 @@ COPY backend/requirements.txt ./backend/requirements.txt
 RUN pip install --no-cache-dir -r backend/requirements.txt
 
 COPY backend/ ./backend/
-COPY --from=frontend /build/dist ./frontend/dist
+COPY --from=frontend /build/frontend/dist ./frontend/dist
 
 # The database and the price cache live on a volume so a container restart
 # does not lose positions.

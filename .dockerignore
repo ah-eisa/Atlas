@@ -13,7 +13,11 @@ node_modules
 frontend/node_modules
 frontend/dist
 backend/.cache
-backend/data
+# The portfolio database is runtime state; the bundled market datasets the
+# bonds and macro views read are part of the application and must ship.
+backend/data/*
+!backend/data/fixed_income
+!backend/data/macro
 *.md
 !README.md
 docs

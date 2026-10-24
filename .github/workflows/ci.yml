@@ -133,3 +133,11 @@ jobs:
           echo "service did not become healthy"
           docker logs atlas
           exit 1
+
+      # Healthy is not enough: the image must also carry the bundled market
+      # datasets, which a .dockerignore rule once left out.
+      - name: Bundled data is in the image
+        run: |
+          curl -fsS http://127.0.0.1:8080/api/v1/fixed-income/yield-curve \
+            | python3 -c "import json,sys; points = json.load(sys.stdin)['curve_points']; assert points, 'empty yield curve'; print(len(points), 'curve points')"
+          curl -fsS http://127.0.0.1:8080/ | grep -q '<div id="root">' && echo "dashboard served"
