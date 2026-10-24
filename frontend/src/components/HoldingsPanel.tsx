@@ -30,7 +30,7 @@ import {
   signClass,
 } from '../lib/format'
 import { assetClassColor } from '../lib/assetColors'
-import type { Holding } from '../lib/types'
+import type { CashBalance, Holding } from '../lib/types'
 import { HoldingInspector } from './HoldingInspector'
 import { Panel, Segmented } from './Panel'
 import { Sparkline } from './Sparkline'
@@ -65,6 +65,8 @@ function SortCaret({ direction }: { direction: false | 'asc' | 'desc' }) {
 interface HoldingsPanelProps {
   holdings: Holding[]
   totalValue: number
+  /** Cash the portfolio holds, shown under the positions. */
+  cash?: CashBalance[]
   currency: string
   editable?: boolean
   onAddPosition?: () => void
@@ -76,6 +78,7 @@ interface HoldingsPanelProps {
 export function HoldingsPanel({
   holdings,
   totalValue,
+  cash = [],
   currency,
   editable = false,
   onAddPosition,
@@ -434,6 +437,37 @@ export function HoldingsPanel({
                 })}
               </tr>
             ))}
+            {activeClass === 'all' && !filterQuery.trim()
+              ? cash.map((balance) => (
+                  <tr key={`cash-${balance.currency}`} className="grid__row grid__row--cash">
+                    <td className="grid__td">
+                      <span className="grid__ticker-cell">
+                        <span className="grid__mark grid__mark--cash" aria-hidden="true">
+                          {balance.currency}
+                        </span>
+                        <span className="grid__instrument">
+                          <span className="grid__ticker">Cash</span>
+                          <span className="grid__name">From sales and income · {balance.currency}</span>
+                        </span>
+                      </span>
+                    </td>
+                    <td className="grid__td" colSpan={3} />
+                    <td className="grid__td grid__td--right">
+                      <Num>{formatMoney(balance.balance)}</Num>
+                    </td>
+                    <td className="grid__td grid__td--right">
+                      <span className="num">{balance.currency}</span>
+                    </td>
+                    <td className="grid__td grid__td--right">
+                      <Num tone="grid__strong">{formatMoney(balance.value_base)}</Num>
+                    </td>
+                    <td className="grid__td grid__td--right">
+                      <Num>{formatPercent(balance.allocation_pct, 1)}</Num>
+                    </td>
+                    <td className="grid__td" colSpan={4} />
+                  </tr>
+                ))
+              : null}
           </tbody>
           <tfoot>
             <tr className="grid__total">

@@ -50,7 +50,7 @@ rail shows them:
 | | **Lab** | Is it concentrated, how would it fare in a past crisis, and where did its return come from? |
 | | **Projection** | What does the next year plausibly look like, and what is it assuming? |
 | **Book** | **Holdings** | What do I own, what did it cost, what is it worth now — and how do I change it? |
-| | **Trades** | What did I buy and sell, and what did each sale realise? |
+| | **Ledger** | What did I buy and sell, what did I earn and pay, and what cash do I hold? |
 | **Markets** | **Bonds** | Where are Treasury yields and credit spreads, and what would a rate move do to a bond? |
 | | **Macro & filings** | What are inflation, rates and employment doing, and what have my companies filed? |
 | | **Options** | What does the chain look like, and how does one option respond to price, time and volatility? |
@@ -62,6 +62,14 @@ Analytics that are actually implemented, not decorative:
   adjustment, so units bought mid-period are not credited with returns that
   predate them. The money-weighted return (XIRR) is reported beside it,
   because the two answer different questions.
+- **A book of record.** Trades with their fees and taxes, dividends with the
+  tax withheld, standalone fees and taxes, splits, symbol changes and
+  mergers, spin-offs, returns of capital and currency conversions are all
+  ledger entries, and every position is rebuilt by replaying them in date
+  order. Sale proceeds and dividends stay in the portfolio as cash, per
+  currency, until spent or withdrawn; units sold are part of the history
+  until the day they were sold. The Ledger view reports income, charges
+  and realised results by year.
 - **A FIFO trade ledger.** Every purchase is its own lot; a sale consumes the
   oldest lots held on its date, and its realised P&L is measured against the
   cost of exactly those units. Deleting a sale returns its units; deleting a
@@ -123,7 +131,7 @@ Atlas/
 │   │   ├── serialize.py     # JSON-safe rounding, null handling
 │   │   └── config.py        # environment-driven settings
 │   ├── data/                # bundled bond and macro datasets (the database lives here too)
-│   ├── tests/               # 216 hermetic tests
+│   ├── tests/               # 240 hermetic tests
 │   ├── export_schema.py     # exports the committed payload JSON Schema
 │   ├── generate_snapshot.py # writes the committed snapshot.json
 │   └── setup_holdings.py    # interactive / CSV position import
@@ -411,7 +419,7 @@ make test-frontend  # frontend: Vitest
 make test-e2e       # browser: Playwright, against the production build
 ```
 
-The backend suite (216 tests) is hermetic: it never reaches Yahoo Finance,
+The backend suite (240 tests) is hermetic: it never reaches Yahoo Finance,
 never touches your real database, and uses a synthetic market with a fixed
 seed, so results are reproducible. It covers the metric maths, the TWR and
 XIRR methodology, the FX decomposition, the SQLite store and its schema
@@ -499,20 +507,25 @@ yield curve and the dashboard.
   included.
 - Crypto trades on calendar days, equities on trading days; the aligned
   series uses the intersection of both calendars.
-- Holdings' prices are dividend-adjusted by the data provider, and the
-  default benchmark is a provider total-return series. Neither index
-  methodology is independently verified.
+- Holdings' prices are split-adjusted by the data provider, and their
+  dividends come from the same provider (replaced by any you record); the
+  default benchmark is a provider total-return series. Neither methodology
+  is independently verified. Pay dates are taken as the ex-dates.
 - The overview's attribution is the single-index arithmetic form (active
   return per position). The Lab's Brinson-Fachler attribution splits
   allocation from selection, as a single-period buy-and-hold from the start
   of the window.
-- The ledger records buys and sells only. Dividends, fees, taxes, splits and
-  other corporate actions are not recorded as transactions; prices are
-  provider-adjusted for dividends and splits instead.
-- Position history follows the open lots: each lot enters on its own date,
-  but units already sold are not shown in past values.
-- Editing a position by hand replaces its trade history with a single lot,
-  so orders placed before the edit can no longer be reversed one by one.
+- Splits, symbol changes and spin-offs are recorded by hand; the provider's
+  own corporate-action feed is not read. A spin-off's cost share is the one
+  you enter.
+- Taxes are recorded, not computed: there are no tax lots by jurisdiction,
+  wash-sale rules or tax reports.
+- A purchase the portfolio's cash cannot pay for is treated as new money
+  added at its cost; a foreign purchase is paid from base-currency cash at
+  the day's rate when there is no cash in its currency.
+- Editing a position by hand replaces its trade history from then on, so
+  orders placed before the edit no longer apply (they stay in the ledger,
+  marked as replaced).
 - There is no multi-user support, no authentication, and no audit log. This
   is a personal tool.
 

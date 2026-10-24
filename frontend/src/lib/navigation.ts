@@ -32,7 +32,7 @@ export const NAV_GROUPS: NavGroup[] = [
     label: 'Book',
     views: [
       { key: 'holdings', label: 'Holdings', needsAnalytics: false },
-      { key: 'trades', label: 'Trades', needsAnalytics: false },
+      { key: 'trades', label: 'Ledger', needsAnalytics: false },
     ],
   },
   {

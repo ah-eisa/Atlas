@@ -40,9 +40,14 @@ eleven views one design. The 2.2 record follows unchanged, from section 1.
 
 ### Remaining technical debt
 
-- The ledger records buys and sells only: no dividends, fees, taxes, splits,
-  other corporate actions or FX cash movements.
-- Units already sold are not represented in past position values.
+- ~~The ledger records buys and sells only~~ — done after 2.3: dividends,
+  fees, taxes, splits, symbol changes, spin-offs, returns of capital and FX
+  conversions are ledger entries, with cash per currency (see CHANGELOG,
+  Unreleased).
+- ~~Units already sold are not represented in past position values~~ — done
+  after 2.3.
+- Corporate actions are entered by hand; the provider's action feed is not
+  read. Taxes are recorded, not computed.
 - The bond and macro datasets live on the data volume, so an existing volume
   keeps the copy it was seeded with.
 - Five `react-hooks/exhaustive-deps` lint warnings in the merged views.

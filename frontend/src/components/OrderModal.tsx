@@ -1,8 +1,10 @@
 /**
- * Trade window: record a buy or a sale.
+ * Trade window: record a buy or a sale, with its fee and any tax on it.
  *
  * The backend matches sales against the oldest lots first; the gain shown
  * here before submitting is an estimate at the average cost, and says so.
+ * A purchase's fee is part of what the units cost; a sale's fee comes off
+ * its proceeds; a tax is reported on its own.
  */
 
 import { useEffect, useState } from 'react'
@@ -47,6 +49,8 @@ export function OrderModal({
   const [ticker, setTicker] = useState(initialTicker)
   const [quantity, setQuantity] = useState('')
   const [price, setPrice] = useState('')
+  const [fee, setFee] = useState('')
+  const [tax, setTax] = useState('')
   const [executedAt, setExecutedAt] = useState(todayIso())
   const [notes, setNotes] = useState('')
   const [lookupLoading, setLookupLoading] = useState(false)
@@ -60,6 +64,8 @@ export function OrderModal({
       setTicker(initialTicker)
       setQuantity('')
       setPrice('')
+      setFee('')
+      setTax('')
       setExecutedAt(todayIso())
       setNotes('')
       setError(null)
@@ -85,12 +91,16 @@ export function OrderModal({
 
   const numQty = Number.parseFloat(quantity.replace(',', '.')) || 0
   const numPrice = Number.parseFloat(price.replace(',', '.')) || 0
+  const numFee = Number.parseFloat(fee.replace(',', '.')) || 0
+  const numTax = Number.parseFloat(tax.replace(',', '.')) || 0
   const totalNotional = numQty * numPrice
+  // What leaves (a purchase) or reaches (a sale) the portfolio's cash.
+  const cashTotal = orderType === 'BUY' ? totalNotional + numFee + numTax : totalNotional - numFee - numTax
 
-  // Estimated Realized P&L if selling
+  // Estimated realised result if selling: after the fee, before tax.
   let estimatedRealizedPnl: number | null = null
   if (orderType === 'SELL' && ownedPosition && numQty > 0) {
-    estimatedRealizedPnl = (numPrice - ownedPosition.cost_basis_per_unit) * numQty
+    estimatedRealizedPnl = (numPrice - ownedPosition.cost_basis_per_unit) * numQty - numFee
   }
 
   const handleLookup = async () => {
@@ -126,6 +136,10 @@ export function OrderModal({
       setError('The price cannot be negative.')
       return
     }
+    if (numFee < 0 || numTax < 0) {
+      setError('A fee or a tax cannot be negative.')
+      return
+    }
     if (orderType === 'SELL') {
       if (!ownedPosition) {
         setError(`${sym} is not in this portfolio, so there is nothing to sell.`)
@@ -146,6 +160,8 @@ export function OrderModal({
         order_type: orderType,
         quantity: numQty,
         price: numPrice,
+        fee: numFee,
+        tax: numTax,
         executed_at: executedAt,
         notes: notes.trim(),
       })
@@ -291,6 +307,37 @@ export function OrderModal({
           />
         </label>
 
+        <label className="field">
+          <span className="field__label">Fee (optional)</span>
+          <input
+            className="input num"
+            type="text"
+            inputMode="decimal"
+            placeholder="0.00"
+            value={fee}
+            onChange={(e) => setFee(e.target.value)}
+            disabled={saving}
+          />
+          <span className="field__hint">
+            {orderType === 'BUY' ? 'Added to what the units cost' : 'Taken off what the sale raised'}, in{' '}
+            {currency}
+          </span>
+        </label>
+
+        <label className="field">
+          <span className="field__label">Tax (optional)</span>
+          <input
+            className="input num"
+            type="text"
+            inputMode="decimal"
+            placeholder="0.00"
+            value={tax}
+            onChange={(e) => setTax(e.target.value)}
+            disabled={saving}
+          />
+          <span className="field__hint">Stamp duty, or tax due on the gain, in {currency}</span>
+        </label>
+
         <label className="field dialog__span">
           <span className="field__label">Note (optional)</span>
           <input
@@ -306,9 +353,9 @@ export function OrderModal({
 
       <div className="dialog__summary" aria-live="polite">
         <div className="dialog__summary-row">
-          <span>Total</span>
+          <span>{orderType === 'BUY' ? 'Total paid' : 'Total received'}</span>
           <span className="dialog__summary-value">
-            {formatMoney(totalNotional)} {currency}
+            {formatMoney(cashTotal)} {currency}
           </span>
         </div>
         {orderType === 'SELL' && estimatedRealizedPnl !== null && (
@@ -320,8 +367,8 @@ export function OrderModal({
               </span>
             </div>
             <span className="dialog__summary-note">
-              Estimated at your average cost. The recorded figure uses the cost of the oldest
-              units sold, so it can differ.
+              Estimated at your average cost, after the fee and before tax. The recorded figure
+              uses the cost of the oldest units sold, so it can differ.
             </span>
           </>
         )}

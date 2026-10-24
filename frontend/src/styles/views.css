@@ -127,3 +127,136 @@
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
+
+/* ------------------------------------------------------------------ *
+ * Ledger                                                              *
+ * ------------------------------------------------------------------ */
+
+.ledger__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+
+.ledger__empty {
+  padding: var(--space-8) var(--space-6);
+  color: var(--text-tertiary);
+  text-align: center;
+}
+
+/* One pill per kind of entry, coloured by what it does to the portfolio. */
+.ledger-kind {
+  display: inline-block;
+  padding: 2px 9px;
+  border-radius: var(--radius-full);
+  background: var(--surface-active);
+  color: var(--text-secondary);
+  font-size: var(--size-micro);
+  font-weight: var(--weight-semibold);
+  white-space: nowrap;
+}
+
+.ledger-kind--buy,
+.ledger-kind--income {
+  background: var(--positive-bg);
+  color: var(--positive);
+}
+
+.ledger-kind--sell,
+.ledger-kind--charges {
+  background: var(--negative-bg);
+  color: var(--negative);
+}
+
+.ledger-kind--actions {
+  background: var(--gold-faint);
+  color: var(--gold);
+}
+
+.ledger-kind--cash {
+  background: var(--accent-faint);
+  color: var(--accent);
+}
+
+.ledger__superseded {
+  margin-left: var(--space-2);
+  color: var(--text-tertiary);
+  font-size: var(--size-micro);
+}
+
+.ledger__currency {
+  color: var(--text-tertiary);
+  font-size: var(--size-micro);
+}
+
+/* An order a later hand edit replaced: kept for the record, no longer applied. */
+.grid__row--superseded .grid__td {
+  color: var(--text-disabled);
+}
+
+.grid__row--superseded .grid__td.pos,
+.grid__row--superseded .grid__td.neg {
+  color: var(--text-disabled);
+}
+
+.ledger-cash {
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--space-5) var(--space-6) 0;
+}
+
+.ledger-cash__row {
+  display: grid;
+  grid-template-columns: 56px minmax(0, auto) 1fr;
+  align-items: baseline;
+  gap: var(--space-4);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--line-faint);
+  border-radius: var(--radius);
+  background: var(--surface-raised);
+}
+
+.ledger-cash__currency {
+  font-weight: var(--weight-bold);
+}
+
+.ledger-cash__balance {
+  font-size: var(--size-data);
+  font-weight: var(--weight-semibold);
+}
+
+.ledger-cash__row .muted {
+  font-size: var(--size-label);
+  text-align: right;
+}
+
+.ledger-cash__money {
+  margin: var(--space-5) var(--space-6) var(--space-6);
+}
+
+.ledger-form__hint {
+  margin: var(--space-3) 0 var(--space-5);
+}
+
+/* The record window has eight kinds: they wrap rather than squeeze. */
+.choice--wrap {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px;
+}
+
+.choice--wrap .choice__option {
+  flex: 1 1 auto;
+  padding: 0 var(--space-4);
+}
+
+/* Cash under the positions in the holdings grid. */
+.grid__mark--cash {
+  background: var(--surface-active);
+  color: var(--text-secondary);
+  font-size: 9px;
+}
+
+.grid__row--cash {
+  background: var(--surface-header);
+}

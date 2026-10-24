@@ -52,6 +52,7 @@ export default function OverviewView({ state, config }: OverviewViewProps) {
       <HoldingsPanel
         holdings={holdings.holdings}
         totalValue={holdings.total_value}
+        cash={holdings.cash ?? []}
         currency={currency}
       />
     </main>

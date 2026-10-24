@@ -163,6 +163,7 @@ export default function HoldingsView({
       <HoldingsPanel
         holdings={holdings.holdings}
         totalValue={holdings.total_value}
+        cash={holdings.cash ?? []}
         currency={currency}
         editable={state.editable}
         onAddPosition={onAddPosition}

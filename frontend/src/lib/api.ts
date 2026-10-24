@@ -32,6 +32,8 @@ import type {
   FactsheetReport,
   HistoricalYieldPoint,
   InstrumentInfo,
+  LedgerEvent,
+  LedgerEventInput,
   MacroHistoryPoint,
   MacroSummaryResponse,
   MarketTickerResponse,
@@ -370,6 +372,23 @@ export function placeOrder(config: DataConfig, input: OrderInput): Promise<Trans
 
 export function deleteTransaction(config: DataConfig, id: number): Promise<void> {
   return requestJson<void>(apiUrl(config, `/api/v1/transactions/${id}`), config, {
+    method: 'DELETE',
+  })
+}
+
+export function listLedgerEvents(config: DataConfig): Promise<LedgerEvent[]> {
+  return requestJson<LedgerEvent[]>(apiUrl(config, '/api/v1/ledger-events'), config, {})
+}
+
+export function createLedgerEvent(config: DataConfig, input: LedgerEventInput): Promise<LedgerEvent> {
+  return requestJson<LedgerEvent>(apiUrl(config, '/api/v1/ledger-events'), config, {
+    method: 'POST',
+    body: JSON.stringify(input),
+  })
+}
+
+export function deleteLedgerEvent(config: DataConfig, id: number): Promise<void> {
+  return requestJson<void>(apiUrl(config, `/api/v1/ledger-events/${id}`), config, {
     method: 'DELETE',
   })
 }

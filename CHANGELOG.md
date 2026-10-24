@@ -9,6 +9,37 @@ frontend ships against it.
 
 ## [Unreleased]
 
+### Added — the book of record (schema version 7)
+
+- **Every change is a ledger entry**, and positions are rebuilt by replaying
+  them in date order: trades with a **fee** (part of a purchase's cost, off a
+  sale's proceeds) and a **tax**; **dividends** with the tax withheld;
+  standalone **fees** and **taxes**; **splits** (and reverse splits),
+  **symbol changes and share mergers**, **spin-offs** with the cost share
+  they take, **returns of capital**, and **currency conversions**. A hand
+  edit of a position is recorded as an adjustment. Backdated entries and
+  deletions stay consistent; an entry that would make the ledger impossible
+  is refused (422, or 409 on deletion). `GET/POST/DELETE /api/v1/ledger-events`.
+- **Cash per currency.** Sale proceeds and dividends stay in the portfolio as
+  cash until spent or withdrawn; purchases are paid from it, and what it
+  cannot pay for is money the owner added, at its cost. Foreign cash is
+  revalued daily, so currency moves on it are part of the return. Cash is
+  shown with the holdings and in the allocation, and added to the Monte
+  Carlo outcomes.
+- **Units sold are part of the history** until the day they were sold, and
+  history before a split is restated in today's units.
+- **Dividends from the market data**: prices are now split-adjusted only, and
+  each dividend is credited as cash at the units held on its ex-date; one
+  you record replaces it. A price cache from before this version is still
+  read when the provider is unreachable, with dividends taken as already in
+  the price.
+- **The Ledger view** (formerly Trades): realised result, net income, fees and
+  taxes, cash; income and charges by year; every entry, filterable by kind,
+  with a window to record income, charges, corporate actions and
+  conversions. The trade window takes a fee and a tax.
+- `summary.ledger` and `holdings.cash` in the payload; 24 new tests that pin
+  each figure.
+
 ### Changed — the "Sovereign" design
 
 - New palette in both themes: alabaster and emerald for light, obsidian for

@@ -71,7 +71,45 @@ export interface Holding {
 
 export interface HoldingsPayload extends Envelope {
   total_value: number
+  /** Cash the portfolio holds, per currency. Empty without a ledger. */
+  cash?: CashBalance[]
   holdings: Holding[]
+}
+
+export interface CashBalance {
+  currency: string
+  /** In the currency's own units. */
+  balance: number
+  value_base: number
+  allocation_pct: number | null
+}
+
+/** Income, charges and realised results, in the base currency. */
+export interface LedgerFigures {
+  dividends: number
+  withholding: number
+  return_of_capital: number
+  fees: number
+  taxes: number
+  realized: number
+  /** Dividends less withholding, fees and taxes. */
+  net_income: number
+}
+
+export interface LedgerReport extends LedgerFigures {
+  /**
+   * Where the dividends come from: the market data (`market`), only what was
+   * recorded (`recorded`), already in the prices of an older cache
+   * (`in_prices`), or none paid (`none`).
+   */
+  dividends_source: 'market' | 'recorded' | 'in_prices' | 'none'
+  cash_value: number
+  cash: CashBalance[]
+  contributions_recorded: number
+  /** Money the owner is assumed to have added when cash could not pay for a purchase. */
+  contributions_assumed: number
+  by_year: (LedgerFigures & { year: string })[]
+  by_position: (LedgerFigures & { ticker: string })[]
 }
 
 /** Named performance windows shared by the summary and the performance readout. */
@@ -147,6 +185,8 @@ export interface SummaryPayload extends Envelope {
     dates: string[]
     values: number[]
   }
+  /** The ledger's income, charges, cash and realised results; null without a ledger. */
+  ledger?: LedgerReport | null
 }
 
 /**
@@ -432,9 +472,14 @@ export interface Transaction {
   order_type: OrderType
   quantity: number
   price: number
+  fee?: number
+  tax?: number
+  currency?: string | null
   realized_pnl: number
   executed_at: string
   notes: string
+  /** An order from before a hand edit of its position, which replaced it. */
+  superseded?: boolean
   created_at: string
 }
 
@@ -443,8 +488,58 @@ export interface OrderInput {
   order_type: OrderType
   quantity: number
   price: number
+  fee?: number
+  tax?: number
   executed_at: string
   notes?: string
+}
+
+export type LedgerEventKind =
+  | 'DIVIDEND'
+  | 'FEE'
+  | 'TAX'
+  | 'SPLIT'
+  | 'SYMBOL_CHANGE'
+  | 'SPINOFF'
+  | 'RETURN_OF_CAPITAL'
+  | 'FX'
+
+/** A recorded dividend, charge, corporate action, conversion or hand edit. */
+export interface LedgerEvent {
+  id: number
+  kind: LedgerEventKind | 'ADJUSTMENT'
+  occurred_on: string
+  ticker: string | null
+  quantity: number
+  price: number
+  amount: number
+  currency: string | null
+  fee: number
+  tax: number
+  ratio: number
+  new_ticker: string | null
+  cost_fraction: number
+  to_currency: string | null
+  to_amount: number
+  note: string
+  superseded: boolean
+  created_at: string
+}
+
+export interface LedgerEventInput {
+  kind: LedgerEventKind
+  occurred_on: string
+  ticker?: string | null
+  amount?: number
+  currency?: string | null
+  fee?: number
+  tax?: number
+  ratio?: number | null
+  new_ticker?: string | null
+  cost_fraction?: number
+  to_currency?: string | null
+  to_amount?: number
+  note?: string
 }
 
 export interface RealizedPnlSummary {
@@ -457,6 +552,7 @@ export interface RealizedPnlSummary {
   win_rate_pct: number | null
   total_buy_volume: number
   total_sell_volume: number
+  total_fees?: number
 }
 
 /** Live API bootstrap payload. */
