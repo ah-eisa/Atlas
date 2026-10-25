@@ -623,3 +623,99 @@ class MarketTickerResponse(BaseModel):
 
 def is_finite(value: float) -> bool:
     return math.isfinite(value)
+
+
+# --------------------------------------------------------------------------
+# Mandate, compliance, audit and reports
+# --------------------------------------------------------------------------
+
+
+class BenchmarkComponentIn(BaseModel):
+    symbol: str = Field(min_length=1, max_length=20)
+    weight: float = Field(gt=0, le=1, allow_inf_nan=False)
+
+
+class BenchmarkPolicyIn(BaseModel):
+    """A blended benchmark: weights must add up to 100%."""
+
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
+
+    name: str = Field(default="", max_length=80)
+    rebalance: Literal["daily", "monthly"] = "monthly"
+    components: list[BenchmarkComponentIn] = Field(min_length=1, max_length=10)
+
+
+class ModelWeightIn(BaseModel):
+    ticker: str = Field(min_length=1, max_length=20)
+    weight: float = Field(ge=0, le=1, allow_inf_nan=False)
+
+
+class ModelIn(BaseModel):
+    """A model portfolio. Weights may add up to less than 100%; the rest is cash."""
+
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
+
+    name: str = Field(min_length=1, max_length=80)
+    description: str = Field(default="", max_length=300)
+    weights: list[ModelWeightIn] = Field(min_length=1, max_length=200)
+
+
+class ModelAssignment(BaseModel):
+    model_config = ConfigDict(protected_namespaces=())
+
+    model_id: int | None = None
+
+
+class SleeveIn(BaseModel):
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
+
+    name: str = Field(min_length=1, max_length=60)
+    target_weight: float | None = Field(default=None, ge=0, le=1, allow_inf_nan=False)
+    description: str = Field(default="", max_length=300)
+
+
+class SleeveAssignment(BaseModel):
+    sleeve_id: int | None = None
+
+
+class ComplianceRuleIn(BaseModel):
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
+
+    kind: str = Field(min_length=1, max_length=40)
+    subject: str | None = Field(default=None, max_length=300)
+    limit: float | None = Field(default=None, ge=0, le=1e6, allow_inf_nan=False)
+    severity: Literal["breach", "warning"] = "breach"
+    note: str = Field(default="", max_length=200)
+
+
+class Toggle(BaseModel):
+    enabled: bool
+
+
+class OrderCheckIn(BaseModel):
+    """A proposed order, checked against the compliance rules before it is placed."""
+
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
+
+    ticker: str = Field(min_length=1, max_length=20)
+    order_type: OrderType
+    quantity: float = Field(gt=0, le=1e12, allow_inf_nan=False)
+    price: float = Field(ge=0, le=1e15, allow_inf_nan=False)
+
+    @field_validator("ticker")
+    @classmethod
+    def _ticker(cls, value: str) -> str:
+        normalised = value.strip().upper()
+        if not TICKER_PATTERN.match(normalised):
+            raise ValueError("ticker must be a Yahoo Finance symbol")
+        return normalised
+
+
+class ReportScheduleIn(BaseModel):
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
+
+    name: str = Field(default="Statement", max_length=80)
+    frequency: Literal["daily", "weekly", "monthly"]
+    weekday: int = Field(default=0, ge=0, le=6)
+    monthday: int = Field(default=1, ge=1, le=31)
+    hour: int = Field(default=7, ge=0, le=23)

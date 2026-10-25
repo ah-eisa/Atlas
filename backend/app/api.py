@@ -17,6 +17,7 @@ Design notes
 from __future__ import annotations
 
 import csv
+import hashlib
 import hmac
 import io
 import logging
@@ -34,7 +35,19 @@ from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 
 from . import data as market_data
-from . import fixed_income, importer, instruments, lab, macro_sec, options, store
+from . import (
+    audit,
+    compliance,
+    fixed_income,
+    governance,
+    importer,
+    instruments,
+    lab,
+    macro_sec,
+    options,
+    reports,
+    store,
+)
 from .config import SETTINGS, Settings
 from .observability import METRICS
 from .portfolio import API_VERSION, AnalyticsUnavailable, PortfolioAnalytics, build_analytics
@@ -42,11 +55,13 @@ from .schemas import (
     AlertRuleIn,
     AttributionRequest,
     BaseCurrencyUpdate,
+    BenchmarkPolicyIn,
     BlackScholesInput,
     BlackScholesOutput,
     BondCalculatorInput,
     BondCalculatorOutput,
     CashFlowIn,
+    ComplianceRuleIn,
     CsvImportCommitRequest,
     CsvImportPreviewRequest,
     HistoricalYieldPoint,
@@ -58,12 +73,19 @@ from .schemas import (
     MacroSummaryResponse,
     MarketQuote,
     MarketTickerResponse,
+    ModelAssignment,
+    ModelIn,
     OptionChainResponse,
+    OrderCheckIn,
     OrderInput,
     PortfolioIn,
     RealizedPnlSummaryOut,
+    ReportScheduleIn,
     SecFilingsResponse,
+    SleeveAssignment,
+    SleeveIn,
     StressRequest,
+    Toggle,
     TransactionOut,
     WatchlistItemIn,
     WhatIfRequest,
@@ -86,7 +108,14 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
             logger.info("Imported %d demo positions", imported)
     except Exception:  # noqa: BLE001 - never prevent the API from starting
         logger.exception("Database initialisation failed; the API will report the error")
-    yield
+    scheduler = reports.Scheduler(SETTINGS) if SETTINGS.report_scheduler else None
+    if scheduler is not None:
+        scheduler.start()
+    try:
+        yield
+    finally:
+        if scheduler is not None:
+            scheduler.stop()
 
 
 app = FastAPI(
@@ -143,6 +172,19 @@ async def duplicate_handler(_: Request, exc: store.DuplicateTicker) -> JSONRespo
     return error_response(409, "duplicate_ticker", str(exc))
 
 
+@app.exception_handler(governance.NotFound)
+@app.exception_handler(reports.ScheduleNotFound)
+async def mandate_not_found_handler(_: Request, exc: store.StoreError) -> JSONResponse:
+    return error_response(404, "not_found", str(exc))
+
+
+@app.exception_handler(governance.GovernanceError)
+@app.exception_handler(compliance.RuleError)
+@app.exception_handler(reports.ScheduleError)
+async def mandate_invalid_handler(_: Request, exc: store.StoreError) -> JSONResponse:
+    return error_response(422, "mandate_invalid", str(exc))
+
+
 @app.exception_handler(store.StoreError)
 async def store_error_handler(_: Request, exc: store.StoreError) -> JSONResponse:
     logger.warning("Storage error: %s", exc)
@@ -179,6 +221,13 @@ async def http_error_handler(_: Request, exc: HTTPException) -> JSONResponse:
 async def request_context(request: Request, call_next):  # type: ignore[no-untyped-def]
     """Attach a request ID and conservative security headers to every response."""
     request_id = request.headers.get("X-Request-ID") or uuid.uuid4().hex[:12]
+    # Who made a change, for the audit trail: the API key's fingerprint when
+    # one is configured (the guard has already checked it), otherwise "api".
+    key = request.headers.get("X-API-Key")
+    if SETTINGS.requires_api_key and key:
+        audit.ACTOR.set(f"key:{hashlib.sha256(key.encode('utf-8')).hexdigest()[:8]}")
+    else:
+        audit.ACTOR.set("api")
     response = await call_next(request)
     response.headers["X-Request-ID"] = request_id
     response.headers["X-Content-Type-Options"] = "nosniff"
@@ -802,6 +851,300 @@ def delete_ledger_event(
 def get_realized_pnl(portfolio_id: int = Depends(_portfolio_id)) -> dict[str, Any]:
     """Summary of realized gains, win rate and trade statistics."""
     return store.get_realized_pnl_summary(SETTINGS, portfolio_id)
+
+
+# ---------------------------------------------------------------------------
+# Mandate: benchmark policy, model portfolios and sleeves
+# ---------------------------------------------------------------------------
+
+
+@app.get("/api/v1/mandate", tags=["mandate"])
+def get_mandate(portfolio_id: int = Depends(_portfolio_id)) -> dict[str, Any]:
+    """Everything the portfolio is held to: benchmark, model, sleeves and rules."""
+    portfolio = next(
+        (p for p in store.list_portfolios(SETTINGS) if p["id"] == portfolio_id), None
+    )
+    with store.connect(SETTINGS) as connection:
+        row = connection.execute(
+            "SELECT model_id FROM portfolios WHERE id = ?", (portfolio_id,)
+        ).fetchone()
+    return {
+        "portfolio": portfolio,
+        "benchmark_policy": governance.get_benchmark_policy(SETTINGS, portfolio_id),
+        "default_benchmark": {"symbol": SETTINGS.benchmark, "name": SETTINGS.benchmark_name},
+        "model_id": row["model_id"] if row is not None else None,
+        "models": governance.list_models(SETTINGS),
+        "sleeves": governance.list_sleeves(SETTINGS, portfolio_id),
+        "rules": governance.list_rules(SETTINGS, portfolio_id),
+        "rule_kinds": [
+            {"kind": kind, "label": label, "direction": direction, "needs_subject": needs, "unit": unit}
+            for kind, (label, direction, needs, unit) in compliance.KINDS.items()
+        ],
+    }
+
+
+@app.put("/api/v1/mandate/benchmark", tags=["mandate"])
+def set_benchmark_policy(
+    body: BenchmarkPolicyIn | None = None, portfolio_id: int = Depends(_portfolio_id)
+) -> dict[str, Any] | None:
+    """Measure the portfolio against a blended benchmark; an empty body clears it."""
+    policy = governance.set_benchmark_policy(
+        body.model_dump() if body is not None else None, SETTINGS, portfolio_id
+    )
+    _service.invalidate()
+    return policy
+
+
+@app.get("/api/v1/models", tags=["mandate"])
+def list_models() -> list[dict[str, Any]]:
+    return governance.list_models(SETTINGS)
+
+
+@app.post("/api/v1/models", status_code=201, tags=["mandate"])
+def create_model(body: ModelIn) -> dict[str, Any]:
+    created = governance.save_model(body.model_dump(), SETTINGS)
+    _service.invalidate()
+    return created
+
+
+@app.put("/api/v1/models/{model_id}", tags=["mandate"])
+def update_model(model_id: int, body: ModelIn) -> dict[str, Any]:
+    updated = governance.save_model(body.model_dump(), SETTINGS, model_id)
+    _service.invalidate()
+    return updated
+
+
+@app.delete("/api/v1/models/{model_id}", status_code=204, tags=["mandate"])
+def delete_model(model_id: int, response: Response) -> Response:
+    governance.delete_model(model_id, SETTINGS)
+    _service.invalidate()
+    response.status_code = 204
+    return response
+
+
+@app.put("/api/v1/mandate/model", tags=["mandate"])
+def set_portfolio_model(
+    body: ModelAssignment, portfolio_id: int = Depends(_portfolio_id)
+) -> dict[str, Any]:
+    """Follow a model portfolio (its weights become the targets), or stop with null."""
+    governance.set_portfolio_model(body.model_id, SETTINGS, portfolio_id)
+    _service.invalidate()
+    return {"model_id": body.model_id}
+
+
+@app.get("/api/v1/sleeves", tags=["mandate"])
+def list_sleeves(portfolio_id: int = Depends(_portfolio_id)) -> list[dict[str, Any]]:
+    return governance.list_sleeves(SETTINGS, portfolio_id)
+
+
+@app.post("/api/v1/sleeves", status_code=201, tags=["mandate"])
+def create_sleeve(body: SleeveIn, portfolio_id: int = Depends(_portfolio_id)) -> dict[str, Any]:
+    created = governance.save_sleeve(body.model_dump(), SETTINGS, portfolio_id)
+    _service.invalidate()
+    return created
+
+
+@app.put("/api/v1/sleeves/{sleeve_id}", tags=["mandate"])
+def update_sleeve(
+    sleeve_id: int, body: SleeveIn, portfolio_id: int = Depends(_portfolio_id)
+) -> dict[str, Any]:
+    updated = governance.save_sleeve(body.model_dump(), SETTINGS, portfolio_id, sleeve_id)
+    _service.invalidate()
+    return updated
+
+
+@app.delete("/api/v1/sleeves/{sleeve_id}", status_code=204, tags=["mandate"])
+def delete_sleeve(
+    sleeve_id: int, response: Response, portfolio_id: int = Depends(_portfolio_id)
+) -> Response:
+    governance.delete_sleeve(sleeve_id, SETTINGS, portfolio_id)
+    _service.invalidate()
+    response.status_code = 204
+    return response
+
+
+@app.put("/api/v1/positions/{holding_id}/sleeve", tags=["mandate"])
+def assign_sleeve(
+    holding_id: int, body: SleeveAssignment, portfolio_id: int = Depends(_portfolio_id)
+) -> dict[str, Any]:
+    governance.assign_sleeve(holding_id, body.sleeve_id, SETTINGS, portfolio_id)
+    _service.invalidate()
+    return {"holding_id": holding_id, "sleeve_id": body.sleeve_id}
+
+
+# ---------------------------------------------------------------------------
+# Compliance
+# ---------------------------------------------------------------------------
+
+
+@app.get("/api/v1/compliance", tags=["compliance"])
+def check_compliance(portfolio_id: int = Depends(_portfolio_id)) -> dict[str, Any]:
+    """Every enabled rule, checked against the portfolio as it is now."""
+    analytics = _service.get(portfolio_id=portfolio_id)
+    result = compliance.evaluate_all(
+        governance.list_rules(SETTINGS, portfolio_id), compliance.exposure_from(analytics)
+    )
+    return {"as_of": analytics.as_of, "base_currency": analytics.portfolio.base_currency, **result}
+
+
+@app.post("/api/v1/compliance/check-order", tags=["compliance"])
+def check_order(body: OrderCheckIn, portfolio_id: int = Depends(_portfolio_id)) -> dict[str, Any]:
+    """The rules as they would stand if this order were filled at this price.
+
+    Nothing is recorded. Rules on volatility, VaR, tracking error and
+    drawdown are checked against today's figures.
+    """
+    analytics = _service.get(portfolio_id=portfolio_id)
+    held = next((h for h in analytics.portfolio.holdings if h.ticker.upper() == body.ticker), None)
+    if held is not None:
+        asset_class, region, currency = held.asset_class, held.region_label, held.currency
+    else:
+        try:
+            info = instruments.lookup(body.ticker)
+            asset_class = info.asset_class or "Stock"
+            region = info.region or "Other"
+            currency = info.currency or analytics.portfolio.base_currency
+        except Exception:  # noqa: BLE001 - an offline lookup still allows the check
+            asset_class, region, currency = "Stock", "Other", analytics.portfolio.base_currency
+    rate = analytics._rate_at(currency, len(analytics.market.prices_base.index) - 1)
+    if rate != rate:  # NaN: a currency the portfolio has no rate for yet
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "code": "no_exchange_rate",
+                "message": f"There is no {currency} rate yet; place the order and check afterwards.",
+            },
+        )
+    before = compliance.exposure_from(analytics)
+    after = compliance.exposure_after_order(
+        before,
+        ticker=body.ticker,
+        side=body.order_type,
+        value_base=body.quantity * body.price * rate,
+        asset_class=asset_class,
+        region=region,
+        currency=currency,
+    )
+    rules = governance.list_rules(SETTINGS, portfolio_id)
+    now = compliance.evaluate_all(rules, before)
+    then = compliance.evaluate_all(rules, after, pre_trade=True)
+    previous = {r["rule_id"]: r["status"] for r in now["results"]}
+    for result in then["results"]:
+        result["status_before"] = previous.get(result["rule_id"])
+    return {
+        "order_value_base": round(body.quantity * body.price * rate, 2),
+        "base_currency": analytics.portfolio.base_currency,
+        "status_before": now["status"],
+        **then,
+        "new_breaches": [
+            r["label"] for r in then["results"] if r["status"] == "breach" and r["status_before"] != "breach"
+        ],
+    }
+
+
+@app.post("/api/v1/compliance/rules", status_code=201, tags=["compliance"])
+def create_rule(body: ComplianceRuleIn, portfolio_id: int = Depends(_portfolio_id)) -> dict[str, Any]:
+    return governance.create_rule(body.model_dump(), SETTINGS, portfolio_id)
+
+
+@app.put("/api/v1/compliance/rules/{rule_id}", tags=["compliance"])
+def toggle_rule(
+    rule_id: int, body: Toggle, portfolio_id: int = Depends(_portfolio_id)
+) -> dict[str, Any]:
+    return governance.set_rule_enabled(rule_id, body.enabled, SETTINGS, portfolio_id)
+
+
+@app.delete("/api/v1/compliance/rules/{rule_id}", status_code=204, tags=["compliance"])
+def delete_rule(
+    rule_id: int, response: Response, portfolio_id: int = Depends(_portfolio_id)
+) -> Response:
+    governance.delete_rule(rule_id, SETTINGS, portfolio_id)
+    response.status_code = 204
+    return response
+
+
+# ---------------------------------------------------------------------------
+# Audit trail
+# ---------------------------------------------------------------------------
+
+
+@app.get("/api/v1/audit", tags=["audit"])
+def list_audit(
+    portfolio_id: int = Depends(_portfolio_id),
+    limit: int = 100,
+    before_id: int | None = None,
+    action: str | None = None,
+) -> dict[str, Any]:
+    """The audit trail of this portfolio (and the changes shared by all), newest first."""
+    with store.connect(SETTINGS) as connection:
+        entries = audit.entries(
+            connection,
+            portfolio_id,
+            limit=max(1, min(limit, 500)),
+            before_id=before_id,
+            action=action,
+        )
+    return {"entries": entries, "next_before_id": entries[-1]["id"] if len(entries) == limit else None}
+
+
+@app.get("/api/v1/audit/verify", tags=["audit"])
+def verify_audit() -> dict[str, Any]:
+    """Walk the hash chain of the whole log and say whether it is intact."""
+    with store.connect(SETTINGS) as connection:
+        return audit.verify(connection)
+
+
+# ---------------------------------------------------------------------------
+# Scheduled reports
+# ---------------------------------------------------------------------------
+
+
+@app.get("/api/v1/reports/schedules", tags=["reports"])
+def list_report_schedules(portfolio_id: int = Depends(_portfolio_id)) -> list[dict[str, Any]]:
+    return reports.list_schedules(SETTINGS, portfolio_id)
+
+
+@app.post("/api/v1/reports/schedules", status_code=201, tags=["reports"])
+def create_report_schedule(
+    body: ReportScheduleIn, portfolio_id: int = Depends(_portfolio_id)
+) -> dict[str, Any]:
+    return reports.create_schedule(body.model_dump(), SETTINGS, portfolio_id)
+
+
+@app.put("/api/v1/reports/schedules/{schedule_id}", tags=["reports"])
+def toggle_report_schedule(
+    schedule_id: int, body: Toggle, portfolio_id: int = Depends(_portfolio_id)
+) -> dict[str, Any]:
+    return reports.set_schedule_enabled(schedule_id, body.enabled, SETTINGS, portfolio_id)
+
+
+@app.delete("/api/v1/reports/schedules/{schedule_id}", status_code=204, tags=["reports"])
+def delete_report_schedule(
+    schedule_id: int, response: Response, portfolio_id: int = Depends(_portfolio_id)
+) -> Response:
+    reports.delete_schedule(schedule_id, SETTINGS, portfolio_id)
+    response.status_code = 204
+    return response
+
+
+@app.post("/api/v1/reports/run", status_code=201, tags=["reports"])
+def run_report_now(
+    schedule_id: int | None = None, portfolio_id: int = Depends(_portfolio_id)
+) -> dict[str, Any]:
+    """Write a statement now, from the analytics the dashboard is showing."""
+    analytics = _service.get(portfolio_id=portfolio_id)
+    return reports.run_report(SETTINGS, portfolio_id, schedule_id, analytics=analytics)
+
+
+@app.get("/api/v1/reports/runs", tags=["reports"])
+def list_report_runs(portfolio_id: int = Depends(_portfolio_id)) -> list[dict[str, Any]]:
+    return reports.list_runs(SETTINGS, portfolio_id)
+
+
+@app.get("/api/v1/reports/runs/{run_id}/file", tags=["reports"])
+def get_report_file(run_id: int, portfolio_id: int = Depends(_portfolio_id)) -> FileResponse:
+    path = reports.run_file(run_id, SETTINGS, portfolio_id)
+    return FileResponse(path, media_type="text/html", filename=path.name)
 
 
 # ---------------------------------------------------------------------------

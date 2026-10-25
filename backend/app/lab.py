@@ -381,7 +381,7 @@ def stress_report(
             "as_of": analytics.as_of,
             "base_currency": base,
             "total_value": round_money(analytics.total_value),
-            "benchmark": analytics.settings.benchmark_name,
+            "benchmark": analytics.benchmark_name,
             "results": results,
             "betas": {ticker: round_ratio(beta) for ticker, beta in betas.items()},
             "methodology": (
@@ -923,7 +923,7 @@ def factsheet_report(
         ),
         "performance_drivers": (
             f"Since inception, the book delivered a Time-Weighted Return (TWR) of {twr * 100:+.2f}% "
-            f"versus {bench_ret * 100:+.2f}% for {analytics.settings.benchmark_name} "
+            f"versus {bench_ret * 100:+.2f}% for {analytics.benchmark_name} "
             f"(Active Return: {active_ret * 100:+.2f}%). "
             + (
                 f"Brinson-Fachler attribution indicates that {top_attr_seg['key']} was the primary "
@@ -952,7 +952,7 @@ def factsheet_report(
 
     md_lines = [
         f"# INVESTMENT COMMITTEE MEMO & FACTSHEET — {portfolio_name.upper()}",
-        f"**As of Date:** {analytics.as_of} | **Base Currency:** {base} | **Benchmark:** {analytics.settings.benchmark_name}",
+        f"**As of Date:** {analytics.as_of} | **Base Currency:** {base} | **Benchmark:** {analytics.benchmark_name}",
         "",
         "## 1. Executive Mandate Summary",
         f"- **Net Asset Value (NAV):** {summary['total_value']:,.2f} {base}",
@@ -992,7 +992,7 @@ def factsheet_report(
             "generated_at": summary.get("generated_at"),
             "portfolio_name": portfolio_name,
             "base_currency": base,
-            "benchmark": analytics.settings.benchmark_name,
+            "benchmark": analytics.benchmark_name,
             "kpis": {
                 "total_value": round_money(summary["total_value"]),
                 "total_cost": round_money(summary["total_cost"]),

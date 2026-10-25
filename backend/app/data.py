@@ -55,7 +55,6 @@ import yfinance as yf
 
 from .config import SETTINGS, Settings
 from .ledger import UNIT_KINDS, LedgerEvent
-
 logger = logging.getLogger(__name__)
 
 # Bumped whenever the on-disk shape changes. A cache from an older version is
@@ -131,6 +130,8 @@ class Holding:
     acquired: str
     target_weight: float | None = None
     lots: tuple[Lot, ...] = ()
+    # The sleeve of the portfolio the position belongs to, if any.
+    sleeve: str | None = None
 
     @property
     def region_label(self) -> str:
@@ -155,6 +156,39 @@ class CashFlow:
 
 
 @dataclass(frozen=True)
+class BenchmarkComponent:
+    """One index in a blended benchmark, and its share of it."""
+
+    symbol: str
+    weight: float
+
+
+@dataclass(frozen=True)
+class BenchmarkPolicy:
+    """A blended benchmark: a weighted set of indices, rebalanced on a schedule.
+
+    ``rebalance`` is ``daily`` (the weights hold every day) or ``monthly``
+    (they drift with the markets inside a month and reset at its start).
+    """
+
+    name: str
+    components: tuple[BenchmarkComponent, ...]
+    rebalance: str = "monthly"
+
+    @property
+    def symbols(self) -> tuple[str, ...]:
+        return tuple(component.symbol for component in self.components)
+
+
+@dataclass(frozen=True)
+class Sleeve:
+    """A named part of a portfolio with its own target share of it."""
+
+    name: str
+    target_weight: float | None = None
+
+
+@dataclass(frozen=True)
 class Portfolio:
     """The portfolio definition as loaded from ``holdings.json``."""
 
@@ -168,6 +202,12 @@ class Portfolio:
     # Quote currency of every instrument the ledger mentions, including
     # positions no longer held.
     currencies: dict[str, str] = field(default_factory=dict)
+    # The mandate: the benchmark the portfolio is measured against, the model
+    # it follows, and the sleeves it is divided into.
+    benchmark_policy: BenchmarkPolicy | None = None
+    model_name: str | None = None
+    model_weights: dict[str, float] | None = None
+    sleeves: tuple[Sleeve, ...] = ()
 
     @property
     def tickers(self) -> tuple[str, ...]:
@@ -604,7 +644,11 @@ def load_market_data(
     foreign = sorted(currency for currency in currencies if currency != base)
     pairs = {currency: fx_symbol(currency, base) for currency in foreign}
 
-    symbols = list(dict.fromkeys([*held, settings.benchmark, *pairs.values()]))
+    # The configured benchmark always comes too: its trading calendar is the
+    # one every series is aligned to, policy or not.
+    policy = portfolio.benchmark_policy
+    policy_symbols = list(policy.symbols) if policy is not None else []
+    symbols = list(dict.fromkeys([*held, settings.benchmark, *policy_symbols, *pairs.values()]))
     end = date.today() + timedelta(days=1)  # yfinance `end` is exclusive
     start = end - timedelta(days=int(365.25 * settings.history_years) + 10)
 
@@ -668,7 +712,9 @@ def load_market_data(
         aligned = aligned.join(extra.dropna(axis=1, how="all"))
 
     fx = {currency: aligned[symbol] for currency, symbol in pairs.items() if symbol in aligned}
-    benchmark = aligned[settings.benchmark]
+    benchmark = (
+        blend_benchmark(aligned, dividends, policy) if policy is not None else aligned[settings.benchmark]
+    )
     priced = [*held, *(ticker for ticker in closed if ticker in aligned.columns)]
     prices_native = aligned.loc[:, priced]
 
@@ -705,6 +751,63 @@ def load_market_data(
         dividends=paid,
         dividends_in_prices=dividends is None,
     )
+
+
+def total_return_index(closes: pd.Series, dividends: pd.Series | None) -> pd.Series:
+    """A close series with its cash dividends reinvested on their ex-dates."""
+    closes = closes.astype(float)
+    if dividends is None or not dividends.any():
+        return closes
+    paid = dividends.reindex(closes.index).fillna(0.0)
+    growth = (closes + paid) / closes.shift(1)
+    growth.iloc[0] = 1.0
+    return float(closes.iloc[0]) * growth.cumprod()
+
+
+def blend_benchmark(
+    closes: pd.DataFrame, dividends: pd.DataFrame | None, policy: BenchmarkPolicy
+) -> pd.Series:
+    """A blended benchmark index, starting at 100.
+
+    Each component is measured with its dividends reinvested, in its own
+    currency. With ``daily`` rebalancing the weights hold every day: the
+    blend's return is the weighted sum of the components' returns. With
+    ``monthly`` the weights drift with the markets inside a month and are
+    reset on its first trading day, as a real portfolio would be rebalanced.
+    """
+    returns = pd.DataFrame(
+        {
+            component.symbol: total_return_index(
+                closes[component.symbol],
+                dividends[component.symbol]
+                if dividends is not None and component.symbol in dividends.columns
+                else None,
+            ).pct_change()
+            for component in policy.components
+        },
+        index=closes.index,
+    ).fillna(0.0)
+    target = pd.Series({c.symbol: c.weight for c in policy.components}, dtype=float)
+    target = target / target.sum()
+
+    if policy.rebalance == "daily":
+        blended = returns.mul(target, axis=1).sum(axis=1)
+        index = 100.0 * (1.0 + blended).cumprod()
+        index.iloc[0] = 100.0
+        return index.rename("benchmark")
+
+    values = []
+    holdings = target * 100.0
+    month = None
+    for stamp, row in returns.iterrows():
+        current = (stamp.year, stamp.month)
+        if month is not None and current != month:
+            holdings = target * float(holdings.sum())
+        if month is not None:
+            holdings = holdings * (1.0 + row)
+        month = current
+        values.append(float(holdings.sum()))
+    return pd.Series(values, index=closes.index, name="benchmark")
 
 
 def fx_rate_on(fx: pd.Series, day: str | date) -> float:

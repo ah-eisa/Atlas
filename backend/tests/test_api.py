@@ -598,7 +598,7 @@ def test_the_schema_version_is_recorded(temp_settings: Any) -> None:
             row["name"]
             for row in connection.execute("PRAGMA table_info(holdings)").fetchall()
         }
-    assert version == 7
+    assert version == 8
     assert "portfolio_id" in columns
     assert "target_weight" in columns
 

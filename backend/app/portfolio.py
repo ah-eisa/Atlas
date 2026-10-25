@@ -773,6 +773,116 @@ class PortfolioAnalytics:
     def as_of(self) -> str:
         return self.market.as_of.isoformat()
 
+    @property
+    def benchmark_name(self) -> str:
+        """What the portfolio is measured against: its policy, or the configured index."""
+        policy = self.portfolio.benchmark_policy
+        return policy.name if policy is not None else self.settings.benchmark_name
+
+    @property
+    def benchmark_symbol(self) -> str:
+        policy = self.portfolio.benchmark_policy
+        if policy is None:
+            return self.settings.benchmark
+        return " + ".join(f"{c.weight:.0%} {c.symbol}" for c in policy.components)
+
+    @property
+    def benchmark_includes_dividends(self) -> bool:
+        # A policy's components are measured with their dividends reinvested.
+        return True if self.portfolio.benchmark_policy is not None else self.settings.benchmark_includes_dividends
+
+    @cached_property
+    def holdings_returns(self) -> tuple[pd.DataFrame, pd.DataFrame]:
+        """Each position's daily gain, and the value it was earned on, in the base currency.
+
+        The gain is the price move on the units held at the previous close, so
+        a trade on the day is not a gain; the value is those units at the
+        previous close.
+        """
+        prices = self.prices_base
+        held = self.active_quantity_frame.shift(1).fillna(0.0)
+        moves = (prices - prices.shift(1)).fillna(0.0)
+        return held * moves, held * prices.shift(1).fillna(0.0)
+
+    def _group_return(self, tickers: list[str], start: pd.Timestamp | None = None) -> float | None:
+        """Holdings-based return of a group of positions since ``start``.
+
+        Each day's return is the group's price move on the units it held at
+        the previous close, over their value then; the days compound. It
+        needs no cash flows, which is what makes it measurable for a part of
+        a portfolio.
+        """
+        if not tickers:
+            return None
+        gains, base = self.holdings_returns
+        columns = [ticker for ticker in tickers if ticker in gains.columns]
+        if not columns:
+            return None
+        daily_gain = gains[columns].sum(axis=1)
+        daily_base = base[columns].sum(axis=1)
+        daily = (daily_gain / daily_base).where(daily_base > 0).dropna()
+        if start is not None:
+            daily = daily.loc[daily.index > start]
+        if daily.empty:
+            return None
+        return float((1.0 + daily).prod() - 1.0)
+
+    def _sleeves_payload(self) -> dict[str, Any]:
+        """The portfolio by sleeve: value, share, target, drift and return.
+
+        Positions outside every sleeve are grouped as ``Unassigned``, and cash
+        as ``Cash``, so the shares add up to the whole portfolio.
+        """
+        if not self.portfolio.sleeves:
+            return {"has_sleeves": False, "sleeves": []}
+        total = float(self.total_value)
+        index = self.active_index
+        year_start = pd.Timestamp(f"{index[-1].year - 1}-12-31") if len(index) else None
+        groups: dict[str, list[PositionView]] = {sleeve.name: [] for sleeve in self.portfolio.sleeves}
+        groups["Unassigned"] = []
+        sleeve_of = {holding.ticker: holding.sleeve for holding in self.portfolio.holdings}
+        for position in self.positions:
+            groups[sleeve_of.get(position.ticker) or "Unassigned"].append(position)
+        targets = {sleeve.name: sleeve.target_weight for sleeve in self.portfolio.sleeves}
+
+        rows = []
+        for name, positions in groups.items():
+            if name == "Unassigned" and not positions:
+                continue
+            value = float(sum(p.value_base for p in positions))
+            weight = value / total if total else 0.0
+            target = targets.get(name)
+            tickers = [p.ticker for p in positions]
+            rows.append(
+                {
+                    "name": name,
+                    "positions": tickers,
+                    "value": round_money(value),
+                    "weight": round_ratio(weight),
+                    "target_weight": round_ratio(target) if target is not None else None,
+                    "drift": round_ratio(weight - target) if target is not None else None,
+                    "return_ytd_pct": round_ratio(self._group_return(tickers, year_start)),
+                    "return_all_pct": round_ratio(self._group_return(tickers)),
+                    "unrealized_pnl": round_money(float(sum(p.unrealized_pnl for p in positions))),
+                }
+            )
+        cash = sum(self.cash_values.values())
+        if cash > 0.005:
+            rows.append(
+                {
+                    "name": "Cash",
+                    "positions": [],
+                    "value": round_money(cash),
+                    "weight": round_ratio(cash / total if total else 0.0),
+                    "target_weight": None,
+                    "drift": None,
+                    "return_ytd_pct": None,
+                    "return_all_pct": None,
+                    "unrealized_pnl": 0.0,
+                }
+            )
+        return {"has_sleeves": True, "sleeves": rows}
+
     def _envelope(self) -> dict[str, Any]:
         return {
             "as_of": self.as_of,
@@ -976,9 +1086,9 @@ class PortfolioAnalytics:
         returns = metrics.daily_returns(benchmark)
         drawdown = metrics.max_drawdown(benchmark)
         return {
-            "name": self.settings.benchmark_name,
-            "symbol": self.settings.benchmark,
-            "includes_dividends": self.settings.benchmark_includes_dividends,
+            "name": self.benchmark_name,
+            "symbol": self.benchmark_symbol,
+            "includes_dividends": self.benchmark_includes_dividends,
             "return_pct": round_ratio(float(benchmark.iloc[-1] / benchmark.iloc[0] - 1.0)),
             "annualized_return_pct": round_ratio(
                 metrics.annualized_return(returns, self.settings.trading_days_per_year)
@@ -1006,7 +1116,7 @@ class PortfolioAnalytics:
                 "version": API_VERSION,
                 **self._envelope(),
                 "holdings_count": len(self.portfolio.holdings),
-                "benchmark": self.settings.benchmark,
+                "benchmark": self.benchmark_symbol,
                 "history_start": to_iso_dates(self.active_index[:1])[0],
                 "history_days": int(len(self.active_index)),
                 "prices_fetched_at": self.market.fetched_at.isoformat(timespec="seconds"),
@@ -1087,6 +1197,7 @@ class PortfolioAnalytics:
                     "values": money_series(tail.to_numpy()),
                 },
                 "ledger": self._ledger_report(),
+                "sleeves": self._sleeves_payload(),
             }
         )
 
@@ -1439,10 +1550,27 @@ class PortfolioAnalytics:
         a single trade. The rebalance figures are the trades that would put
         it back, and the turnover is what that would cost in fees and tax.
         """
-        positions = [p for p in self.positions if p.target_weight is not None]
-        if not positions:
+        model = self.portfolio.model_weights
+        if model is not None:
+            # The portfolio follows a model: its weights are the targets, and
+            # an instrument the model holds and the portfolio does not is a
+            # drift of its whole weight.
+            current_weights = {p.ticker.upper(): float(p.allocation_pct) for p in self.positions}
+            pairs = [
+                (ticker, current_weights.get(ticker, 0.0), float(model.get(ticker, 0.0)))
+                for ticker in sorted(set(current_weights) | set(model))
+            ]
+        else:
+            pairs = [
+                (p.ticker, float(p.allocation_pct), float(p.target_weight))
+                for p in self.positions
+                if p.target_weight is not None
+            ]
+        if not pairs:
             return {
                 "has_targets": False,
+                "source": "none",
+                "model": None,
                 "positions": [],
                 "total_drift": 0.0,
                 "turnover": 0.0,
@@ -1456,9 +1584,7 @@ class PortfolioAnalytics:
         sells = 0.0
         drift_sum = 0.0
         target_sum = 0.0
-        for position in positions:
-            target = float(position.target_weight or 0.0)
-            current = float(position.allocation_pct)
+        for ticker, current, target in pairs:
             drift = current - target
             trade = -drift * total_value
             if trade > 0:
@@ -1469,7 +1595,7 @@ class PortfolioAnalytics:
             target_sum += target
             rows.append(
                 {
-                    "ticker": position.ticker,
+                    "ticker": ticker,
                     "current_weight": round_ratio(current),
                     "target_weight": round_ratio(target),
                     "drift": round_ratio(drift),
@@ -1480,6 +1606,8 @@ class PortfolioAnalytics:
 
         return {
             "has_targets": True,
+            "source": "model" if model is not None else "positions",
+            "model": self.portfolio.model_name,
             "positions": rows,
             # Half the sum of absolute drifts is the turnover needed to rebalance
             # a fully invested book: every trade moves two weights.
@@ -1500,8 +1628,8 @@ class PortfolioAnalytics:
         return json_safe(
             {
                 **self._envelope(),
-                "benchmark": self.settings.benchmark,
-                "benchmark_name": self.settings.benchmark_name,
+                "benchmark": self.benchmark_symbol,
+                "benchmark_name": self.benchmark_name,
                 "methodology": "time-weighted, contributions excluded",
                 "dates": dates,
                 "portfolio": money_series(growth.to_numpy()),
@@ -1651,12 +1779,12 @@ class PortfolioAnalytics:
                 "value_at_risk": value_at_risk,
                 "beta": {
                     "value": round_ratio(metrics.beta(daily, benchmark_daily)),
-                    "benchmark": self.settings.benchmark,
-                    "benchmark_name": self.settings.benchmark_name,
+                    "benchmark": self.benchmark_symbol,
+                    "benchmark_name": self.benchmark_name,
                 },
                 "benchmark": {
-                    "name": self.settings.benchmark_name,
-                    "symbol": self.settings.benchmark,
+                    "name": self.benchmark_name,
+                    "symbol": self.benchmark_symbol,
                     "correlation": round_ratio(
                         float(daily.corr(benchmark)) if len(daily) > 1 and len(benchmark) > 1 else None
                     ),

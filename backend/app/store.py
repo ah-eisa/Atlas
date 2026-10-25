@@ -27,7 +27,7 @@ from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Any, Iterator
 
-from . import ledger
+from . import audit, ledger
 from .config import SETTINGS, Settings
 from .data import CashFlow, Holding, Lot, Portfolio, normalise_currency
 
@@ -153,7 +153,121 @@ MIGRATIONS: list[tuple[int, str, Any]] = [
         "ledger_events",
         lambda connection: _add_ledger_events(connection),
     ),
+    (
+        8,
+        "governance",
+        lambda connection: _add_governance_tables(connection),
+    ),
 ]
+
+
+def _add_governance_tables(connection: sqlite3.Connection) -> None:
+    """The mandate around a portfolio, and the record of who changed what.
+
+    * ``portfolios.benchmark_policy``: the blended benchmark the portfolio is
+      measured against, as JSON; ``portfolios.model_id``: the model portfolio
+      it follows.
+    * ``models`` and ``model_weights``: model portfolios, shared by every
+      portfolio, as target weights per instrument.
+    * ``sleeves``: named parts of a portfolio with their own target weight;
+      ``holdings.sleeve_id`` puts a position in one.
+    * ``compliance_rules``: the limits a portfolio must stay within.
+    * ``audit_log``: every change, append-only. Each entry carries the hash
+      of the one before it, so an edited or deleted entry breaks the chain;
+      triggers refuse updates and deletes outright.
+    * ``report_schedules`` and ``report_runs``: reports written on a schedule.
+    """
+    portfolio_columns = {
+        row["name"] for row in connection.execute("PRAGMA table_info(portfolios)").fetchall()
+    }
+    if "benchmark_policy" not in portfolio_columns:
+        connection.execute("ALTER TABLE portfolios ADD COLUMN benchmark_policy TEXT")
+    if "model_id" not in portfolio_columns:
+        connection.execute("ALTER TABLE portfolios ADD COLUMN model_id INTEGER")
+    holding_columns = {
+        row["name"] for row in connection.execute("PRAGMA table_info(holdings)").fetchall()
+    }
+    if "sleeve_id" not in holding_columns:
+        connection.execute("ALTER TABLE holdings ADD COLUMN sleeve_id INTEGER")
+
+    connection.executescript(
+        """
+        CREATE TABLE IF NOT EXISTS models (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            name        TEXT NOT NULL UNIQUE,
+            description TEXT NOT NULL DEFAULT '',
+            created_at  TEXT NOT NULL,
+            updated_at  TEXT NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS model_weights (
+            model_id INTEGER NOT NULL,
+            ticker   TEXT NOT NULL COLLATE NOCASE,
+            weight   REAL NOT NULL CHECK (weight >= 0 AND weight <= 1),
+            PRIMARY KEY (model_id, ticker)
+        );
+        CREATE TABLE IF NOT EXISTS sleeves (
+            id            INTEGER PRIMARY KEY AUTOINCREMENT,
+            portfolio_id  INTEGER NOT NULL DEFAULT 1,
+            name          TEXT NOT NULL,
+            target_weight REAL CHECK (target_weight IS NULL OR (target_weight >= 0 AND target_weight <= 1)),
+            description   TEXT NOT NULL DEFAULT '',
+            created_at    TEXT NOT NULL,
+            UNIQUE (portfolio_id, name)
+        );
+        CREATE TABLE IF NOT EXISTS compliance_rules (
+            id           INTEGER PRIMARY KEY AUTOINCREMENT,
+            portfolio_id INTEGER NOT NULL DEFAULT 1,
+            kind         TEXT NOT NULL,
+            subject      TEXT,
+            limit_value  REAL,
+            severity     TEXT NOT NULL DEFAULT 'breach',
+            enabled      INTEGER NOT NULL DEFAULT 1,
+            note         TEXT NOT NULL DEFAULT '',
+            created_at   TEXT NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS audit_log (
+            id           INTEGER PRIMARY KEY AUTOINCREMENT,
+            portfolio_id INTEGER,
+            at           TEXT NOT NULL,
+            actor        TEXT NOT NULL,
+            action       TEXT NOT NULL,
+            entity       TEXT NOT NULL,
+            entity_id    TEXT,
+            detail       TEXT NOT NULL DEFAULT '{}',
+            prev_hash    TEXT NOT NULL,
+            hash         TEXT NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS ix_audit_portfolio ON audit_log (portfolio_id, id);
+        CREATE TRIGGER IF NOT EXISTS audit_log_no_update BEFORE UPDATE ON audit_log
+        BEGIN SELECT RAISE(ABORT, 'the audit log is append-only'); END;
+        CREATE TRIGGER IF NOT EXISTS audit_log_no_delete BEFORE DELETE ON audit_log
+        BEGIN SELECT RAISE(ABORT, 'the audit log is append-only'); END;
+        CREATE TABLE IF NOT EXISTS report_schedules (
+            id           INTEGER PRIMARY KEY AUTOINCREMENT,
+            portfolio_id INTEGER NOT NULL DEFAULT 1,
+            name         TEXT NOT NULL,
+            frequency    TEXT NOT NULL CHECK (frequency IN ('daily', 'weekly', 'monthly')),
+            weekday      INTEGER NOT NULL DEFAULT 0,
+            monthday     INTEGER NOT NULL DEFAULT 1,
+            hour         INTEGER NOT NULL DEFAULT 7,
+            enabled      INTEGER NOT NULL DEFAULT 1,
+            last_run_at  TEXT,
+            next_run_at  TEXT NOT NULL,
+            created_at   TEXT NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS report_runs (
+            id           INTEGER PRIMARY KEY AUTOINCREMENT,
+            schedule_id  INTEGER,
+            portfolio_id INTEGER NOT NULL,
+            started_at   TEXT NOT NULL,
+            finished_at  TEXT,
+            status       TEXT NOT NULL,
+            path         TEXT,
+            error        TEXT
+        );
+        CREATE INDEX IF NOT EXISTS ix_report_runs_schedule ON report_runs (schedule_id, id);
+        """
+    )
 
 
 def _add_ledger_events(connection: sqlite3.Connection) -> None:
@@ -657,8 +771,18 @@ def delete_portfolio(portfolio_id: int, settings: Settings = SETTINGS) -> None:
         cursor = connection.execute("DELETE FROM portfolios WHERE id = ?", (portfolio_id,))
         if cursor.rowcount == 0:
             raise StoreError(f"no portfolio with id {portfolio_id}")
-        for table in ("holdings", "cash_flows", "transactions", "ledger_events", "lots"):
+        for table in (
+            "holdings",
+            "cash_flows",
+            "transactions",
+            "ledger_events",
+            "lots",
+            "sleeves",
+            "compliance_rules",
+            "report_schedules",
+        ):
             connection.execute(f"DELETE FROM {table} WHERE portfolio_id = ?", (portfolio_id,))
+        audit.record(connection, portfolio_id, "portfolio.delete", "portfolio", portfolio_id)
         _bump_revision(connection)
 
 
@@ -724,6 +848,7 @@ def create_holding(
                 raise DuplicateTicker(f"{values['ticker']} is already in the portfolio") from exc
             raise StoreError(str(exc)) from exc
         _record_hand_edits(connection, portfolio_id)
+        audit.record(connection, portfolio_id, "position.create", "holding", cursor.lastrowid, {"after": values})
         _bump_revision(connection)
         row = connection.execute("SELECT * FROM holdings WHERE id = ?", (cursor.lastrowid,)).fetchone()
     return _row_to_dict(row)
@@ -738,7 +863,7 @@ def update_holding(
     values = _normalise(data)
     with connect(settings) as connection:
         existing = connection.execute(
-            "SELECT ticker FROM holdings WHERE id = ? AND portfolio_id = ?",
+            "SELECT * FROM holdings WHERE id = ? AND portfolio_id = ?",
             (holding_id, portfolio_id),
         ).fetchone()
         if existing is None:
@@ -772,6 +897,14 @@ def update_holding(
                 raise DuplicateTicker(f"{values['ticker']} is already in the portfolio") from exc
             raise StoreError(str(exc)) from exc
         _record_hand_edits(connection, portfolio_id)
+        audit.record(
+            connection,
+            portfolio_id,
+            "position.update",
+            "holding",
+            holding_id,
+            {"before": _row_to_dict(existing), "after": values},
+        )
         _bump_revision(connection)
         row = connection.execute("SELECT * FROM holdings WHERE id = ?", (holding_id,)).fetchone()
     return _row_to_dict(row)
@@ -783,12 +916,14 @@ def delete_holding(
     portfolio_id: int = DEFAULT_PORTFOLIO_ID,
 ) -> None:
     with connect(settings) as connection:
-        cursor = connection.execute(
-            "DELETE FROM holdings WHERE id = ? AND portfolio_id = ?", (holding_id, portfolio_id)
-        )
-        if cursor.rowcount == 0:
+        existing = connection.execute(
+            "SELECT * FROM holdings WHERE id = ? AND portfolio_id = ?", (holding_id, portfolio_id)
+        ).fetchone()
+        if existing is None:
             raise HoldingNotFound(f"holding {holding_id} does not exist")
+        connection.execute("DELETE FROM holdings WHERE id = ?", (holding_id,))
         _record_hand_edits(connection, portfolio_id)
+        audit.record(connection, portfolio_id, "position.delete", "holding", holding_id, {"before": _row_to_dict(existing)})
         _bump_revision(connection)
 
 
@@ -851,6 +986,7 @@ def set_base_currency(
                 "VALUES (?, 'Main', ?, ?)",
                 (portfolio_id, code, _now()),
             )
+        audit.record(connection, portfolio_id, "settings.base_currency", "portfolio", portfolio_id, {"after": code})
         _bump_revision(connection)
     return code
 
@@ -894,6 +1030,14 @@ def create_portfolio(
             "INSERT INTO portfolios (name, base_currency, created_at) VALUES (?, ?, ?)",
             (label, code, _now()),
         )
+        audit.record(
+            connection,
+            cursor.lastrowid,
+            "portfolio.create",
+            "portfolio",
+            cursor.lastrowid,
+            {"name": label, "base_currency": code},
+        )
         _bump_revision(connection)
         row = connection.execute(
             "SELECT id, name, base_currency, created_at FROM portfolios WHERE id = ?",
@@ -919,6 +1063,13 @@ def build_portfolio(
     if not rows:
         raise EmptyPortfolio("the portfolio has no positions")
     lots = position_lots(settings, portfolio_id)
+    from .governance import mandate_for
+
+    with connect(settings) as connection:
+        if _has_table(connection, "sleeves"):
+            policy, model_name, model_weights, sleeves, membership = mandate_for(connection, portfolio_id)
+        else:
+            policy, model_name, model_weights, sleeves, membership = None, None, None, (), {}
     holdings = tuple(
         Holding(
             ticker=row["ticker"],
@@ -933,6 +1084,7 @@ def build_portfolio(
                 float(row["target_weight"]) if row["target_weight"] is not None else None
             ),
             lots=lots.get(row["ticker"].upper(), ()),
+            sleeve=membership.get(int(row["id"])),
         )
         for row in rows
     )
@@ -951,6 +1103,10 @@ def build_portfolio(
         cash_flows=cash_flows,
         ledger=events,
         currencies=currencies,
+        benchmark_policy=policy,
+        model_name=model_name,
+        model_weights=model_weights,
+        sleeves=sleeves,
     )
 
 
@@ -987,6 +1143,14 @@ def create_cash_flow(
             "VALUES (?, ?, ?, ?, ?)",
             (portfolio_id, occurred_on, amount, note, _now()),
         )
+        audit.record(
+            connection,
+            portfolio_id,
+            "cash_flow.create",
+            "cash_flow",
+            cursor.lastrowid,
+            {"occurred_on": occurred_on, "amount": amount, "note": note},
+        )
         _bump_revision(connection)
         row = connection.execute(
             "SELECT id, occurred_on, amount, note, created_at FROM cash_flows WHERE id = ?",
@@ -1008,6 +1172,7 @@ def delete_cash_flow(
         )
         if cursor.rowcount == 0:
             raise CashFlowNotFound(f"no cash flow with id {cash_flow_id}")
+        audit.record(connection, portfolio_id, "cash_flow.delete", "cash_flow", cash_flow_id)
         _bump_revision(connection)
 
 
@@ -1524,6 +1689,22 @@ def place_order(
             _rebuild(connection, portfolio_id, {ticker_clean: metadata})
         except ledger.LedgerError as exc:
             raise OrderValidationError(str(exc)) from exc
+        audit.record(
+            connection,
+            portfolio_id,
+            "order.place",
+            "transaction",
+            tx_id,
+            {
+                "ticker": ticker_clean,
+                "order_type": order_type_clean,
+                "quantity": quantity,
+                "price": price,
+                "fee": fee,
+                "tax": tax,
+                "executed_at": executed_at,
+            },
+        )
         _bump_revision(connection)
         tx_row = connection.execute("SELECT * FROM transactions WHERE id = ?", (tx_id,)).fetchone()
 
@@ -1574,6 +1755,14 @@ def delete_transaction(
             raise TransactionConflict(
                 f"deleting this order would leave a later entry impossible: {exc}"
             ) from exc
+        audit.record(
+            connection,
+            portfolio_id,
+            "order.delete",
+            "transaction",
+            transaction_id,
+            {"before": _transaction_row_to_dict(tx)},
+        )
         _bump_revision(connection)
 
 
@@ -1688,6 +1877,14 @@ def create_ledger_event(
             _rebuild(connection, portfolio_id, hints)
         except ledger.LedgerError as exc:
             raise LedgerValidationError(str(exc)) from exc
+        audit.record(
+            connection,
+            portfolio_id,
+            "ledger.create",
+            "ledger_event",
+            event_id,
+            {"kind": kind, "ticker": ticker, "occurred_on": str(data["occurred_on"])[:10]},
+        )
         _bump_revision(connection)
         row = connection.execute(
             f"SELECT {_EVENT_COLUMNS} FROM ledger_events WHERE id = ?", (event_id,)
@@ -1727,6 +1924,7 @@ def delete_ledger_event(
             raise TransactionConflict(
                 f"deleting this entry would leave a later one impossible: {exc}"
             ) from exc
+        audit.record(connection, portfolio_id, "ledger.delete", "ledger_event", event_id, {"kind": str(row["kind"])})
         _bump_revision(connection)
 
 
@@ -1833,6 +2031,7 @@ def seed_from_demo(settings: Settings = SETTINGS) -> int:
             imported += 1
         _record_hand_edits(connection, DEFAULT_PORTFOLIO_ID)
         _set_meta(connection, "seeded", "1")
+        audit.record(connection, DEFAULT_PORTFOLIO_ID, "portfolio.seed", "portfolio", DEFAULT_PORTFOLIO_ID, {"positions": imported})
         _bump_revision(connection)
         logger.info("Seeded %d demo positions from %s", imported, settings.holdings_path)
         return imported
@@ -1882,6 +2081,14 @@ def replace_all(
         )
         _record_hand_edits(connection, portfolio_id)
         _set_meta(connection, "seeded", "1")
+        audit.record(
+            connection,
+            portfolio_id,
+            "positions.replace",
+            "portfolio",
+            portfolio_id,
+            {"positions": len(normalised), "base_currency": base_currency.strip().upper()},
+        )
         _bump_revision(connection)
     return len(normalised)
 

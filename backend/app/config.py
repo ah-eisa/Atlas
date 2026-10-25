@@ -95,9 +95,11 @@ class Settings:
         db_path: SQLite database holding the user's positions.
         seed_demo: Import ``holdings.json`` on first boot when the store is
             empty. Never overwrites positions afterwards.
+        report_scheduler: Run scheduled reports in the background while the
+            API is up.
         benchmark_includes_dividends: Whether the benchmark index is a total
-            return series. The portfolio's own prices are dividend-adjusted
-            (``auto_adjust``), so comparing them with a price-only index
+            return series. The portfolio's own returns include its dividends
+            (credited as cash), so comparing them with a price-only index
             biases alpha downwards by roughly the portfolio's dividend yield.
     """
 
@@ -127,6 +129,7 @@ class Settings:
     api_key: str = ""
     db_path: Path = field(default=BACKEND_DIR / "data" / "portfolio.db")
     seed_demo: bool = True
+    report_scheduler: bool = True
 
     holdings_path: Path = field(default=BACKEND_DIR / "holdings.json")
     cache_dir: Path = field(default=BACKEND_DIR / ".cache")
@@ -182,6 +185,7 @@ def load_settings() -> Settings:
         api_key=_env_str("PORTFOLIO_API_KEY", ""),
         db_path=_env_path("PORTFOLIO_DB_PATH", BACKEND_DIR / "data" / "portfolio.db"),
         seed_demo=_env_bool("PORTFOLIO_SEED_DEMO", True),
+        report_scheduler=_env_bool("PORTFOLIO_REPORT_SCHEDULER", True),
         holdings_path=_env_path("PORTFOLIO_HOLDINGS_PATH", BACKEND_DIR / "holdings.json"),
         cache_dir=_env_path("PORTFOLIO_CACHE_DIR", BACKEND_DIR / ".cache"),
         snapshot_path=_env_path("PORTFOLIO_SNAPSHOT_PATH", REPO_ROOT / "snapshot.json"),

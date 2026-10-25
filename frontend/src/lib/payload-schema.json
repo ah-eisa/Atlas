@@ -1151,11 +1151,24 @@
             "has_targets": {
               "type": "boolean"
             },
+            "model": {
+              "type": [
+                "null",
+                "string",
+                "number",
+                "boolean",
+                "array",
+                "object"
+              ]
+            },
             "positions": {
               "type": "array"
             },
             "residual": {
               "type": "number"
+            },
+            "source": {
+              "type": "string"
             },
             "target_sum": {
               "type": "number"
@@ -1202,6 +1215,18 @@
             "array",
             "object"
           ]
+        },
+        "sleeves": {
+          "additionalProperties": true,
+          "properties": {
+            "has_sleeves": {
+              "type": "boolean"
+            },
+            "sleeves": {
+              "type": "array"
+            }
+          },
+          "type": "object"
         },
         "sparkline": {
           "additionalProperties": true,
