@@ -20,12 +20,17 @@ import type {
   AttributionGroupBy,
   AttributionPeriod,
   AttributionReport,
+  AuditEntry,
+  AuditVerification,
+  BenchmarkPolicy,
   BlackScholesInput,
   BlackScholesOutput,
   BondCalculatorInput,
   BondCalculatorOutput,
   BootstrapResponse,
   CashFlow,
+  ComplianceReport,
+  ComplianceRule,
   CsvImportCommitResult,
   CsvImportPreview,
   DataSource,
@@ -36,15 +41,22 @@ import type {
   LedgerEventInput,
   MacroHistoryPoint,
   MacroSummaryResponse,
+  Mandate,
   MarketTickerResponse,
+  ModelPortfolio,
   OptionChainResponse,
+  OrderCheck,
   OrderInput,
+  OrderType,
   Portfolio,
   PortfolioState,
   Position,
   PositionInput,
   RealizedPnlSummary,
+  ReportRun,
+  ReportSchedule,
   SecFilingsResponse,
+  SleeveDefinition,
   Snapshot,
   StressReport,
   StressShock,
@@ -123,12 +135,20 @@ export function setStoredApiKey(key: string): void {
  * hard-coded `localhost` target is rejected by CORS (and by proxies that
  * resolve `localhost` to IPv6) the moment anyone opens the app by its
  * numeric address.
+ *
+ * When the page is not served by Vite's dev or preview server it was served
+ * by the API itself (the Docker image, `uvicorn` on any port), and the API is
+ * the page's own origin - wherever that port was mapped to.
  */
 function defaultApiBaseUrl(): string {
   if (typeof window === 'undefined') return `http://localhost:${DEFAULT_API_PORT}`
-  const { protocol, hostname } = window.location
+  const { protocol, hostname, port, origin } = window.location
+  if (!VITE_PORTS.has(port)) return origin
   return `${protocol}//${hostname}:${DEFAULT_API_PORT}`
 }
+
+/** Ports Vite serves the app from in development and preview. */
+const VITE_PORTS = new Set(['5173', '4173'])
 
 /** Resolve the active configuration from URL params and build-time env. */
 export function resolveConfig(): DataConfig {
@@ -561,6 +581,8 @@ export async function downloadExport(
 ): Promise<void> {
   const headers = new Headers({ Accept: format === 'json' ? 'application/json' : 'text/csv' })
   if (config.apiKey) headers.set('X-API-Key', config.apiKey)
+  // Without it the export was always the default portfolio's.
+  if (config.portfolioId) headers.set('X-Portfolio-Id', String(config.portfolioId))
 
   const response = await fetch(exportUrl(config, format), { headers })
   if (!response.ok) {
@@ -1919,6 +1941,171 @@ export async function getMarketTicker(config: DataConfig): Promise<MarketTickerR
   }
 }
 
+// --------------------------------------------------------------------------
+// Governance: the mandate, compliance, the audit trail and scheduled reports
+// --------------------------------------------------------------------------
 
+export function getMandate(config: DataConfig): Promise<Mandate> {
+  return requestJson<Mandate>(apiUrl(config, '/api/v1/mandate'), config)
+}
 
+export function setBenchmarkPolicy(
+  config: DataConfig,
+  policy: BenchmarkPolicy | null,
+): Promise<BenchmarkPolicy | null> {
+  return requestJson<BenchmarkPolicy | null>(apiUrl(config, '/api/v1/mandate/benchmark'), config, {
+    method: 'PUT',
+    body: policy ? JSON.stringify(policy) : undefined,
+  })
+}
 
+export function saveModel(
+  config: DataConfig,
+  model: { name: string; description?: string; weights: { ticker: string; weight: number }[] },
+  id?: number,
+): Promise<ModelPortfolio> {
+  return requestJson<ModelPortfolio>(apiUrl(config, id ? `/api/v1/models/${id}` : '/api/v1/models'), config, {
+    method: id ? 'PUT' : 'POST',
+    body: JSON.stringify(model),
+  })
+}
+
+export function deleteModel(config: DataConfig, id: number): Promise<void> {
+  return requestJson<void>(apiUrl(config, `/api/v1/models/${id}`), config, { method: 'DELETE' })
+}
+
+export function setPortfolioModel(config: DataConfig, modelId: number | null): Promise<unknown> {
+  return requestJson(apiUrl(config, '/api/v1/mandate/model'), config, {
+    method: 'PUT',
+    body: JSON.stringify({ model_id: modelId }),
+  })
+}
+
+export function saveSleeve(
+  config: DataConfig,
+  sleeve: { name: string; target_weight: number | null; description?: string },
+  id?: number,
+): Promise<SleeveDefinition> {
+  return requestJson<SleeveDefinition>(apiUrl(config, id ? `/api/v1/sleeves/${id}` : '/api/v1/sleeves'), config, {
+    method: id ? 'PUT' : 'POST',
+    body: JSON.stringify(sleeve),
+  })
+}
+
+export function deleteSleeve(config: DataConfig, id: number): Promise<void> {
+  return requestJson<void>(apiUrl(config, `/api/v1/sleeves/${id}`), config, { method: 'DELETE' })
+}
+
+export function assignSleeve(config: DataConfig, holdingId: number, sleeveId: number | null): Promise<unknown> {
+  return requestJson(apiUrl(config, `/api/v1/positions/${holdingId}/sleeve`), config, {
+    method: 'PUT',
+    body: JSON.stringify({ sleeve_id: sleeveId }),
+  })
+}
+
+export function getCompliance(config: DataConfig): Promise<ComplianceReport> {
+  return requestJson<ComplianceReport>(apiUrl(config, '/api/v1/compliance'), config)
+}
+
+export function checkOrder(
+  config: DataConfig,
+  order: { ticker: string; order_type: OrderType; quantity: number; price: number },
+  signal?: AbortSignal,
+): Promise<OrderCheck> {
+  return requestJson<OrderCheck>(
+    apiUrl(config, '/api/v1/compliance/check-order'),
+    config,
+    { method: 'POST', body: JSON.stringify(order) },
+    signal,
+  )
+}
+
+export function createComplianceRule(
+  config: DataConfig,
+  rule: { kind: string; subject?: string | null; limit?: number | null; severity: 'breach' | 'warning'; note?: string },
+): Promise<ComplianceRule> {
+  return requestJson<ComplianceRule>(apiUrl(config, '/api/v1/compliance/rules'), config, {
+    method: 'POST',
+    body: JSON.stringify(rule),
+  })
+}
+
+export function toggleComplianceRule(config: DataConfig, id: number, enabled: boolean): Promise<ComplianceRule> {
+  return requestJson<ComplianceRule>(apiUrl(config, `/api/v1/compliance/rules/${id}`), config, {
+    method: 'PUT',
+    body: JSON.stringify({ enabled }),
+  })
+}
+
+export function deleteComplianceRule(config: DataConfig, id: number): Promise<void> {
+  return requestJson<void>(apiUrl(config, `/api/v1/compliance/rules/${id}`), config, { method: 'DELETE' })
+}
+
+export function listAudit(
+  config: DataConfig,
+  options: { beforeId?: number | null; action?: string } = {},
+): Promise<{ entries: AuditEntry[]; next_before_id: number | null }> {
+  const params = new URLSearchParams({ limit: '100' })
+  if (options.beforeId) params.set('before_id', String(options.beforeId))
+  if (options.action) params.set('action', options.action)
+  return requestJson(apiUrl(config, `/api/v1/audit?${params.toString()}`), config)
+}
+
+export function verifyAudit(config: DataConfig): Promise<AuditVerification> {
+  return requestJson<AuditVerification>(apiUrl(config, '/api/v1/audit/verify'), config)
+}
+
+export function listReportSchedules(config: DataConfig): Promise<ReportSchedule[]> {
+  return requestJson<ReportSchedule[]>(apiUrl(config, '/api/v1/reports/schedules'), config)
+}
+
+export function createReportSchedule(
+  config: DataConfig,
+  schedule: { name: string; frequency: ReportSchedule['frequency']; weekday: number; monthday: number; hour: number },
+): Promise<ReportSchedule> {
+  return requestJson<ReportSchedule>(apiUrl(config, '/api/v1/reports/schedules'), config, {
+    method: 'POST',
+    body: JSON.stringify(schedule),
+  })
+}
+
+export function toggleReportSchedule(config: DataConfig, id: number, enabled: boolean): Promise<ReportSchedule> {
+  return requestJson<ReportSchedule>(apiUrl(config, `/api/v1/reports/schedules/${id}`), config, {
+    method: 'PUT',
+    body: JSON.stringify({ enabled }),
+  })
+}
+
+export function deleteReportSchedule(config: DataConfig, id: number): Promise<void> {
+  return requestJson<void>(apiUrl(config, `/api/v1/reports/schedules/${id}`), config, { method: 'DELETE' })
+}
+
+export function runReportNow(config: DataConfig, scheduleId?: number): Promise<ReportRun> {
+  const query = scheduleId ? `?schedule_id=${scheduleId}` : ''
+  return requestJson<ReportRun>(apiUrl(config, `/api/v1/reports/run${query}`), config, { method: 'POST' })
+}
+
+export function listReportRuns(config: DataConfig): Promise<ReportRun[]> {
+  return requestJson<ReportRun[]>(apiUrl(config, '/api/v1/reports/runs'), config)
+}
+
+/** Open a written statement in a new tab; fetched so the API key and portfolio travel with it. */
+export async function openReportRun(config: DataConfig, id: number): Promise<void> {
+  // Opened first, while the click still counts as the user's: a window
+  // opened after an await is blocked as a pop-up.
+  const target = window.open('', '_blank')
+  const headers = new Headers({ Accept: 'text/html' })
+  if (config.apiKey) headers.set('X-API-Key', config.apiKey)
+  if (config.portfolioId) headers.set('X-Portfolio-Id', String(config.portfolioId))
+  const response = await fetch(apiUrl(config, `/api/v1/reports/runs/${id}/file`), { headers })
+  if (!response.ok) {
+    target?.close()
+    throw new ApiError(`The statement could not be opened (status ${response.status}).`, {
+      status: response.status,
+      code: 'report_unavailable',
+    })
+  }
+  const url = URL.createObjectURL(await response.blob())
+  if (target) target.location.href = url
+  else window.location.assign(url)
+}

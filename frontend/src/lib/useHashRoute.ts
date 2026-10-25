@@ -20,6 +20,8 @@ export const VIEW_KEYS = [
   'macro',
   'options',
   'projection',
+  'mandate',
+  'oversight',
   'data',
 ] as const
 

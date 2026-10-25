@@ -9,7 +9,7 @@ import { expect, test } from '@playwright/test'
  * that pushed the page sideways on a phone.
  */
 
-const VIEWS = ['overview', 'performance', 'risk', 'xray', 'holdings', 'trades', 'bonds', 'macro', 'options', 'projection', 'data']
+const VIEWS = ['overview', 'performance', 'risk', 'xray', 'holdings', 'trades', 'bonds', 'macro', 'options', 'projection', 'mandate', 'oversight', 'data']
 
 test.beforeEach(async ({ page }) => {
   const errors: string[] = []
@@ -222,7 +222,7 @@ test('a window closes on Escape and gives focus back to what opened it', async (
 test('the navigation is grouped and [ ] step between views', async ({ page }) => {
   await page.goto('/?source=snapshot#/overview')
   const nav = page.getByRole('navigation', { name: 'Primary' })
-  for (const group of ['Portfolio', 'Book', 'Markets', 'Sources']) {
+  for (const group of ['Portfolio', 'Book', 'Markets', 'Governance', 'Sources']) {
     await expect(nav.getByRole('group', { name: group })).toBeAttached()
   }
   await expect(nav.getByRole('link', { name: 'Overview' })).toHaveAttribute('aria-current', 'page')

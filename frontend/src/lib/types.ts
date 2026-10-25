@@ -154,6 +154,9 @@ export interface SummaryPayload extends Envelope {
   /** How far the portfolio has drifted from its target weights. */
   drift: {
     has_targets: boolean
+    /** Where the targets come from: a model portfolio, the positions' own targets, or none. */
+    source?: 'model' | 'positions' | 'none'
+    model?: string | null
     positions: {
       ticker: string
       current_weight: number
@@ -187,6 +190,7 @@ export interface SummaryPayload extends Envelope {
   }
   /** The ledger's income, charges, cash and realised results; null without a ledger. */
   ledger?: LedgerReport | null
+  sleeves?: { has_sleeves: boolean; sleeves: SleeveSummary[] }
 }
 
 /**
@@ -405,6 +409,8 @@ export interface Position {
   acquired: string
   /** Optional target weight as a fraction of the portfolio. */
   target_weight: number | null
+  /** The sleeve the position belongs to, if any. */
+  sleeve_id?: number | null
   created_at: string
   updated_at: string
 }
@@ -1103,3 +1109,163 @@ export interface MarketTickerResponse {
 
 
 
+
+// --------------------------------------------------------------------------
+// Governance: the mandate, compliance, the audit trail and scheduled reports
+// --------------------------------------------------------------------------
+
+export interface BenchmarkComponent {
+  symbol: string
+  /** Share of the blend, as a fraction. */
+  weight: number
+}
+
+export interface BenchmarkPolicy {
+  name: string
+  rebalance: 'daily' | 'monthly'
+  components: BenchmarkComponent[]
+}
+
+export interface ModelPortfolio {
+  id: number
+  name: string
+  description: string
+  weights: { ticker: string; weight: number }[]
+  total_weight: number
+  portfolios: { id: number; name: string }[]
+  created_at: string
+  updated_at: string
+}
+
+export interface SleeveDefinition {
+  id: number
+  name: string
+  target_weight: number | null
+  description: string
+  positions: number
+  created_at: string
+}
+
+export interface ComplianceRule {
+  id: number
+  kind: string
+  subject: string | null
+  limit: number | null
+  severity: 'breach' | 'warning'
+  enabled: boolean
+  note: string
+  created_at: string
+}
+
+export interface ComplianceRuleKind {
+  kind: string
+  label: string
+  direction: 'max' | 'min' | 'none'
+  needs_subject: boolean
+  unit: 'weight' | 'count' | 'list'
+}
+
+export interface Mandate {
+  portfolio: { id: number; name: string; base_currency: string } | null
+  benchmark_policy: BenchmarkPolicy | null
+  default_benchmark: { symbol: string; name: string }
+  model_id: number | null
+  models: ModelPortfolio[]
+  sleeves: SleeveDefinition[]
+  rules: ComplianceRule[]
+  rule_kinds: ComplianceRuleKind[]
+}
+
+export type ComplianceStatus = 'pass' | 'warning' | 'breach' | 'unknown'
+
+export interface ComplianceResult {
+  rule_id: number | null
+  kind: string
+  label: string
+  subject: string | null
+  limit: number | null
+  unit: 'weight' | 'count' | 'list'
+  severity: 'breach' | 'warning'
+  actual: number | null
+  status: ComplianceStatus
+  offenders: string[]
+  note: string
+  detail?: string
+  /** On a pre-trade check: the rule's status before the order. */
+  status_before?: ComplianceStatus | null
+}
+
+export interface ComplianceReport {
+  as_of?: string
+  base_currency?: string
+  status: ComplianceStatus
+  checked: number
+  breaches: number
+  warnings: number
+  results: ComplianceResult[]
+}
+
+export interface OrderCheck extends ComplianceReport {
+  order_value_base: number
+  status_before: ComplianceStatus
+  /** Rules the order would breach that are not breached now. */
+  new_breaches: string[]
+}
+
+export interface AuditEntry {
+  id: number
+  portfolio_id: number | null
+  at: string
+  actor: string
+  action: string
+  entity: string
+  entity_id: string | null
+  detail: Record<string, unknown>
+  hash: string
+}
+
+export interface AuditVerification {
+  valid: boolean
+  entries: number
+  broken_at: number | null
+  reason: string | null
+}
+
+export interface ReportSchedule {
+  id: number
+  portfolio_id: number
+  name: string
+  frequency: 'daily' | 'weekly' | 'monthly'
+  weekday: number
+  monthday: number
+  hour: number
+  enabled: boolean
+  description: string
+  last_run_at: string | null
+  next_run_at: string
+  created_at: string
+}
+
+export interface ReportRun {
+  id: number
+  schedule_id: number | null
+  schedule_name: string
+  started_at: string
+  finished_at: string | null
+  status: 'running' | 'done' | 'failed'
+  file: string | null
+  error: string | null
+}
+
+/** Each sleeve of the portfolio, from the summary payload. */
+export interface SleeveSummary {
+  name: string
+  positions: string[]
+  value: number
+  weight: number
+  target_weight: number | null
+  drift: number | null
+  return_ytd_pct: number | null
+  return_all_pct: number | null
+  unrealized_pnl: number
+}

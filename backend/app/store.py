@@ -728,6 +728,7 @@ def _row_to_dict(row: sqlite3.Row) -> dict[str, Any]:
         "target_weight": (
             float(row["target_weight"]) if row["target_weight"] is not None else None
         ),
+        "sleeve_id": row["sleeve_id"] if "sleeve_id" in row.keys() else None,
         "created_at": str(row["created_at"]),
         "updated_at": str(row["updated_at"]),
     }

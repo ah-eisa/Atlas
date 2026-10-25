@@ -67,6 +67,8 @@ const FixedIncomeView = lazyView(() => import('./views/FixedIncomeView'))
 const MacroSecView = lazyView(() => import('./views/MacroSecView'))
 const OptionsView = lazyView(() => import('./views/OptionsView'))
 const DataView = lazyView(() => import('./views/DataView'))
+const MandateView = lazyView(() => import('./views/MandateView'))
+const OversightView = lazyView(() => import('./views/OversightView'))
 
 const SIDEBAR_KEY = 'atlas.sidebar.collapsed'
 
@@ -458,6 +460,14 @@ function ViewContent({
         onOpenTradeModal={(ticker, type) => onOpenTradeModal?.(ticker, type)}
       />
     )
+  }
+
+  if (view === 'mandate') {
+    return <MandateView state={state} config={config} onReload={onReload} />
+  }
+
+  if (view === 'oversight') {
+    return <OversightView state={state} config={config} />
   }
 
   if (view === 'bonds') {

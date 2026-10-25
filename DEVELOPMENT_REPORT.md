@@ -55,11 +55,11 @@ eleven views one design. The 2.2 record follows unchanged, from section 1.
 
 ### Next priorities
 
-1. **Portfolio accounting audit**: FIFO edge cases, corporate actions,
-   dividends, fees, taxes, splits and FX cash flows, each with tests that pin
-   the expected figures.
-2. **Institutional portfolio layer**: benchmark policies, sleeves and model
-   portfolios, compliance rules, an audit trail, scheduled reporting.
+1. ~~**Portfolio accounting audit**~~ — done after 2.3 (schema version 7).
+2. ~~**Institutional portfolio layer**~~ — done after 2.3 (schema version 8):
+   benchmark policies, model portfolios, sleeves, compliance with a
+   pre-trade check, an append-only hash-chained audit trail, scheduled
+   statements.
 3. **Multi-user, authentication and permissions**, only once the product is
    used by more than one person.
 

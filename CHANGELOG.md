@@ -9,6 +9,36 @@ frontend ships against it.
 
 ## [Unreleased]
 
+### Added — the mandate and oversight (schema version 8)
+
+- **Benchmark policy** per portfolio: a blend of indices or funds (weights
+  adding up to 100%, funds measured with dividends reinvested), rebalanced
+  daily or monthly. It replaces the configured benchmark for that portfolio
+  in beta, alpha, tracking error, the chart and the factsheet.
+- **Model portfolios**, shared by every portfolio: a portfolio that follows
+  one is measured against its weights, including what the model holds and
+  the portfolio does not.
+- **Sleeves**: named parts of a portfolio with a target share; each sleeve's
+  value, weight, drift and holdings-based return (`summary.sleeves`).
+- **Compliance**: fifteen kinds of limit, each within / close / past (hard or
+  soft), with the positions responsible; and a **pre-trade check** in the
+  trade window that says which limits an order would breach.
+- **Audit trail**: every change recorded in its own transaction with the
+  actor of the request; append-only (triggers) and SHA-256 hash-chained, with
+  a verification of the chain.
+- **Scheduled reports**: daily, weekly or monthly HTML statements (value,
+  performance and risk, holdings, income and charges, sleeves, compliance,
+  commentary), or one on demand; every run recorded.
+- Two views under **Governance**: Mandate and Oversight.
+
+### Fixed
+
+- A page served by the API itself (the Docker image, or `uvicorn` on any
+  port) now talks to the API at its own origin, instead of always port 8000.
+- The portfolio export now exports the selected portfolio, not always the
+  first.
+- A looked-up price is entered to the cent instead of with float noise.
+
 ### Added — the book of record (schema version 7)
 
 - **Every change is a ledger entry**, and positions are rebuilt by replaying

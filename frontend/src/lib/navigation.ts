@@ -44,6 +44,13 @@ export const NAV_GROUPS: NavGroup[] = [
     ],
   },
   {
+    label: 'Governance',
+    views: [
+      { key: 'mandate', label: 'Mandate', needsAnalytics: false },
+      { key: 'oversight', label: 'Oversight', needsAnalytics: false },
+    ],
+  },
+  {
     label: 'Sources',
     views: [{ key: 'data', label: 'Data', needsAnalytics: false }],
   },

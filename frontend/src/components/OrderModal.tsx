@@ -13,12 +13,13 @@ import { Dialog } from './Dialog'
 
 import {
   ApiError,
+  checkOrder,
   lookupInstrument,
   placeOrder,
   type DataConfig,
 } from '../lib/api'
 import { formatMoney, formatMoneySigned, signClass } from '../lib/format'
-import type { InstrumentInfo, OrderType, Position } from '../lib/types'
+import type { InstrumentInfo, OrderCheck, OrderType, Position } from '../lib/types'
 
 interface OrderModalProps {
   isOpen: boolean
@@ -57,6 +58,7 @@ export function OrderModal({
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [instrumentName, setInstrumentName] = useState<string | null>(null)
+  const [check, setCheck] = useState<OrderCheck | null>(null)
 
   useEffect(() => {
     if (isOpen) {
@@ -82,6 +84,27 @@ export function OrderModal({
       }
     }
   }, [isOpen, initialTicker, initialType, positions])
+
+  // The compliance rules as they would stand after this order, checked a
+  // moment after typing stops. Advisory: a breach is shown, not enforced.
+  useEffect(() => {
+    setCheck(null)
+    if (!isOpen || config.source !== 'api') return
+    const sym = ticker.trim().toUpperCase()
+    const qty = Number.parseFloat(quantity.replace(',', '.')) || 0
+    const unit = Number.parseFloat(price.replace(',', '.')) || 0
+    if (!sym || qty <= 0 || unit <= 0) return
+    const controller = new AbortController()
+    const timer = window.setTimeout(() => {
+      checkOrder(config, { ticker: sym, order_type: orderType, quantity: qty, price: unit }, controller.signal)
+        .then((result) => setCheck(result.checked > 0 ? result : null))
+        .catch(() => setCheck(null))
+    }, 450)
+    return () => {
+      window.clearTimeout(timer)
+      controller.abort()
+    }
+  }, [isOpen, config, ticker, quantity, price, orderType])
 
   if (!isOpen) return null
 
@@ -112,7 +135,9 @@ export function OrderModal({
       const info: InstrumentInfo = await lookupInstrument(config, sym)
       setInstrumentName(info.name)
       if (info.last_price && !price) {
-        setPrice(String(info.last_price))
+        // The quote comes with float noise (372.2280012207031); a price is
+        // entered to the cent, or to six places below one unit.
+        setPrice(String(Number(info.last_price.toFixed(info.last_price >= 1 ? 2 : 6))))
       }
     } catch {
       // Lookup failure is non-fatal
@@ -373,6 +398,27 @@ export function OrderModal({
           </>
         )}
       </div>
+
+      {check ? (
+        <div
+          className={`order-check order-check--${check.new_breaches.length ? 'breach' : check.status}`}
+          aria-live="polite"
+        >
+          {check.new_breaches.length ? (
+            <>
+              <strong>This order would breach {check.new_breaches.length === 1 ? 'a limit' : 'limits'}:</strong>{' '}
+              {check.new_breaches.join('; ')}. It can still be placed.
+            </>
+          ) : check.status === 'pass' ? (
+            <>Within all {check.checked} compliance rules after this order.</>
+          ) : (
+            <>
+              After this order: {check.breaches} {check.breaches === 1 ? 'rule' : 'rules'} breached,{' '}
+              {check.warnings} close to {check.warnings === 1 ? 'its limit' : 'their limits'}.
+            </>
+          )}
+        </div>
+      ) : null}
 
       {error && (
         <div className="dialog__error" role="alert">

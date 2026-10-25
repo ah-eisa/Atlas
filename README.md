@@ -39,7 +39,7 @@ account, no telemetry, and no server other than the one you run.
 
 ## What it does
 
-Eleven views over one analytics payload, grouped the way the navigation
+Thirteen views over one analytics payload, grouped the way the navigation
 rail shows them:
 
 | Group | View | Question it answers |
@@ -54,6 +54,8 @@ rail shows them:
 | **Markets** | **Bonds** | Where are Treasury yields and credit spreads, and what would a rate move do to a bond? |
 | | **Macro & filings** | What are inflation, rates and employment doing, and what have my companies filed? |
 | | **Options** | What does the chain look like, and how does one option respond to price, time and volatility? |
+| **Governance** | **Mandate** | What is it measured against, what should it look like, and is it inside its limits? |
+| | **Oversight** | Who changed what and when, and which statements were written? |
 | **Sources** | **Data** | Where did these numbers come from, when were they fetched, and how fresh are they? |
 
 Analytics that are actually implemented, not decorative:
@@ -70,6 +72,21 @@ Analytics that are actually implemented, not decorative:
   currency, until spent or withdrawn; units sold are part of the history
   until the day they were sold. The Ledger view reports income, charges
   and realised results by year.
+- **A mandate.** A blended benchmark per portfolio (indices or funds with
+  dividends reinvested, rebalanced daily or monthly) replaces the configured
+  index in every relative figure; model portfolios set the targets of the
+  portfolios that follow them; sleeves divide a portfolio, each with its own
+  target and holdings-based return.
+- **Compliance.** Fifteen kinds of limit - single position, asset class,
+  region, currency (cash included), cash, restricted instruments, number of
+  positions, volatility, VaR, tracking error, drawdown, sleeve and model
+  drift - each reported as within, close to or past its limit, and checked
+  in the trade window before an order is placed.
+- **An audit trail.** Every change is recorded with who made it, in the same
+  transaction; the log is append-only and hash-chained, and the chain can
+  be verified from the Oversight view.
+- **Scheduled reports.** Daily, weekly or monthly HTML statements written to
+  `backend/data/reports/` by a background scheduler, or on demand.
 - **A FIFO trade ledger.** Every purchase is its own lot; a sale consumes the
   oldest lots held on its date, and its realised P&L is measured against the
   cost of exactly those units. Deleting a sale returns its units; deleting a
@@ -131,7 +148,7 @@ Atlas/
 │   │   ├── serialize.py     # JSON-safe rounding, null handling
 │   │   └── config.py        # environment-driven settings
 │   ├── data/                # bundled bond and macro datasets (the database lives here too)
-│   ├── tests/               # 240 hermetic tests
+│   ├── tests/               # 260 hermetic tests
 │   ├── export_schema.py     # exports the committed payload JSON Schema
 │   ├── generate_snapshot.py # writes the committed snapshot.json
 │   └── setup_holdings.py    # interactive / CSV position import
@@ -376,6 +393,7 @@ sensible default; nothing needs to be set for a local run.
 | `PORTFOLIO_CACHE_DIR` | `backend/.cache` | Price cache directory |
 | `PORTFOLIO_SNAPSHOT_PATH` | `snapshot.json` | Where the snapshot generator writes |
 | `PORTFOLIO_SEED_DEMO` | `true` | Seed the example portfolio on first boot |
+| `PORTFOLIO_REPORT_SCHEDULER` | `true` | Run scheduled reports in the background |
 | `PORTFOLIO_API_KEY` | *(empty)* | When set, data routes require `X-API-Key` |
 | `PORTFOLIO_CORS_ORIGINS` | localhost:5173/4173 | Comma-separated allowed origins |
 
@@ -419,7 +437,7 @@ make test-frontend  # frontend: Vitest
 make test-e2e       # browser: Playwright, against the production build
 ```
 
-The backend suite (240 tests) is hermetic: it never reaches Yahoo Finance,
+The backend suite (260 tests) is hermetic: it never reaches Yahoo Finance,
 never touches your real database, and uses a synthetic market with a fixed
 seed, so results are reproducible. It covers the metric maths, the TWR and
 XIRR methodology, the FX decomposition, the SQLite store and its schema
@@ -526,8 +544,12 @@ yield curve and the dashboard.
 - Editing a position by hand replaces its trade history from then on, so
   orders placed before the edit no longer apply (they stay in the ledger,
   marked as replaced).
-- There is no multi-user support, no authentication, and no audit log. This
-  is a personal tool.
+- There is no multi-user support and no authentication beyond one shared API
+  key; the audit trail records the key's fingerprint, not a person.
+- Scheduled reports are written to disk; delivering them (e-mail, a shared
+  drive) is left to whatever watches that folder.
+- A pre-trade check does not re-estimate risk: rules on volatility, VaR,
+  tracking error and drawdown are checked against today's figures.
 
 ---
 

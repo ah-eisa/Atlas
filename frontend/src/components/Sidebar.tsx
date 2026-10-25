@@ -31,6 +31,8 @@ const ICONS: Record<ViewKey, string> = {
   bonds: 'M4 6h16v12H4zM4 10h16M8 14h3',
   macro: 'M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0',
   options: 'M4 20 20 4M8 4h12v12',
+  mandate: 'M12 3 4 6v6c0 4.5 3.4 8.3 8 9 4.6-.7 8-4.5 8-9V6zM9 12l2 2 4-4',
+  oversight: 'M4 4h16v16H4zM8 9h8M8 13h8M8 17h5',
   data: 'M4 5c0-1.7 3.6-3 8-3s8 1.3 8 3-3.6 3-8 3-8-1.3-8-3zM4 5v14c0 1.7 3.6 3 8 3s8-1.3 8-3V5M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3',
 }
 

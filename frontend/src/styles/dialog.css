@@ -984,3 +984,24 @@ body.has-modal {
     font-size: 22px;
   }
 }
+
+/* The pre-trade compliance check under the order summary. */
+.order-check {
+  margin-top: var(--space-4);
+  padding: var(--space-3) var(--space-4);
+  border-left: 3px solid var(--positive);
+  border-radius: var(--radius-sm);
+  background: var(--positive-bg);
+  font-size: var(--size-caption);
+}
+
+.order-check--warning,
+.order-check--unknown {
+  border-left-color: var(--warning);
+  background: var(--warning-bg);
+}
+
+.order-check--breach {
+  border-left-color: var(--negative);
+  background: var(--negative-bg);
+}

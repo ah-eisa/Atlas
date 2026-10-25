@@ -121,6 +121,7 @@ class HoldingOut(BaseModel):
     cost_basis_per_unit: float
     acquired: date
     target_weight: float | None = None
+    sleeve_id: int | None = None
     created_at: str
     updated_at: str
 
